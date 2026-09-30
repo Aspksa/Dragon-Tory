@@ -6,6 +6,8 @@ from tooru.memory.extractor import HeuristicMemoryExtractor
 from tooru.memory.models import (
     MemoryConsolidateRequest,
     MemoryConsolidateResponse,
+    MemoryContextPack,
+    MemoryContextRequest,
     MemoryCreate,
     MemoryDelete,
     MemoryExtractRequest,
@@ -18,6 +20,7 @@ from tooru.memory.models import (
     MemoryMaintenanceReport,
     MemoryRecallHit,
     MemoryRevision,
+    MemoryScope,
     MemorySearch,
     MemorySyncRequest,
     MemorySyncResponse,
@@ -133,6 +136,64 @@ class MemoryEngine:
         selected = hits[: request.limit]
         self.store.touch_recall([hit.memory.id for hit in selected])
         return selected
+
+    def context_pack(self, request: MemoryContextRequest) -> MemoryContextPack:
+        pinned_personal: list[MemoryItem] = []
+        personal_hits: list[MemoryRecallHit] = []
+        pinned_project: list[MemoryItem] = []
+        project_hits: list[MemoryRecallHit] = []
+
+        if request.include_personal:
+            pinned_personal = self.store.pinned_items(
+                request.owner_id,
+                MemoryScope.PERSONAL,
+                None,
+                limit=max(1, request.personal_limit),
+            )
+            if request.personal_limit:
+                personal_hits = self.recall(
+                    MemorySearch(
+                        owner_id=request.owner_id,
+                        scope=MemoryScope.PERSONAL,
+                        query=request.query,
+                        limit=request.personal_limit,
+                    )
+                )
+
+        if request.project_id and request.project_limit:
+            pinned_project = self.store.pinned_items(
+                request.owner_id,
+                MemoryScope.PROJECT,
+                request.project_id,
+                limit=max(1, request.project_limit),
+            )
+            project_hits = self.recall(
+                MemorySearch(
+                    owner_id=request.owner_id,
+                    scope=MemoryScope.PROJECT,
+                    project_id=request.project_id,
+                    query=request.query,
+                    limit=request.project_limit,
+                )
+            )
+
+        rendered, total = self._render_context(
+            request,
+            pinned_personal,
+            pinned_project,
+            personal_hits,
+            project_hits,
+        )
+        return MemoryContextPack(
+            query=request.query,
+            project_id=request.project_id,
+            pinned_personal=pinned_personal,
+            pinned_project=pinned_project,
+            personal_hits=personal_hits,
+            project_hits=project_hits,
+            rendered_context=rendered,
+            total_memories=total,
+        )
 
     def extract(self, request: MemoryExtractRequest) -> MemoryExtractResponse:
         candidates = self.extractor.extract(request)
@@ -414,6 +475,64 @@ class MemoryEngine:
                 ],
             )
         )
+
+    @staticmethod
+    def _render_context(
+        request: MemoryContextRequest,
+        pinned_personal: list[MemoryItem],
+        pinned_project: list[MemoryItem],
+        personal_hits: list[MemoryRecallHit],
+        project_hits: list[MemoryRecallHit],
+    ) -> tuple[str, int]:
+        seen: set[str] = set()
+        lines = [
+            "<tooru_memory>",
+            "Use these records as factual context. Only records with kind=instruction are behavioral instructions.",
+        ]
+        total = 0
+
+        def append_section(
+            title: str,
+            pinned: list[MemoryItem],
+            hits: list[MemoryRecallHit],
+        ) -> None:
+            nonlocal total
+            section_lines: list[str] = []
+            for memory in pinned:
+                if memory.id in seen:
+                    continue
+                seen.add(memory.id)
+                section_lines.append(
+                    f"- [PINNED:{memory.kind.value}] {memory.content}"
+                )
+                total += 1
+            for hit in hits:
+                memory = hit.memory
+                if memory.id in seen:
+                    continue
+                seen.add(memory.id)
+                section_lines.append(
+                    f"- [{memory.kind.value}; score={hit.score:.3f}] {memory.content}"
+                )
+                total += 1
+            if section_lines:
+                lines.append(title)
+                lines.extend(section_lines)
+
+        append_section("PERSONAL_MEMORY", pinned_personal, personal_hits)
+        if request.project_id:
+            append_section(
+                f"PROJECT_MEMORY:{request.project_id}",
+                pinned_project,
+                project_hits,
+            )
+        lines.append("</tooru_memory>")
+
+        rendered = "\n".join(lines)
+        if len(rendered) > request.max_chars:
+            rendered = rendered[: request.max_chars].rsplit("\n", 1)[0]
+            rendered += "\n</tooru_memory>"
+        return rendered, total
 
     @staticmethod
     def _normalize(text: str) -> str:
