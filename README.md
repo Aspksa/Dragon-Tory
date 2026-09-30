@@ -37,3 +37,21 @@
 Авторизация и центральная мобильная синхронизация намеренно пока не добавлены.
 
 См. docs/MEMORY_ENGINE.md и docs/MEMORY_INTELLIGENCE.md.
+
+
+## Tooru Memory Guardian v1
+
+Над Memory Intelligence теперь работает скрытый Guardian:
+
+- LOW / MEDIUM / HIGH / PROTECTED уровни риска;
+- DeepSeek — основной анализатор, Claude — reviewer важных изменений;
+- HIGH без reviewer не меняет критическую память и уходит в pending;
+- pinned-память нельзя автоматически перезаписать;
+- каждое решение Guardian сохраняется в аудит;
+- безопасные низко- и среднерисковые записи применяются автоматически;
+- локальный fallback остаётся рабочим при недоступности AI.
+
+Основной будущий путь чата:
+Chat Pipeline → Memory Guardian → Memory Intelligence → Memory Engine.
+
+См. docs/MEMORY_GUARDIAN.md.
