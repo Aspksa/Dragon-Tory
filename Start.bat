@@ -3,8 +3,8 @@ setlocal EnableExtensions DisableDelayedExpansion
 chcp 65001 >nul 2>&1
 title Dragon Tory Launcher
 
-set "ROOT=%~dp0"
-set "BOOTSTRAP=%ROOT%scripts\windows\bootstrap.ps1"
+for %%I in ("%~dp0.") do set "ROOT=%%~fI"
+set "BOOTSTRAP=%ROOT%\scripts\windows\bootstrap.ps1"
 
 if not exist "%BOOTSTRAP%" (
     echo [ERROR] Missing bootstrap script:
