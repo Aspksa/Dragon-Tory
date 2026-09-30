@@ -62,3 +62,20 @@ GET /v1/memory/maintenance/latest
 
 Durable types include fact, preference, decision, task, event, episode, goal,
 entity, note, instruction, relationship and summary.
+
+
+## AI Context Builder
+
+POST /v1/memory/context builds a bounded context pack for Claude or DeepSeek.
+
+The builder:
+- recalls personal memory separately from project memory;
+- never searches another project's memory;
+- always includes pinned memories for the selected scope;
+- deduplicates memories that appear in both pinned and semantic results;
+- respects a maximum character budget;
+- labels memory kinds and relevance scores;
+- marks only kind=instruction records as behavioral instructions.
+
+This is the bridge between long-term memory and the future AI Router. The
+models receive selected context instead of the whole database.
