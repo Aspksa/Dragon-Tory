@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from tooru.memory.models import (
     MemoryConsolidateRequest,
     MemoryConsolidateResponse,
+    MemoryContextPack,
+    MemoryContextRequest,
     MemoryCreate,
     MemoryDelete,
     MemoryExtractRequest,
@@ -40,6 +42,14 @@ def recall_memory(
     request: Request,
 ) -> list[MemoryRecallHit]:
     return request.app.state.memory.recall(payload)
+
+
+@router.post("/context", response_model=MemoryContextPack)
+def build_memory_context(
+    payload: MemoryContextRequest,
+    request: Request,
+) -> MemoryContextPack:
+    return request.app.state.memory.context_pack(payload)
 
 
 @router.post("/extract", response_model=MemoryExtractResponse)
