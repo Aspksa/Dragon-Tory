@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from tooru.memory.models import (
@@ -103,7 +105,7 @@ def sync_memory(payload: MemorySyncRequest, request: Request) -> MemorySyncRespo
 def get_memory_links(
     memory_id: str,
     request: Request,
-    relation: MemoryLinkType | None = Query(default=None),
+    relation: Annotated[MemoryLinkType | None, Query()] = None,
 ) -> list[MemoryLink]:
     return request.app.state.memory.links_for(memory_id, relation)
 
@@ -112,7 +114,7 @@ def get_memory_links(
 def get_memory_history(
     memory_id: str,
     request: Request,
-    owner_id: str = Query(default="local-user"),
+    owner_id: Annotated[str, Query()] = "local-user",
 ) -> list[MemoryRevision]:
     try:
         return request.app.state.memory.history(memory_id, owner_id)
