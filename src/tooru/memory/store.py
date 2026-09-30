@@ -403,10 +403,14 @@ class SQLiteMemoryStore:
         }
 
     def missing_vector_items(self, limit: int = 500) -> list[MemoryItem]:
+        select_columns = ", ".join(
+            f"m.{column.strip()}"
+            for column in self.SELECT_COLUMNS.replace("\n", " ").split(",")
+        )
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
-                SELECT {self.SELECT_COLUMNS}
+                SELECT {select_columns}
                 FROM memory_items m
                 LEFT JOIN memory_vectors v ON v.memory_id = m.id
                 WHERE m.deleted_at IS NULL AND v.memory_id IS NULL
