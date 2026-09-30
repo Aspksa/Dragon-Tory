@@ -112,7 +112,7 @@ if not exist "%VPY%" goto :PYTHON_ERROR
 echo [OK] Python: %VPY%
 
 set "CURHASH="
-for /f "usebackq delims=" %%H in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath $env:DRAGON_PYPROJECT).Hash"`) do set "CURHASH=%%H"
+for /f "delims=" %%H in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath $env:DRAGON_PYPROJECT).Hash"') do set "CURHASH=%%H"
 
 set "OLDHASH="
 if exist "%HASHFILE%" set /p OLDHASH=<"%HASHFILE%"
