@@ -10,6 +10,7 @@ from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import GuardianConfig, MemoryGuardian
+from tooru.memory.guardian_automation import MemoryGuardianAutomation
 from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.maintenance import MemoryAutomation
 from tooru.memory.store import SQLiteMemoryStore
@@ -46,7 +47,15 @@ async def lifespan(app: FastAPI):
             medium_importance=settings.memory_guardian_medium_importance,
             high_importance=settings.memory_guardian_high_importance,
             min_confidence=settings.memory_guardian_min_confidence,
+            max_attempts=settings.memory_guardian_max_attempts,
+            retry_delay_seconds=settings.memory_guardian_retry_delay_seconds,
         ),
+    )
+
+    guardian_automation = MemoryGuardianAutomation(
+        guardian,
+        interval_seconds=settings.memory_guardian_interval_seconds,
+        batch_size=settings.memory_guardian_retry_batch_size,
     )
 
     automation = MemoryAutomation(
@@ -63,14 +72,18 @@ async def lifespan(app: FastAPI):
     app.state.ai_router = ai_router
     app.state.memory_intelligence = intelligence
     app.state.memory_guardian = guardian
+    app.state.memory_guardian_automation = guardian_automation
     app.state.memory_automation = automation
 
     if settings.memory_automation_enabled:
         automation.start()
+    if settings.memory_guardian_automation_enabled:
+        guardian_automation.start()
 
     try:
         yield
     finally:
+        await guardian_automation.stop()
         await automation.stop()
 
 
