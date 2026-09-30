@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import ClassVar
 
 from tooru.memory.intelligence import MemoryIntelligence
 from tooru.memory.models import (
@@ -27,7 +28,7 @@ class GuardianConfig:
 class MemoryGuardian:
     """Hidden policy layer controlling what Memory Intelligence may persist."""
 
-    _critical_kinds = {
+    _critical_kinds: ClassVar[set[MemoryKind]] = {
         MemoryKind.FACT,
         MemoryKind.PREFERENCE,
         MemoryKind.DECISION,
