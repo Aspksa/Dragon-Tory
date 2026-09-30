@@ -20,7 +20,6 @@ from tooru.memory.models import (
     MemoryUpdate,
 )
 
-
 logger = logging.getLogger(__name__)
 
 _DECISION_ADAPTER = TypeAdapter(list[MemoryIntelligenceDecision])
