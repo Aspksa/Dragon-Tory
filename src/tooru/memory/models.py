@@ -127,6 +127,27 @@ class MemoryRecallHit(BaseModel):
     pin_score: float
 
 
+class MemoryContextRequest(BaseModel):
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+    query: str = Field(min_length=1, max_length=2_000)
+    project_id: str | None = Field(default=None, max_length=200)
+    include_personal: bool = True
+    personal_limit: int = Field(default=8, ge=0, le=50)
+    project_limit: int = Field(default=12, ge=0, le=100)
+    max_chars: int = Field(default=12_000, ge=1_000, le=100_000)
+
+
+class MemoryContextPack(BaseModel):
+    query: str
+    project_id: str | None
+    pinned_personal: list[MemoryItem]
+    pinned_project: list[MemoryItem]
+    personal_hits: list[MemoryRecallHit]
+    project_hits: list[MemoryRecallHit]
+    rendered_context: str
+    total_memories: int
+
+
 class MemoryFeedback(BaseModel):
     owner_id: str = Field(default="local-user", min_length=1, max_length=200)
     helpful: bool
