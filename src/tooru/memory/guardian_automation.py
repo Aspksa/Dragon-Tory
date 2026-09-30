@@ -90,10 +90,10 @@ class MemoryGuardianAutomation:
                             "Guardian queue item %s failed",
                             item.id,
                         )
-                return self.status()
             finally:
                 self.last_completed_at = datetime.now(UTC).isoformat()
                 self.running = False
+            return self.status()
 
     def status(self) -> MemoryGuardianAutomationStatus:
         return MemoryGuardianAutomationStatus(
