@@ -176,16 +176,39 @@ function Test-PythonInstaller {
         return $false
     }
 
-    $signature = Get-AuthenticodeSignature -LiteralPath $InstallerPath
-    if ($signature.Status -ne "Valid") {
-        Write-LauncherLog "WARN" "Python installer signature is not valid: $($signature.Status)"
+    $expectedHashes = @{
+        "python-3.12.10-amd64.exe" = "67B5635E80EA51072B87941312D00EC8927C4DB9BA18938F7AD2D27B328B95FB"
+        "python-3.12.10-arm64.exe" = "377AC8FD478987940088E879441E702A71B53164D2A1E6F1D51FF77A7E470258"
+    }
+
+    $name = $file.Name.ToLowerInvariant()
+    if (-not $expectedHashes.ContainsKey($name)) {
+        Write-LauncherLog "WARN" "No pinned SHA-256 is configured for $($file.Name)."
         return $false
     }
 
-    $subject = [string]$signature.SignerCertificate.Subject
-    if ($subject -notmatch "Python Software Foundation") {
-        Write-LauncherLog "WARN" "Python installer signer is unexpected: $subject"
+    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $InstallerPath).Hash.ToUpperInvariant()
+    if ($actualHash -ne $expectedHashes[$name]) {
+        Write-LauncherLog "WARN" "Python installer SHA-256 mismatch."
         return $false
+    }
+
+    try {
+        $signature = Get-AuthenticodeSignature -LiteralPath $InstallerPath -ErrorAction Stop
+        if ($signature.Status -ne "Valid") {
+            Write-LauncherLog "WARN" "Python installer signature is not valid: $($signature.Status)"
+            return $false
+        }
+
+        $subject = [string]$signature.SignerCertificate.Subject
+        if ($subject -notmatch "Python Software Foundation") {
+            Write-LauncherLog "WARN" "Python installer signer is unexpected: $subject"
+            return $false
+        }
+
+        Write-LauncherLog "OK" "Python installer SHA-256 and Authenticode signature are valid."
+    } catch {
+        Write-LauncherLog "WARN" "Authenticode API is unavailable; pinned SHA-256 verification succeeded."
     }
 
     return $true
