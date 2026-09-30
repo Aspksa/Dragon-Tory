@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     memory_guardian_medium_importance: float = 0.65
     memory_guardian_high_importance: float = 0.85
     memory_guardian_min_confidence: float = 0.60
+    memory_guardian_automation_enabled: bool = True
+    memory_guardian_interval_seconds: int = 900
+    memory_guardian_retry_batch_size: int = 20
+    memory_guardian_max_attempts: int = 5
+    memory_guardian_retry_delay_seconds: int = 1800
 
     model_config = SettingsConfigDict(
         env_prefix="TOORU_",
