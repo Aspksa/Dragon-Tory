@@ -117,6 +117,8 @@ class MemoryAutomation:
 
             try:
                 await self.run_once()
-            except Exception:
-                # run_once records/logs the failure; keep future cycles alive.
-                continue
+            except Exception as exc:  # noqa: BLE001 - daemon must survive one failed cycle
+                logger.warning(
+                    "Memory maintenance will retry on the next cycle: %s",
+                    exc,
+                )
