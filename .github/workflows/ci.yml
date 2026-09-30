@@ -35,3 +35,15 @@ jobs:
 
       - name: Test
         run: pytest -q
+
+
+  portable-launcher:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate portable launcher
+        shell: cmd
+        run: Start.bat --check
