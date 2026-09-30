@@ -1,6 +1,6 @@
-from dataclasses import dataclass
 import json
 import logging
+from dataclasses import dataclass
 
 from pydantic import TypeAdapter, ValidationError
 
