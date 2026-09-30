@@ -5,12 +5,15 @@ from pathlib import Path
 from uuid import uuid4
 
 from tooru.memory.models import (
+    ConversationMessage,
     MemoryCreate,
     MemoryDelete,
     MemoryFeedback,
     MemoryGuardianAuditEvent,
     MemoryGuardianDecision,
     MemoryGuardianOutcome,
+    MemoryGuardianQueueItem,
+    MemoryGuardianQueueStatus,
     MemoryGuardianRisk,
     MemoryGuardianStatus,
     MemoryIntelligenceDecision,
@@ -169,6 +172,42 @@ class SQLiteMemoryStore:
                 ON memory_guardian_events(
                     owner_id, scope, project_id, outcome, created_at DESC
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_guardian_queue (
+                    id TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    project_id TEXT,
+                    risk TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    decision_json TEXT NOT NULL,
+                    messages_json TEXT NOT NULL,
+                    analyzer TEXT NOT NULL,
+                    reviewer TEXT,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 5,
+                    next_attempt_at TEXT,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_guardian_queue_pending_fingerprint
+                ON memory_guardian_queue(fingerprint)
+                WHERE status = 'pending'
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_guardian_queue_due
+                ON memory_guardian_queue(status, next_attempt_at, created_at)
                 """
             )
             conn.execute(
@@ -1009,6 +1048,151 @@ class SQLiteMemoryStore:
             for row in rows
         ]
 
+    def queue_guardian_decision(
+        self,
+        *,
+        fingerprint: str,
+        owner_id: str,
+        scope: MemoryScope,
+        project_id: str | None,
+        risk: MemoryGuardianRisk,
+        decision: MemoryIntelligenceDecision,
+        messages: list[ConversationMessage],
+        analyzer: str,
+        reviewer: str | None,
+        max_attempts: int,
+        retry_delay_seconds: int,
+    ) -> MemoryGuardianQueueItem:
+        now = datetime.now(UTC)
+        now_iso = now.isoformat()
+        next_attempt_at = (now + timedelta(seconds=retry_delay_seconds)).isoformat()
+        queue_id = str(uuid4())
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO memory_guardian_queue (
+                    id, fingerprint, owner_id, scope, project_id, risk, status,
+                    decision_json, messages_json, analyzer, reviewer, attempts,
+                    max_attempts, next_attempt_at, last_error, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 0, ?, ?, NULL, ?, ?)
+                """,
+                (
+                    queue_id,
+                    fingerprint,
+                    owner_id,
+                    scope.value,
+                    project_id,
+                    risk.value,
+                    decision.model_dump_json(),
+                    json.dumps(
+                        [message.model_dump(mode="json") for message in messages],
+                        ensure_ascii=False,
+                    ),
+                    analyzer,
+                    reviewer,
+                    max_attempts,
+                    next_attempt_at,
+                    now_iso,
+                    now_iso,
+                ),
+            )
+            row = conn.execute(
+                """
+                SELECT *
+                FROM memory_guardian_queue
+                WHERE fingerprint = ? AND status = 'pending'
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (fingerprint,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("failed to create or load Guardian queue item")
+        return self._row_to_guardian_queue_item(row)
+
+    def get_guardian_queue_item(self, queue_id: str) -> MemoryGuardianQueueItem:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM memory_guardian_queue WHERE id = ?",
+                (queue_id,),
+            ).fetchone()
+        if row is None:
+            raise MemoryNotFoundError(queue_id)
+        return self._row_to_guardian_queue_item(row)
+
+    def guardian_queue_items(
+        self,
+        *,
+        status: MemoryGuardianQueueStatus | None = None,
+        due_only: bool = False,
+        limit: int = 50,
+    ) -> list[MemoryGuardianQueueItem]:
+        clauses: list[str] = []
+        params: list[object] = []
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status.value)
+        if due_only:
+            clauses.append("(next_attempt_at IS NULL OR next_attempt_at <= ?)")
+            params.append(self._now())
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT *
+                FROM memory_guardian_queue
+                {where}
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [self._row_to_guardian_queue_item(row) for row in rows]
+
+    def update_guardian_queue(
+        self,
+        queue_id: str,
+        *,
+        status: MemoryGuardianQueueStatus | None = None,
+        reviewer: str | None = None,
+        last_error: str | None = None,
+        increment_attempt: bool = False,
+        retry_delay_seconds: int | None = None,
+    ) -> MemoryGuardianQueueItem:
+        current = self.get_guardian_queue_item(queue_id)
+        next_status = status or current.status
+        attempts = current.attempts + (1 if increment_attempt else 0)
+        now = datetime.now(UTC)
+        next_attempt_at = current.next_attempt_at
+        if retry_delay_seconds is not None:
+            next_attempt_at = (
+                now + timedelta(seconds=retry_delay_seconds)
+            ).isoformat()
+        if next_status is not MemoryGuardianQueueStatus.PENDING:
+            next_attempt_at = None
+
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE memory_guardian_queue
+                SET status = ?, reviewer = ?, attempts = ?, next_attempt_at = ?,
+                    last_error = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    next_status.value,
+                    reviewer if reviewer is not None else current.reviewer,
+                    attempts,
+                    next_attempt_at,
+                    last_error,
+                    now.isoformat(),
+                    queue_id,
+                ),
+            )
+        return self.get_guardian_queue_item(queue_id)
+
     def _get_by_mutation_id(
         self, owner_id: str, client_mutation_id: str
     ) -> MemoryItem | None:
@@ -1158,6 +1342,33 @@ class SQLiteMemoryStore:
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             deleted_at=row["deleted_at"],
+        )
+
+    @staticmethod
+    def _row_to_guardian_queue_item(row: sqlite3.Row) -> MemoryGuardianQueueItem:
+        return MemoryGuardianQueueItem(
+            id=row["id"],
+            fingerprint=row["fingerprint"],
+            owner_id=row["owner_id"],
+            scope=MemoryScope(row["scope"]),
+            project_id=row["project_id"],
+            risk=MemoryGuardianRisk(row["risk"]),
+            status=MemoryGuardianQueueStatus(row["status"]),
+            decision=MemoryIntelligenceDecision.model_validate_json(
+                row["decision_json"]
+            ),
+            messages=[
+                ConversationMessage.model_validate(message)
+                for message in json.loads(row["messages_json"])
+            ],
+            analyzer=row["analyzer"],
+            reviewer=row["reviewer"],
+            attempts=row["attempts"],
+            max_attempts=row["max_attempts"],
+            next_attempt_at=row["next_attempt_at"],
+            last_error=row["last_error"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )
 
     @staticmethod
