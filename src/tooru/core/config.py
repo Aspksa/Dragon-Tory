@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     memory_intelligence_reviewer_threshold: float = 0.85
     memory_intelligence_context_limit: int = 12
 
+    memory_guardian_enabled: bool = True
+    memory_guardian_medium_importance: float = 0.65
+    memory_guardian_high_importance: float = 0.85
+    memory_guardian_min_confidence: float = 0.60
+
     model_config = SettingsConfigDict(
         env_prefix="TOORU_",
         env_file=".env",
