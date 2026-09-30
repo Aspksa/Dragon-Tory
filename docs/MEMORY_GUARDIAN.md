@@ -80,3 +80,65 @@ The future chat pipeline should call Memory Guardian after a completed user/AI
 turn. Guardian should remain hidden from the visible chat surface.
 
 Authorization and central mobile synchronization remain deliberately deferred.
+
+
+## Guardian v2: durable pending queue
+
+HIGH-risk or low-confidence memory no longer exists only as an in-process
+pending result. Guardian persists it in memory_guardian_queue.
+
+Each queue record stores:
+- owner / scope / project;
+- risk;
+- structured memory decision;
+- source conversation messages;
+- analyzer and reviewer;
+- attempts and max attempts;
+- next retry time;
+- last error;
+- timestamps.
+
+A SHA-256 fingerprint deduplicates identical pending decisions so repeated chat
+turns do not flood the review queue.
+
+## Autonomous review worker
+
+MemoryGuardianAutomation runs separately from ordinary MemoryAutomation.
+
+Default cadence is 15 minutes. It only processes queue items whose retry time
+is due, in a bounded batch.
+
+Lifecycle:
+
+pending -> reviewer retry -> applied / rejected
+                     \-> retry later
+                     \-> dead after max attempts
+
+When the configured reviewer is not registered in AIRouter, the queue remains
+safe and durable. It is deferred instead of being lost or applied without
+review.
+
+## Manual local control
+
+Pending decisions can be approved or rejected through local API endpoints.
+
+Manual approval still passes owner/scope/project validation and cannot
+auto-overwrite pinned protected memory.
+
+## Dead-letter protection
+
+Repeated reviewer failures are bounded by max_attempts. After the limit, the
+queue item becomes dead and stops consuming review attempts automatically.
+
+## Guardian v2 API
+
+GET  /v1/memory/guardian/queue
+POST /v1/memory/guardian/queue/{queue_id}/retry
+POST /v1/memory/guardian/queue/{queue_id}/approve
+POST /v1/memory/guardian/queue/{queue_id}/reject
+
+POST /v1/memory/guardian/automation/run
+GET  /v1/memory/guardian/automation/status
+
+GET  /v1/memory/guardian/status now also reports durable queue counts for
+pending, applied, rejected and dead records.
