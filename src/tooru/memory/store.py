@@ -995,11 +995,33 @@ class SQLiteMemoryStore:
             counts[row["outcome"]] = int(row["count"])
             total += int(row["count"])
 
+        with self._connect() as conn:
+            queue_rows = conn.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM memory_guardian_queue
+                GROUP BY status
+                """
+            ).fetchall()
+
+        queue_counts = {
+            MemoryGuardianQueueStatus.PENDING.value: 0,
+            MemoryGuardianQueueStatus.APPLIED.value: 0,
+            MemoryGuardianQueueStatus.REJECTED.value: 0,
+            MemoryGuardianQueueStatus.DEAD.value: 0,
+        }
+        for row in queue_rows:
+            queue_counts[row["status"]] = int(row["count"])
+
         status.total_events = total
         status.applied = counts[MemoryGuardianOutcome.APPLIED.value]
         status.pending = counts[MemoryGuardianOutcome.PENDING.value]
         status.blocked = counts[MemoryGuardianOutcome.BLOCKED.value]
         status.ignored = counts[MemoryGuardianOutcome.IGNORED.value]
+        status.queued_pending = queue_counts[MemoryGuardianQueueStatus.PENDING.value]
+        status.queued_applied = queue_counts[MemoryGuardianQueueStatus.APPLIED.value]
+        status.queued_rejected = queue_counts[MemoryGuardianQueueStatus.REJECTED.value]
+        status.queued_dead = queue_counts[MemoryGuardianQueueStatus.DEAD.value]
         status.last_event_at = last["created_at"] if last else None
         return status
 
