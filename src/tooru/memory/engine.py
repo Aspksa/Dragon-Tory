@@ -19,7 +19,7 @@ from tooru.memory.models import (
     MemorySyncResponse,
     MemoryUpdate,
 )
-from tooru.memory.reranker import HybridReranker
+from tooru.memory.reranker import HybridReranker, lexical_similarity
 from tooru.memory.store import SQLiteMemoryStore
 
 
@@ -44,6 +44,10 @@ class MemoryEngine:
         exact = self.store.find_exact(memory)
         if exact is not None:
             return exact
+
+        near_duplicate = self._near_duplicate(memory)
+        if near_duplicate is not None:
+            return near_duplicate
 
         previous_same_key = self.store.find_same_key(memory)
         item = self.store.add(memory)
@@ -95,7 +99,11 @@ class MemoryEngine:
             return []
 
         query_vector = self.embedder.embed([request.query])[0]
-        vectors = self.store.vectors_for([item.id for item in candidates])
+        vectors = self.store.vectors_for(
+            [item.id for item in candidates],
+            provider=self.embedder.name,
+            model=self.embedder.model,
+        )
 
         missing = [item for item in candidates if item.id not in vectors]
         if missing:
@@ -222,7 +230,11 @@ class MemoryEngine:
         return self.store.sync(request)
 
     def backfill_vectors(self, limit: int = 500) -> int:
-        items = self.store.missing_vector_items(limit)
+        items = self.store.stale_vector_items(
+            self.embedder.name,
+            self.embedder.model,
+            limit,
+        )
         if not items:
             return 0
         vectors = self.embedder.embed([self._embedding_text(item) for item in items])
@@ -231,6 +243,65 @@ class MemoryEngine:
                 item.id, vector, self.embedder.name, self.embedder.model
             )
         return len(items)
+
+    def _near_duplicate(self, memory: MemoryCreate) -> MemoryItem | None:
+        if memory.key is not None:
+            return None
+
+        request = MemorySearch(
+            owner_id=memory.owner_id,
+            scope=memory.scope,
+            project_id=memory.project_id,
+            query=memory.content,
+            kind=memory.kind,
+            min_importance=0.0,
+            limit=20,
+        )
+        candidates = self.store.candidates(request, limit=100)
+        if not candidates:
+            return None
+
+        query_vector = self.embedder.embed([
+            " | ".join(
+                filter(
+                    None,
+                    [
+                        memory.kind.value,
+                        memory.content,
+                        " ".join(memory.tags),
+                    ],
+                )
+            )
+        ])[0]
+        vectors = self.store.vectors_for(
+            [candidate.id for candidate in candidates],
+            provider=self.embedder.name,
+            model=self.embedder.model,
+        )
+
+        missing = [candidate for candidate in candidates if candidate.id not in vectors]
+        if missing:
+            generated = self.embedder.embed(
+                [self._embedding_text(candidate) for candidate in missing]
+            )
+            for candidate, vector in zip(missing, generated, strict=True):
+                self.store.upsert_vector(
+                    candidate.id,
+                    vector,
+                    self.embedder.name,
+                    self.embedder.model,
+                )
+                vectors[candidate.id] = vector
+
+        for candidate in candidates:
+            semantic = max(
+                0.0,
+                cosine_similarity(query_vector, vectors.get(candidate.id, [])),
+            )
+            lexical = lexical_similarity(memory.content, candidate.content)
+            if semantic >= 0.97 and lexical >= 0.80:
+                return candidate
+        return None
 
     def _index(self, item: MemoryItem) -> None:
         vector = self.embedder.embed([self._embedding_text(item)])[0]
@@ -249,7 +320,11 @@ class MemoryEngine:
         )
         query_vector = self.embedder.embed([self._embedding_text(item)])[0]
         candidates = self.store.candidates(request, limit=100)
-        vectors = self.store.vectors_for([candidate.id for candidate in candidates])
+        vectors = self.store.vectors_for(
+            [candidate.id for candidate in candidates],
+            provider=self.embedder.name,
+            model=self.embedder.model,
+        )
         for candidate in candidates:
             if candidate.id == item.id:
                 continue
