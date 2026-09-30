@@ -7,10 +7,13 @@ from tooru.memory.models import (
     MemoryDelete,
     MemoryExtractRequest,
     MemoryExtractResponse,
+    MemoryFeedback,
     MemoryItem,
     MemoryLink,
     MemoryLinkType,
+    MemoryMaintenanceReport,
     MemoryRecallHit,
+    MemoryRevision,
     MemorySearch,
     MemorySyncRequest,
     MemorySyncResponse,
@@ -55,6 +58,16 @@ def consolidate_memory(
     return request.app.state.memory.consolidate(payload)
 
 
+@router.post("/maintenance/run", response_model=MemoryMaintenanceReport)
+async def run_maintenance(request: Request) -> MemoryMaintenanceReport:
+    return await request.app.state.memory_automation.run_once()
+
+
+@router.get("/maintenance/latest", response_model=MemoryMaintenanceReport | None)
+def latest_maintenance(request: Request) -> MemoryMaintenanceReport | None:
+    return request.app.state.memory_automation.latest_report
+
+
 @router.post("/sync", response_model=MemorySyncResponse)
 def sync_memory(payload: MemorySyncRequest, request: Request) -> MemorySyncResponse:
     return request.app.state.memory.sync(payload)
@@ -67,6 +80,30 @@ def get_memory_links(
     relation: MemoryLinkType | None = Query(default=None),
 ) -> list[MemoryLink]:
     return request.app.state.memory.links_for(memory_id, relation)
+
+
+@router.get("/{memory_id}/history", response_model=list[MemoryRevision])
+def get_memory_history(
+    memory_id: str,
+    request: Request,
+    owner_id: str = Query(default="local-user"),
+) -> list[MemoryRevision]:
+    try:
+        return request.app.state.memory.history(memory_id, owner_id)
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.post("/{memory_id}/feedback", response_model=MemoryItem)
+def memory_feedback(
+    memory_id: str,
+    payload: MemoryFeedback,
+    request: Request,
+) -> MemoryItem:
+    try:
+        return request.app.state.memory.feedback(memory_id, payload)
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
 
 @router.get("/{memory_id}", response_model=MemoryItem)

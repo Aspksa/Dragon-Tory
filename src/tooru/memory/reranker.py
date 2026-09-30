@@ -22,7 +22,7 @@ def lexical_similarity(query: str, text: str) -> float:
     return overlap / math.sqrt(len(query_tokens) * len(text_tokens))
 
 
-def recency_score(updated_at: str, half_life_days: float = 90.0) -> float:
+def recency_score(updated_at: str, half_life_days: float = 120.0) -> float:
     try:
         moment = datetime.fromisoformat(updated_at)
         if moment.tzinfo is None:
@@ -31,6 +31,13 @@ def recency_score(updated_at: str, half_life_days: float = 90.0) -> float:
     except ValueError:
         return 0.5
     return math.exp(-math.log(2) * age_days / half_life_days)
+
+
+def usage_score(memory: MemoryItem) -> float:
+    access = min(1.0, math.log1p(memory.access_count) / math.log(21))
+    total_feedback = memory.helpful_count + memory.unhelpful_count
+    feedback = memory.helpful_count / total_feedback if total_feedback else 0.5
+    return 0.65 * access + 0.35 * feedback
 
 
 class HybridReranker:
@@ -51,13 +58,17 @@ class HybridReranker:
         )
         recency = recency_score(memory.updated_at)
         semantic = max(0.0, semantic_score)
+        usage = usage_score(memory)
+        pin = 1.0 if memory.pinned else 0.0
 
         total = (
-            0.50 * semantic
-            + 0.20 * lexical
+            0.44 * semantic
+            + 0.18 * lexical
             + 0.12 * memory.importance
             + 0.08 * memory.confidence
-            + 0.10 * recency
+            + 0.08 * recency
+            + 0.05 * usage
+            + 0.05 * pin
         )
         return MemoryRecallHit(
             memory=memory,
@@ -67,4 +78,6 @@ class HybridReranker:
             importance_score=memory.importance,
             confidence_score=memory.confidence,
             recency_score=round(recency, 6),
+            usage_score=round(usage, 6),
+            pin_score=pin,
         )

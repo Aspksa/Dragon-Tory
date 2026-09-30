@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 
 from tooru.memory.embedding import EmbeddingProvider, cosine_similarity
 from tooru.memory.extractor import HeuristicMemoryExtractor
@@ -9,11 +10,14 @@ from tooru.memory.models import (
     MemoryDelete,
     MemoryExtractRequest,
     MemoryExtractResponse,
+    MemoryFeedback,
     MemoryItem,
     MemoryKind,
     MemoryLink,
     MemoryLinkType,
+    MemoryMaintenanceReport,
     MemoryRecallHit,
+    MemoryRevision,
     MemorySearch,
     MemorySyncRequest,
     MemorySyncResponse,
@@ -56,17 +60,12 @@ class MemoryEngine:
         for previous in previous_same_key:
             if self._normalize(previous.content) != self._normalize(item.content):
                 self.store.add_link(
-                    item.id,
-                    previous.id,
-                    MemoryLinkType.CONTRADICTS,
-                    1.0,
+                    item.id, previous.id, MemoryLinkType.CONTRADICTS, 1.0
                 )
                 self.store.add_link(
-                    item.id,
-                    previous.id,
-                    MemoryLinkType.SUPERSEDES,
-                    0.9,
+                    item.id, previous.id, MemoryLinkType.SUPERSEDES, 1.0
                 )
+                self.store.mark_superseded(previous.id, previous.owner_id)
 
         self._link_related(item)
         return item
@@ -86,6 +85,12 @@ class MemoryEngine:
 
     def delete(self, memory_id: str, payload: MemoryDelete) -> MemoryItem:
         return self.store.delete(memory_id, payload)
+
+    def feedback(self, memory_id: str, payload: MemoryFeedback) -> MemoryItem:
+        return self.store.record_feedback(memory_id, payload)
+
+    def history(self, memory_id: str, owner_id: str) -> list[MemoryRevision]:
+        return self.store.history_for(memory_id, owner_id)
 
     def search(self, request: MemorySearch) -> list[MemoryItem]:
         return [hit.memory for hit in self.recall(request)]
@@ -107,7 +112,9 @@ class MemoryEngine:
 
         missing = [item for item in candidates if item.id not in vectors]
         if missing:
-            generated = self.embedder.embed([self._embedding_text(item) for item in missing])
+            generated = self.embedder.embed(
+                [self._embedding_text(item) for item in missing]
+            )
             for item, vector in zip(missing, generated, strict=True):
                 self.store.upsert_vector(
                     item.id, vector, self.embedder.name, self.embedder.model
@@ -123,7 +130,9 @@ class MemoryEngine:
             for item in candidates
         ]
         hits.sort(key=lambda hit: hit.score, reverse=True)
-        return hits[: request.limit]
+        selected = hits[: request.limit]
+        self.store.touch_recall([hit.memory.id for hit in selected])
+        return selected
 
     def extract(self, request: MemoryExtractRequest) -> MemoryExtractResponse:
         candidates = self.extractor.extract(request)
@@ -169,6 +178,9 @@ class MemoryEngine:
             MemoryKind.DECISION: "Решения",
             MemoryKind.TASK: "Задачи",
             MemoryKind.EVENT: "События",
+            MemoryKind.EPISODE: "Эпизоды",
+            MemoryKind.GOAL: "Цели",
+            MemoryKind.ENTITY: "Сущности",
             MemoryKind.NOTE: "Заметки",
             MemoryKind.INSTRUCTION: "Правила",
             MemoryKind.RELATIONSHIP: "Связи",
@@ -180,12 +192,14 @@ class MemoryEngine:
             best = sorted(
                 items,
                 key=lambda item: (
+                    item.pinned,
                     item.importance,
+                    item.access_count,
                     item.confidence,
                     item.updated_at,
                 ),
                 reverse=True,
-            )[:8]
+            )[:10]
             lines = "\n".join(f"- {item.content.strip()}" for item in best)
             sections.append(f"{labels.get(kind, kind.value)}:\n{lines}")
 
@@ -199,8 +213,8 @@ class MemoryEngine:
                 key="memory.consolidated.summary",
                 content=summary,
                 source="memory-consolidator",
-                confidence=0.90,
-                importance=0.90,
+                confidence=0.92,
+                importance=0.92,
                 tags=["summary", "auto-consolidated"],
             )
         )
@@ -208,16 +222,73 @@ class MemoryEngine:
         for source_id in source_ids:
             if source_id != memory.id:
                 self.store.add_link(
-                    memory.id,
-                    source_id,
-                    MemoryLinkType.SUMMARIZES,
-                    1.0,
+                    memory.id, source_id, MemoryLinkType.SUMMARIZES, 1.0
                 )
         return MemoryConsolidateResponse(
             summary=summary,
             memory=memory,
             source_ids=source_ids,
         )
+
+    def maintain(
+        self,
+        archive_after_days: int,
+        archive_max_importance: float,
+        archive_max_access_count: int,
+        auto_consolidate_threshold: int,
+        consolidate_cooldown_hours: int,
+    ) -> MemoryMaintenanceReport:
+        started_at = datetime.now(UTC).isoformat()
+        vectors = self.backfill_vectors()
+        expired = self.store.archive_expired()
+        stale = self.store.archive_stale(
+            older_than_days=archive_after_days,
+            max_importance=archive_max_importance,
+            max_access_count=archive_max_access_count,
+        )
+
+        summaries = 0
+        cooldown = datetime.now(UTC) - timedelta(hours=consolidate_cooldown_hours)
+        for owner_id, scope, project_id, count, last_summary_at in self.store.maintenance_scopes():
+            if count < auto_consolidate_threshold:
+                continue
+            if last_summary_at:
+                try:
+                    last_summary = datetime.fromisoformat(last_summary_at)
+                    if last_summary.tzinfo is None:
+                        last_summary = last_summary.replace(tzinfo=UTC)
+                    if last_summary > cooldown:
+                        continue
+                except ValueError:
+                    pass
+
+            result = self.consolidate(
+                MemoryConsolidateRequest(
+                    owner_id=owner_id,
+                    scope=scope,
+                    project_id=project_id,
+                    limit=min(count, 250),
+                    min_importance=0.25,
+                )
+            )
+            if result.memory is not None:
+                summaries += 1
+
+        counts = self.store.status_counts()
+        completed_at = datetime.now(UTC).isoformat()
+        report = MemoryMaintenanceReport(
+            started_at=started_at,
+            completed_at=completed_at,
+            vectors_reindexed=vectors,
+            expired_archived=expired,
+            stale_archived=stale,
+            summaries_created=summaries,
+            active_memories=counts.get("active", 0),
+            archived_memories=counts.get("archived", 0),
+            superseded_memories=counts.get("superseded", 0),
+        )
+        self.store.save_maintenance_report(report.model_dump())
+        return report
 
     def links_for(
         self,
@@ -265,11 +336,7 @@ class MemoryEngine:
             " | ".join(
                 filter(
                     None,
-                    [
-                        memory.kind.value,
-                        memory.content,
-                        " ".join(memory.tags),
-                    ],
+                    [memory.kind.value, memory.content, " ".join(memory.tags)],
                 )
             )
         ])[0]
@@ -286,10 +353,7 @@ class MemoryEngine:
             )
             for candidate, vector in zip(missing, generated, strict=True):
                 self.store.upsert_vector(
-                    candidate.id,
-                    vector,
-                    self.embedder.name,
-                    self.embedder.model,
+                    candidate.id, vector, self.embedder.name, self.embedder.model
                 )
                 vectors[candidate.id] = vector
 
@@ -334,10 +398,7 @@ class MemoryEngine:
             similarity = max(0.0, cosine_similarity(query_vector, vector))
             if similarity >= self.related_threshold:
                 self.store.add_link(
-                    item.id,
-                    candidate.id,
-                    MemoryLinkType.RELATED,
-                    similarity,
+                    item.id, candidate.id, MemoryLinkType.RELATED, similarity
                 )
 
     @staticmethod

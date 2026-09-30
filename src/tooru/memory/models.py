@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -14,10 +15,19 @@ class MemoryKind(StrEnum):
     DECISION = "decision"
     TASK = "task"
     EVENT = "event"
+    EPISODE = "episode"
+    GOAL = "goal"
+    ENTITY = "entity"
     NOTE = "note"
     INSTRUCTION = "instruction"
     RELATIONSHIP = "relationship"
     SUMMARY = "summary"
+
+
+class MemoryStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    SUPERSEDED = "superseded"
 
 
 class MemoryLinkType(StrEnum):
@@ -26,6 +36,7 @@ class MemoryLinkType(StrEnum):
     CONTRADICTS = "contradicts"
     SUPERSEDES = "supersedes"
     SUMMARIZES = "summarizes"
+    SUPPORTS = "supports"
 
 
 class ScopedMemoryModel(BaseModel):
@@ -51,6 +62,8 @@ class MemoryCreate(ScopedMemoryModel):
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     importance: float = Field(default=0.5, ge=0.0, le=1.0)
     tags: list[str] = Field(default_factory=list, max_length=30)
+    pinned: bool = False
+    expires_at: str | None = None
     device_id: str | None = Field(default=None, max_length=200)
     session_id: str | None = Field(default=None, max_length=200)
     client_mutation_id: str | None = Field(default=None, max_length=200)
@@ -58,7 +71,14 @@ class MemoryCreate(ScopedMemoryModel):
 
 class MemoryItem(MemoryCreate):
     id: str
+    status: MemoryStatus = MemoryStatus.ACTIVE
     revision: int = Field(ge=1)
+    access_count: int = Field(default=0, ge=0)
+    helpful_count: int = Field(default=0, ge=0)
+    unhelpful_count: int = Field(default=0, ge=0)
+    last_accessed_at: str | None = None
+    reinforced_at: str | None = None
+    archived_at: str | None = None
     created_at: str
     updated_at: str
     deleted_at: str | None = None
@@ -73,6 +93,8 @@ class MemoryUpdate(BaseModel):
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     importance: float | None = Field(default=None, ge=0.0, le=1.0)
     tags: list[str] | None = Field(default=None, max_length=30)
+    pinned: bool | None = None
+    expires_at: str | None = None
     device_id: str | None = Field(default=None, max_length=200)
     session_id: str | None = Field(default=None, max_length=200)
     expected_revision: int = Field(ge=1)
@@ -89,6 +111,7 @@ class MemorySearch(ScopedMemoryModel):
     kind: MemoryKind | None = None
     min_importance: float = Field(default=0.0, ge=0.0, le=1.0)
     tags: list[str] = Field(default_factory=list, max_length=10)
+    include_archived: bool = False
     limit: int = Field(default=20, ge=1, le=100)
 
 
@@ -100,6 +123,14 @@ class MemoryRecallHit(BaseModel):
     importance_score: float
     confidence_score: float
     recency_score: float
+    usage_score: float
+    pin_score: float
+
+
+class MemoryFeedback(BaseModel):
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+    helpful: bool
+    strength: float = Field(default=1.0, ge=0.1, le=1.0)
 
 
 class MemorySyncRequest(ScopedMemoryModel):
@@ -150,3 +181,23 @@ class MemoryLink(BaseModel):
     relation: MemoryLinkType
     weight: float = Field(ge=0.0, le=1.0)
     created_at: str
+
+
+class MemoryRevision(BaseModel):
+    memory_id: str
+    revision: int
+    reason: str
+    snapshot: dict[str, Any]
+    created_at: str
+
+
+class MemoryMaintenanceReport(BaseModel):
+    started_at: str
+    completed_at: str
+    vectors_reindexed: int = 0
+    expired_archived: int = 0
+    stale_archived: int = 0
+    summaries_created: int = 0
+    active_memories: int = 0
+    archived_memories: int = 0
+    superseded_memories: int = 0

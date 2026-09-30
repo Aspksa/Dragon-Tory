@@ -8,6 +8,7 @@ from tooru.api.memory import router as memory_router
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
+from tooru.memory.maintenance import MemoryAutomation
 from tooru.memory.store import SQLiteMemoryStore
 
 
@@ -21,8 +22,27 @@ async def lifespan(app: FastAPI):
         related_threshold=settings.memory_related_threshold,
     )
     memory.initialize()
+
+    automation = MemoryAutomation(
+        memory,
+        interval_seconds=settings.memory_maintenance_interval_seconds,
+        archive_after_days=settings.memory_archive_after_days,
+        archive_max_importance=settings.memory_archive_max_importance,
+        archive_max_access_count=settings.memory_archive_max_access_count,
+        auto_consolidate_threshold=settings.memory_auto_consolidate_threshold,
+        consolidate_cooldown_hours=settings.memory_consolidate_cooldown_hours,
+    )
+
     app.state.memory = memory
-    yield
+    app.state.memory_automation = automation
+
+    if settings.memory_automation_enabled:
+        automation.start()
+
+    try:
+        yield
+    finally:
+        await automation.stop()
 
 
 def create_app() -> FastAPI:

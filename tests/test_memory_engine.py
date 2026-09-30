@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from tooru.memory.embedding import HashEmbeddingProvider
@@ -7,10 +8,12 @@ from tooru.memory.models import (
     MemoryConsolidateRequest,
     MemoryCreate,
     MemoryExtractRequest,
+    MemoryFeedback,
     MemoryKind,
     MemoryLinkType,
     MemoryScope,
     MemorySearch,
+    MemoryStatus,
 )
 from tooru.memory.store import SQLiteMemoryStore
 
@@ -32,14 +35,12 @@ def test_duplicate_memory_returns_existing_item(tmp_path: Path) -> None:
         kind=MemoryKind.FACT,
         content="Ноутбук имеет 16 ГБ оперативной памяти.",
     )
-
     first = engine.add(memory)
     second = engine.add(memory)
-
     assert first.id == second.id
 
 
-def test_same_key_creates_contradiction_link(tmp_path: Path) -> None:
+def test_same_key_supersedes_old_memory(tmp_path: Path) -> None:
     engine = make_engine(tmp_path)
     first = engine.add(
         MemoryCreate(
@@ -59,15 +60,15 @@ def test_same_key_creates_contradiction_link(tmp_path: Path) -> None:
             content="Основная модель — Model B.",
         )
     )
-
-    links = engine.links_for(second.id, MemoryLinkType.CONTRADICTS)
-
+    links = engine.links_for(second.id, MemoryLinkType.SUPERSEDES)
+    old = engine.get(first.id)
     assert any(link.target_id == first.id for link in links)
+    assert old.status is MemoryStatus.SUPERSEDED
 
 
-def test_hybrid_recall_prefers_relevant_memory(tmp_path: Path) -> None:
+def test_hybrid_recall_tracks_usage_and_feedback(tmp_path: Path) -> None:
     engine = make_engine(tmp_path)
-    engine.add(
+    important = engine.add(
         MemoryCreate(
             scope=MemoryScope.PROJECT,
             project_id="dragon-tory",
@@ -94,14 +95,63 @@ def test_hybrid_recall_prefers_relevant_memory(tmp_path: Path) -> None:
             limit=2,
         )
     )
-
     assert hits
     assert "Claude" in hits[0].memory.content
+
+    touched = engine.get(important.id)
+    assert touched.access_count >= 1
+
+    reinforced = engine.feedback(
+        important.id,
+        MemoryFeedback(helpful=True, strength=1.0),
+    )
+    assert reinforced.helpful_count == 1
+    assert reinforced.reinforced_at is not None
+
+
+def test_history_is_written_for_updates_and_feedback(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    item = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PERSONAL,
+            kind=MemoryKind.PREFERENCE,
+            key="ui.theme",
+            content="Светлая тема.",
+        )
+    )
+    engine.feedback(item.id, MemoryFeedback(helpful=True))
+    history = engine.history(item.id, item.owner_id)
+    assert len(history) >= 2
+    assert history[0].revision > history[-1].revision
+
+
+def test_expired_memory_is_archived_by_maintenance(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    expired = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    item = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PERSONAL,
+            kind=MemoryKind.NOTE,
+            content="Временная заметка.",
+            expires_at=expired,
+        )
+    )
+
+    report = engine.maintain(
+        archive_after_days=180,
+        archive_max_importance=0.3,
+        archive_max_access_count=1,
+        auto_consolidate_threshold=100,
+        consolidate_cooldown_hours=24,
+    )
+
+    archived = engine.get(item.id)
+    assert report.expired_archived == 1
+    assert archived.status is MemoryStatus.ARCHIVED
 
 
 def test_conversation_extraction_and_consolidation(tmp_path: Path) -> None:
     engine = make_engine(tmp_path)
-
     result = engine.extract(
         MemoryExtractRequest(
             scope=MemoryScope.PROJECT,
@@ -117,7 +167,6 @@ def test_conversation_extraction_and_consolidation(tmp_path: Path) -> None:
             ],
         )
     )
-
     assert len(result.saved) >= 1
 
     engine.add(
@@ -136,7 +185,6 @@ def test_conversation_extraction_and_consolidation(tmp_path: Path) -> None:
             project_id="dragon-tory",
         )
     )
-
     assert consolidated.memory is not None
     assert consolidated.memory.kind is MemoryKind.SUMMARY
     assert consolidated.source_ids

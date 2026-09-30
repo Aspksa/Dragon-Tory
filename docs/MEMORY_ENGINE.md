@@ -1,62 +1,64 @@
-# Memory Engine v3
+# Memory Engine v4
 
-Memory is a first-class subsystem of Dragon Tory. Claude and DeepSeek consume
-memory, but neither provider owns it.
+Dragon Tory owns its memory. Claude and DeepSeek are replaceable reasoning
+providers that consume selected context; they do not own long-term memory.
 
-## Retrieval pipeline
+## Memory lifecycle
 
-1. Enforce owner/scope/project isolation.
-2. Build a query embedding.
-3. Load a bounded candidate set from SQLite.
-4. Compare semantic vectors.
-5. Rerank using semantic similarity, lexical similarity, importance,
-   confidence and recency.
-6. Return the highest scoring memories to the AI context builder.
+Every record can be active, archived or superseded.
 
-POST /v1/memory/recall exposes scores for debugging and tuning.
+A memory can be pinned so automatic maintenance never archives it. Temporary
+memories can have an expires_at timestamp. Low-value old notes, events and
+episodes can be archived automatically while durable facts, decisions, goals,
+preferences and instructions are preserved.
 
-## Embeddings
+When a new keyed fact or decision replaces an older value, the older memory is
+marked superseded instead of being erased. Both versions remain auditable.
 
-The default hash embedder is fully offline, deterministic and dependency-free.
-It keeps memory indexing functional before a paid embeddings service is chosen.
+## Reinforcement
 
-A stronger neural embedding service can later use the OpenAI-compatible
-provider through environment settings without changing the memory API.
+Recall usage is tracked with access_count and last_accessed_at.
 
-## Duplicate and contradiction handling
+Applications can send helpful or unhelpful feedback. Helpful memories are
+reinforced slightly; unhelpful memories are weakened slightly. Retrieval also
+uses historical usage as one ranking signal.
 
-Exact normalized duplicates are not inserted twice.
+Pinned memory receives an explicit ranking boost.
 
-Memories sharing the same explicit key but different content are retained.
-The new memory receives contradicts and supersedes graph links to the previous
-value instead of silently deleting history.
+## Hybrid recall
 
-## Relationship graph
+Ranking combines semantic similarity, lexical overlap, importance, confidence,
+recency, usage feedback and pinning.
 
-memory_links supports related, duplicate, contradicts, supersedes and
-summarizes relations.
+## History and provenance
 
-Related memories are linked automatically when semantic similarity crosses the
-configured threshold.
+Every create, edit, feedback change, supersession, archive and delete writes a
+revision snapshot to memory_history.
 
-## Conversation extraction
+The history API makes changes auditable and prepares the engine for future
+rollback tools.
 
-POST /v1/memory/extract inspects user conversation messages and creates durable
-memory candidates. The first implementation is intentionally conservative and
-offline. It extracts likely preferences, decisions, tasks, instructions and
-facts.
+## Automated maintenance
 
-The extractor is isolated from storage so a Claude/DeepSeek-backed extractor
-can replace it later.
+The local backend runs a safe maintenance cycle at a configurable interval.
 
-## Consolidation
+A cycle can:
+- reindex stale or missing embeddings;
+- archive expired temporary memory;
+- archive old low-value notes, events and episodes;
+- create periodic consolidation summaries after enough new memory accumulates;
+- store a maintenance report.
 
-POST /v1/memory/consolidate creates a durable summary from important memories
-inside exactly one personal/project scope. The summary is linked to its source
-memories.
+Maintenance does not expose the database to the internet and does not implement
+mobile synchronization or authentication.
 
-## Mobile note
+Manual trigger:
+POST /v1/memory/maintenance/run
 
-The existing revision, cursor and device fields remain compatible with future
-mobile clients. This stage intentionally does not add remote authentication or
-a central internet synchronization service.
+Latest in-process report:
+GET /v1/memory/maintenance/latest
+
+## Memory classes
+
+Durable types include fact, preference, decision, task, event, episode, goal,
+entity, note, instruction, relationship and summary.

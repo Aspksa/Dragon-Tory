@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     memory_embedding_dimensions: int = 384
     memory_related_threshold: float = 0.82
 
+    memory_automation_enabled: bool = True
+    memory_maintenance_interval_seconds: int = 1800
+    memory_archive_after_days: int = 180
+    memory_archive_max_importance: float = 0.30
+    memory_archive_max_access_count: int = 1
+    memory_auto_consolidate_threshold: int = 40
+    memory_consolidate_cooldown_hours: int = 24
+
     model_config = SettingsConfigDict(
         env_prefix="TOORU_",
         env_file=".env",
