@@ -337,3 +337,49 @@ class MemoryGuardianStatus(BaseModel):
     blocked: int = 0
     ignored: int = 0
     last_event_at: str | None = None
+
+
+class MemoryGuardianQueueStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    APPLIED = "applied"
+    DEAD = "dead"
+
+
+class MemoryGuardianQueueItem(BaseModel):
+    id: str
+    fingerprint: str
+    owner_id: str
+    scope: MemoryScope
+    project_id: str | None = None
+    risk: MemoryGuardianRisk
+    status: MemoryGuardianQueueStatus
+    decision: MemoryIntelligenceDecision
+    messages: list[ConversationMessage]
+    analyzer: str
+    reviewer: str | None = None
+    attempts: int = 0
+    max_attempts: int = 5
+    next_attempt_at: str | None = None
+    last_error: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class MemoryGuardianQueueAction(BaseModel):
+    reason: str = Field(default="", max_length=2_000)
+
+
+class MemoryGuardianAutomationStatus(BaseModel):
+    started: bool
+    running: bool
+    interval_seconds: int
+    processed_count: int = 0
+    applied_count: int = 0
+    rejected_count: int = 0
+    dead_count: int = 0
+    failure_count: int = 0
+    last_started_at: str | None = None
+    last_completed_at: str | None = None
+    last_error: str | None = None
