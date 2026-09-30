@@ -6,6 +6,7 @@ from tooru.memory.engine import MemoryEngine
 from tooru.memory.models import (
     ConversationMessage,
     MemoryConsolidateRequest,
+    MemoryContextRequest,
     MemoryCreate,
     MemoryExtractRequest,
     MemoryFeedback,
@@ -148,6 +149,75 @@ def test_expired_memory_is_archived_by_maintenance(tmp_path: Path) -> None:
     archived = engine.get(item.id)
     assert report.expired_archived == 1
     assert archived.status is MemoryStatus.ARCHIVED
+
+
+def test_context_pack_keeps_projects_isolated_and_includes_pinned_personal(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    pinned = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PERSONAL,
+            kind=MemoryKind.INSTRUCTION,
+            content="Всегда отвечать на русском языке.",
+            importance=1.0,
+            pinned=True,
+        )
+    )
+    engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.DECISION,
+            content="Dragon Tory использует Claude и DeepSeek.",
+            importance=1.0,
+        )
+    )
+    engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="other-project",
+            kind=MemoryKind.DECISION,
+            content="Другой проект использует Model X.",
+            importance=1.0,
+        )
+    )
+
+    pack = engine.context_pack(
+        MemoryContextRequest(
+            query="Какие модели использует проект?",
+            project_id="dragon-tory",
+        )
+    )
+
+    assert any(item.id == pinned.id for item in pack.pinned_personal)
+    assert "Dragon Tory" in pack.rendered_context
+    assert "Другой проект" not in pack.rendered_context
+    assert "PERSONAL_MEMORY" in pack.rendered_context
+    assert "PROJECT_MEMORY:dragon-tory" in pack.rendered_context
+
+
+def test_extractor_recognizes_goal_and_episode(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    result = engine.extract(
+        MemoryExtractRequest(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            auto_save=False,
+            messages=[
+                ConversationMessage(
+                    role="user",
+                    content=(
+                        "Моя цель — сделать Тоору сильным помощником. "
+                        "Сегодня сделали новую систему памяти."
+                    ),
+                )
+            ],
+        )
+    )
+    kinds = {item.kind for item in result.candidates}
+    assert MemoryKind.GOAL in kinds
+    assert MemoryKind.EPISODE in kinds
 
 
 def test_conversation_extraction_and_consolidation(tmp_path: Path) -> None:
