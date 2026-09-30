@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     claude_api_key: str | None = None
 
+    memory_embedding_provider: str = "hash"
+    memory_embedding_url: str | None = None
+    memory_embedding_api_key: str | None = None
+    memory_embedding_model: str | None = None
+    memory_embedding_dimensions: int = 384
+    memory_related_threshold: float = 0.82
+
     model_config = SettingsConfigDict(
         env_prefix="TOORU_",
         env_file=".env",

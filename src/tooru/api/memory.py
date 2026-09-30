@@ -1,9 +1,16 @@
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from tooru.memory.models import (
+    MemoryConsolidateRequest,
+    MemoryConsolidateResponse,
     MemoryCreate,
     MemoryDelete,
+    MemoryExtractRequest,
+    MemoryExtractResponse,
     MemoryItem,
+    MemoryLink,
+    MemoryLinkType,
+    MemoryRecallHit,
     MemorySearch,
     MemorySyncRequest,
     MemorySyncResponse,
@@ -24,9 +31,42 @@ def search_memory(payload: MemorySearch, request: Request) -> list[MemoryItem]:
     return request.app.state.memory.search(payload)
 
 
+@router.post("/recall", response_model=list[MemoryRecallHit])
+def recall_memory(
+    payload: MemorySearch,
+    request: Request,
+) -> list[MemoryRecallHit]:
+    return request.app.state.memory.recall(payload)
+
+
+@router.post("/extract", response_model=MemoryExtractResponse)
+def extract_memory(
+    payload: MemoryExtractRequest,
+    request: Request,
+) -> MemoryExtractResponse:
+    return request.app.state.memory.extract(payload)
+
+
+@router.post("/consolidate", response_model=MemoryConsolidateResponse)
+def consolidate_memory(
+    payload: MemoryConsolidateRequest,
+    request: Request,
+) -> MemoryConsolidateResponse:
+    return request.app.state.memory.consolidate(payload)
+
+
 @router.post("/sync", response_model=MemorySyncResponse)
 def sync_memory(payload: MemorySyncRequest, request: Request) -> MemorySyncResponse:
     return request.app.state.memory.sync(payload)
+
+
+@router.get("/{memory_id}/links", response_model=list[MemoryLink])
+def get_memory_links(
+    memory_id: str,
+    request: Request,
+    relation: MemoryLinkType | None = Query(default=None),
+) -> list[MemoryLink]:
+    return request.app.state.memory.links_for(memory_id, relation)
 
 
 @router.get("/{memory_id}", response_model=MemoryItem)

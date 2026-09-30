@@ -20,6 +20,14 @@ class MemoryKind(StrEnum):
     SUMMARY = "summary"
 
 
+class MemoryLinkType(StrEnum):
+    RELATED = "related"
+    DUPLICATE = "duplicate"
+    CONTRADICTS = "contradicts"
+    SUPERSEDES = "supersedes"
+    SUMMARIZES = "summarizes"
+
+
 class ScopedMemoryModel(BaseModel):
     owner_id: str = Field(default="local-user", min_length=1, max_length=200)
     scope: MemoryScope
@@ -84,6 +92,16 @@ class MemorySearch(ScopedMemoryModel):
     limit: int = Field(default=20, ge=1, le=100)
 
 
+class MemoryRecallHit(BaseModel):
+    memory: MemoryItem
+    score: float
+    semantic_score: float
+    lexical_score: float
+    importance_score: float
+    confidence_score: float
+    recency_score: float
+
+
 class MemorySyncRequest(ScopedMemoryModel):
     cursor_updated_at: str | None = None
     cursor_id: str | None = None
@@ -95,3 +113,40 @@ class MemorySyncResponse(BaseModel):
     next_updated_at: str | None = None
     next_id: str | None = None
     has_more: bool = False
+
+
+class ConversationMessage(BaseModel):
+    role: str = Field(pattern="^(user|assistant|system|tool)$")
+    content: str = Field(min_length=1, max_length=100_000)
+
+
+class MemoryExtractRequest(ScopedMemoryModel):
+    messages: list[ConversationMessage] = Field(min_length=1, max_length=200)
+    auto_save: bool = True
+    device_id: str | None = Field(default=None, max_length=200)
+    session_id: str | None = Field(default=None, max_length=200)
+
+
+class MemoryExtractResponse(BaseModel):
+    candidates: list[MemoryCreate]
+    saved: list[MemoryItem]
+
+
+class MemoryConsolidateRequest(ScopedMemoryModel):
+    limit: int = Field(default=100, ge=2, le=1000)
+    min_importance: float = Field(default=0.25, ge=0.0, le=1.0)
+
+
+class MemoryConsolidateResponse(BaseModel):
+    summary: str
+    memory: MemoryItem | None
+    source_ids: list[str]
+
+
+class MemoryLink(BaseModel):
+    id: str
+    source_id: str
+    target_id: str
+    relation: MemoryLinkType
+    weight: float = Field(ge=0.0, le=1.0)
+    created_at: str

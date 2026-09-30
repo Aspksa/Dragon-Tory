@@ -6,13 +6,20 @@ from fastapi import FastAPI
 from tooru.api.health import router as health_router
 from tooru.api.memory import router as memory_router
 from tooru.core.config import get_settings
+from tooru.memory.embedding import build_embedding_provider
+from tooru.memory.engine import MemoryEngine
 from tooru.memory.store import SQLiteMemoryStore
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    memory = SQLiteMemoryStore(settings.memory_db_path)
+    store = SQLiteMemoryStore(settings.memory_db_path)
+    memory = MemoryEngine(
+        store=store,
+        embedder=build_embedding_provider(settings),
+        related_threshold=settings.memory_related_threshold,
+    )
     memory.initialize()
     app.state.memory = memory
     yield
