@@ -303,6 +303,7 @@ class MemoryGuardianDecision(BaseModel):
     outcome: MemoryGuardianOutcome
     policy_reason: str
     memory_id: str | None = None
+    queue_id: str | None = None
 
 
 class MemoryGuardianResult(BaseModel):
