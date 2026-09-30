@@ -13,6 +13,11 @@ from tooru.memory.models import (
     MemoryExtractRequest,
     MemoryExtractResponse,
     MemoryFeedback,
+    MemoryGuardianAuditEvent,
+    MemoryGuardianOutcome,
+    MemoryGuardianRequest,
+    MemoryGuardianResult,
+    MemoryGuardianStatus,
     MemoryIntelligenceRequest,
     MemoryIntelligenceResult,
     MemoryItem,
@@ -63,6 +68,31 @@ async def memory_intelligence(
     request: Request,
 ) -> MemoryIntelligenceResult:
     return await request.app.state.memory_intelligence.process(payload)
+
+
+@router.post("/guardian/process", response_model=MemoryGuardianResult)
+async def guardian_process(
+    payload: MemoryGuardianRequest,
+    request: Request,
+) -> MemoryGuardianResult:
+    return await request.app.state.memory_guardian.process(payload)
+
+
+@router.get("/guardian/status", response_model=MemoryGuardianStatus)
+def guardian_status(request: Request) -> MemoryGuardianStatus:
+    return request.app.state.memory_guardian.status()
+
+
+@router.get("/guardian/events", response_model=list[MemoryGuardianAuditEvent])
+def guardian_events(
+    request: Request,
+    outcome: Annotated[MemoryGuardianOutcome | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[MemoryGuardianAuditEvent]:
+    return request.app.state.memory.store.guardian_events(
+        outcome=outcome,
+        limit=limit,
+    )
 
 
 @router.post("/extract", response_model=MemoryExtractResponse)
