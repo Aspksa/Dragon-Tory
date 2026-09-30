@@ -389,15 +389,27 @@ try {
         exit 0
     }
 
+    $forceLocalPython = ($env:TOORU_FORCE_LOCAL_PYTHON -eq "1")
+
+    if ($forceLocalPython -and (Test-Path -LiteralPath $VenvDir)) {
+        Write-LauncherLog "INFO" "Forced local-Python validation: rebuilding .venv."
+        Remove-Item -LiteralPath $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     if (-not (Test-Venv)) {
         if (Test-Path -LiteralPath $VenvDir) {
             Write-LauncherLog "WARN" "Existing .venv is invalid (often caused by moving the drive). Rebuilding it."
             Remove-Item -LiteralPath $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
         }
 
-        $candidate = Find-Python
-        if ($null -eq $candidate) {
+        if ($forceLocalPython) {
+            Write-LauncherLog "INFO" "Forcing project-local Python bootstrap."
             $candidate = Install-LocalPython
+        } else {
+            $candidate = Find-Python
+            if ($null -eq $candidate) {
+                $candidate = Install-LocalPython
+            }
         }
 
         New-ProjectVenv $candidate
