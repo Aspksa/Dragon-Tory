@@ -16,6 +16,7 @@ from tooru.memory.models import (
     MemoryGuardianRequest,
     MemoryKind,
     MemoryScope,
+    MemorySearch,
 )
 from tooru.memory.store import SQLiteMemoryStore
 
@@ -142,7 +143,7 @@ async def test_pending_memory_retries_when_claude_becomes_available(
 
     assert updated.status is MemoryGuardianQueueStatus.APPLIED
     memories = engine.store.candidates(
-        __import__("tooru.memory.models", fromlist=["MemorySearch"]).MemorySearch(
+        MemorySearch(
             scope=MemoryScope.PROJECT,
             project_id="dragon-tory",
             query="архитектура памяти",
@@ -168,7 +169,7 @@ async def test_manual_approve_and_reject_pending_items(tmp_path: Path) -> None:
     assert any(
         item.kind is MemoryKind.DECISION
         for item in engine.store.candidates(
-            __import__("tooru.memory.models", fromlist=["MemorySearch"]).MemorySearch(
+            MemorySearch(
                 scope=MemoryScope.PROJECT,
                 project_id="dragon-tory",
                 query="архитектуру памяти",
