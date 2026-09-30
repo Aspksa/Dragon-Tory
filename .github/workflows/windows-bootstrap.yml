@@ -1,0 +1,86 @@
+name: Dragon Tory Windows Bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Start.bat"
+      - "scripts/windows/**"
+      - "pyproject.toml"
+      - ".github/workflows/windows-bootstrap.yml"
+  pull_request:
+    paths:
+      - "Start.bat"
+      - "scripts/windows/**"
+      - "pyproject.toml"
+      - ".github/workflows/windows-bootstrap.yml"
+  workflow_dispatch:
+
+jobs:
+  first-run-russian-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Copy project to Cyrillic path
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP "Русский диск\Дракончик Тоору"
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $target -Recurse -Force
+          "DRAGON_TEST_ROOT=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Full first-run bootstrap without preinstalled Python
+        shell: pwsh
+        env:
+          TOORU_FORCE_LOCAL_PYTHON: "1"
+        run: |
+          $launcher = Join-Path $env:DRAGON_TEST_ROOT "Start.bat"
+          & $launcher --no-browser
+          if ($LASTEXITCODE -ne 0) {
+            throw "Portable first-run bootstrap failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Verify downloaded Python and libraries
+        shell: pwsh
+        run: |
+          $localPython = Join-Path $env:DRAGON_TEST_ROOT "runtime\python\python.exe"
+          $venvPython = Join-Path $env:DRAGON_TEST_ROOT ".venv\Scripts\python.exe"
+
+          if (-not (Test-Path -LiteralPath $localPython)) {
+            throw "Project-local Python was not installed."
+          }
+          if (-not (Test-Path -LiteralPath $venvPython)) {
+            throw ".venv was not created."
+          }
+
+          & $localPython -c "import sys; assert sys.version_info[:3] == (3, 12, 10)"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Downloaded local Python version validation failed."
+          }
+
+          & $venvPython -c "import fastapi, uvicorn, pydantic_settings"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Required runtime libraries cannot be imported."
+          }
+
+          & $venvPython -m pip check
+          if ($LASTEXITCODE -ne 0) {
+            throw "pip check found dependency problems."
+          }
+
+      - name: Verify running Dragon Tory
+        shell: pwsh
+        run: |
+          $health = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 5
+          if ($health.status -ne "ok") {
+            throw "Dragon Tory health check failed."
+          }
+
+          $page = Invoke-WebRequest -Uri "http://127.0.0.1:8787/" -TimeoutSec 5 -UseBasicParsing
+          if ($page.StatusCode -ne 200) {
+            throw "Dragon Tory home page did not return HTTP 200."
+          }
