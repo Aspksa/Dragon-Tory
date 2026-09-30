@@ -402,7 +402,12 @@ class SQLiteMemoryStore:
             for row in rows
         }
 
-    def missing_vector_items(self, limit: int = 500) -> list[MemoryItem]:
+    def stale_vector_items(
+        self,
+        provider: str,
+        model: str,
+        limit: int = 500,
+    ) -> list[MemoryItem]:
         select_columns = ", ".join(
             f"m.{column.strip()}"
             for column in self.SELECT_COLUMNS.replace("\n", " ").split(",")
@@ -413,11 +418,16 @@ class SQLiteMemoryStore:
                 SELECT {select_columns}
                 FROM memory_items m
                 LEFT JOIN memory_vectors v ON v.memory_id = m.id
-                WHERE m.deleted_at IS NULL AND v.memory_id IS NULL
+                WHERE m.deleted_at IS NULL
+                  AND (
+                    v.memory_id IS NULL
+                    OR v.provider != ?
+                    OR v.model != ?
+                  )
                 ORDER BY m.updated_at DESC
                 LIMIT ?
                 """,
-                (limit,),
+                (provider, model, limit),
             ).fetchall()
         return [self._row_to_item(row) for row in rows]
 
