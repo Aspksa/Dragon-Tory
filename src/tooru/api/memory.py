@@ -14,7 +14,11 @@ from tooru.memory.models import (
     MemoryExtractResponse,
     MemoryFeedback,
     MemoryGuardianAuditEvent,
+    MemoryGuardianAutomationStatus,
     MemoryGuardianOutcome,
+    MemoryGuardianQueueAction,
+    MemoryGuardianQueueItem,
+    MemoryGuardianQueueStatus,
     MemoryGuardianRequest,
     MemoryGuardianResult,
     MemoryGuardianStatus,
@@ -93,6 +97,91 @@ def guardian_events(
         outcome=outcome,
         limit=limit,
     )
+
+
+@router.get("/guardian/queue", response_model=list[MemoryGuardianQueueItem])
+def guardian_queue(
+    request: Request,
+    queue_status: Annotated[MemoryGuardianQueueStatus | None, Query()] = None,
+    due_only: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[MemoryGuardianQueueItem]:
+    return request.app.state.memory_guardian.queue_items(
+        status=queue_status,
+        due_only=due_only,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/guardian/queue/{queue_id}/retry",
+    response_model=MemoryGuardianQueueItem,
+)
+async def guardian_retry(
+    queue_id: str,
+    request: Request,
+) -> MemoryGuardianQueueItem:
+    try:
+        return await request.app.state.memory_guardian.retry_queue_item(queue_id)
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.post(
+    "/guardian/queue/{queue_id}/approve",
+    response_model=MemoryGuardianQueueItem,
+)
+def guardian_approve(
+    queue_id: str,
+    payload: MemoryGuardianQueueAction,
+    request: Request,
+) -> MemoryGuardianQueueItem:
+    try:
+        return request.app.state.memory_guardian.approve_queue_item(
+            queue_id,
+            reason=payload.reason,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/guardian/queue/{queue_id}/reject",
+    response_model=MemoryGuardianQueueItem,
+)
+def guardian_reject(
+    queue_id: str,
+    payload: MemoryGuardianQueueAction,
+    request: Request,
+) -> MemoryGuardianQueueItem:
+    try:
+        return request.app.state.memory_guardian.reject_queue_item(
+            queue_id,
+            reason=payload.reason,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.post(
+    "/guardian/automation/run",
+    response_model=MemoryGuardianAutomationStatus,
+)
+async def guardian_automation_run(request: Request) -> MemoryGuardianAutomationStatus:
+    return await request.app.state.memory_guardian_automation.run_once()
+
+
+@router.get(
+    "/guardian/automation/status",
+    response_model=MemoryGuardianAutomationStatus,
+)
+def guardian_automation_status(request: Request) -> MemoryGuardianAutomationStatus:
+    return request.app.state.memory_guardian_automation.status()
 
 
 @router.post("/extract", response_model=MemoryExtractResponse)
