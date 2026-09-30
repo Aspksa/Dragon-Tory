@@ -69,6 +69,45 @@ async def test_heuristic_fallback_saves_durable_decision(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
+async def test_intelligence_context_lookup_does_not_reinforce_memory(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    existing = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.FACT,
+            content="Dragon Tory использует сильную память.",
+            importance=0.9,
+        )
+    )
+    intelligence = MemoryIntelligence(
+        engine,
+        AIRouter(),
+        IntelligenceConfig(),
+    )
+
+    await intelligence.process(
+        MemoryIntelligenceRequest(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            use_ai=False,
+            auto_apply=False,
+            messages=[
+                ConversationMessage(
+                    role="user",
+                    content="Расскажи про память Dragon Tory.",
+                )
+            ],
+        )
+    )
+
+    after = engine.get(existing.id)
+    assert after.access_count == 0
+
+
+@pytest.mark.asyncio
 async def test_ai_can_create_memory_and_claude_can_review(tmp_path: Path) -> None:
     engine = make_engine(tmp_path)
     router = AIRouter()
