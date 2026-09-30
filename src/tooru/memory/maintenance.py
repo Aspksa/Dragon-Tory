@@ -1,9 +1,10 @@
 import asyncio
 import logging
 from contextlib import suppress
+from datetime import UTC, datetime
 
 from tooru.memory.engine import MemoryEngine
-from tooru.memory.models import MemoryMaintenanceReport
+from tooru.memory.models import MemoryAutomationStatus, MemoryMaintenanceReport
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +30,32 @@ class MemoryAutomation:
         self.archive_max_access_count = archive_max_access_count
         self.auto_consolidate_threshold = auto_consolidate_threshold
         self.consolidate_cooldown_hours = consolidate_cooldown_hours
+
         self.latest_report: MemoryMaintenanceReport | None = None
+        self.run_count = 0
+        self.failure_count = 0
+        self.last_started_at: str | None = None
+        self.last_completed_at: str | None = None
+        self.last_error: str | None = None
+        self.running = False
+
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
+        self._run_lock = asyncio.Lock()
+
+    @property
+    def started(self) -> bool:
+        return self._task is not None and not self._task.done()
 
     def start(self) -> None:
-        if self._task is None:
-            self._task = asyncio.create_task(
-                self._loop(),
-                name="tooru-memory-maintenance",
-            )
+        if self.started:
+            return
+        if self._stop.is_set():
+            self._stop = asyncio.Event()
+        self._task = asyncio.create_task(
+            self._loop(),
+            name="tooru-memory-maintenance",
+        )
 
     async def stop(self) -> None:
         self._stop.set()
@@ -49,16 +66,43 @@ class MemoryAutomation:
             self._task = None
 
     async def run_once(self) -> MemoryMaintenanceReport:
-        report = await asyncio.to_thread(
-            self.engine.maintain,
-            self.archive_after_days,
-            self.archive_max_importance,
-            self.archive_max_access_count,
-            self.auto_consolidate_threshold,
-            self.consolidate_cooldown_hours,
+        async with self._run_lock:
+            self.running = True
+            self.last_started_at = datetime.now(UTC).isoformat()
+            self.last_error = None
+            try:
+                report = await asyncio.to_thread(
+                    self.engine.maintain,
+                    self.archive_after_days,
+                    self.archive_max_importance,
+                    self.archive_max_access_count,
+                    self.auto_consolidate_threshold,
+                    self.consolidate_cooldown_hours,
+                )
+                self.latest_report = report
+                self.run_count += 1
+                return report
+            except Exception as exc:
+                self.failure_count += 1
+                self.last_error = f"{type(exc).__name__}: {exc}"
+                logger.exception("Memory maintenance cycle failed")
+                raise
+            finally:
+                self.last_completed_at = datetime.now(UTC).isoformat()
+                self.running = False
+
+    def status(self) -> MemoryAutomationStatus:
+        return MemoryAutomationStatus(
+            started=self.started,
+            running=self.running,
+            interval_seconds=self.interval_seconds,
+            run_count=self.run_count,
+            failure_count=self.failure_count,
+            last_started_at=self.last_started_at,
+            last_completed_at=self.last_completed_at,
+            last_error=self.last_error,
+            latest_report=self.latest_report,
         )
-        self.latest_report = report
-        return report
 
     async def _loop(self) -> None:
         while not self._stop.is_set():
@@ -74,4 +118,5 @@ class MemoryAutomation:
             try:
                 await self.run_once()
             except Exception:
-                logger.exception("Memory maintenance cycle failed")
+                # run_once records/logs the failure; keep future cycles alive.
+                continue
