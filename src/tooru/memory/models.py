@@ -39,6 +39,12 @@ class MemoryLinkType(StrEnum):
     SUPPORTS = "supports"
 
 
+class MemoryIntelligenceAction(StrEnum):
+    IGNORE = "ignore"
+    CREATE = "create"
+    UPDATE = "update"
+
+
 class ScopedMemoryModel(BaseModel):
     owner_id: str = Field(default="local-user", min_length=1, max_length=200)
     scope: MemoryScope
@@ -182,6 +188,37 @@ class MemoryExtractRequest(ScopedMemoryModel):
 class MemoryExtractResponse(BaseModel):
     candidates: list[MemoryCreate]
     saved: list[MemoryItem]
+
+
+class MemoryIntelligenceRequest(ScopedMemoryModel):
+    messages: list[ConversationMessage] = Field(min_length=1, max_length=200)
+    auto_apply: bool = True
+    use_ai: bool = True
+    primary_provider: str | None = Field(default=None, max_length=100)
+    reviewer_provider: str | None = Field(default=None, max_length=100)
+    device_id: str | None = Field(default=None, max_length=200)
+    session_id: str | None = Field(default=None, max_length=200)
+
+
+class MemoryIntelligenceDecision(BaseModel):
+    action: MemoryIntelligenceAction
+    content: str = Field(default="", max_length=100_000)
+    kind: MemoryKind = MemoryKind.NOTE
+    key: str | None = Field(default=None, max_length=200)
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    tags: list[str] = Field(default_factory=list, max_length=30)
+    target_memory_id: str | None = Field(default=None, max_length=200)
+    reason: str = Field(default="", max_length=2_000)
+
+
+class MemoryIntelligenceResult(BaseModel):
+    analyzer: str
+    reviewer: str | None = None
+    used_fallback: bool = False
+    decisions: list[MemoryIntelligenceDecision]
+    applied: list[MemoryItem]
+    ignored: int = 0
 
 
 class MemoryConsolidateRequest(ScopedMemoryModel):

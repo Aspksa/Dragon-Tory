@@ -5,7 +5,7 @@
 Персональная AI-платформа с раздельной личной и проектной памятью,
 инструментами и маршрутизацией между DeepSeek и Claude.
 
-## Memory Engine v4
+## Memory Engine v4 + Memory Intelligence
 
 В ядре уже есть:
 
@@ -25,6 +25,15 @@
 - история каждой ревизии;
 - обучение полезности памяти через helpful/unhelpful feedback;
 - автоматическое локальное обслуживание и архивирование;
+- Context Builder для Claude/DeepSeek;
+- Memory Intelligence Layer с решениями ignore/create/update;
+- DeepSeek как роль основного анализатора памяти;
+- Claude как роль проверяющего важных решений;
+- строгая проверка AI JSON до изменения базы;
+- безопасный локальный fallback при недоступности AI;
+- защита от изменения памяти другого проекта;
 - CI-тесты памяти в GitHub Actions.
 
 Авторизация и центральная мобильная синхронизация намеренно пока не добавлены.
+
+См. docs/MEMORY_ENGINE.md и docs/MEMORY_INTELLIGENCE.md.

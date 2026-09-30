@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     memory_auto_consolidate_threshold: int = 40
     memory_consolidate_cooldown_hours: int = 24
 
+    # Memory Intelligence Layer. Providers are registered in AIRouter later.
+    memory_intelligence_primary_provider: str = "deepseek"
+    memory_intelligence_reviewer_provider: str = "claude"
+    memory_intelligence_reviewer_threshold: float = 0.85
+    memory_intelligence_context_limit: int = 12
+
     model_config = SettingsConfigDict(
         env_prefix="TOORU_",
         env_file=".env",

@@ -3,11 +3,13 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
+from tooru.ai.router import AIRouter
 from tooru.api.health import router as health_router
 from tooru.api.memory import router as memory_router
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
+from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.maintenance import MemoryAutomation
 from tooru.memory.store import SQLiteMemoryStore
 
@@ -23,6 +25,18 @@ async def lifespan(app: FastAPI):
     )
     memory.initialize()
 
+    ai_router = AIRouter()
+    intelligence = MemoryIntelligence(
+        engine=memory,
+        router=ai_router,
+        config=IntelligenceConfig(
+            primary_provider=settings.memory_intelligence_primary_provider,
+            reviewer_provider=settings.memory_intelligence_reviewer_provider,
+            reviewer_threshold=settings.memory_intelligence_reviewer_threshold,
+            context_limit=settings.memory_intelligence_context_limit,
+        ),
+    )
+
     automation = MemoryAutomation(
         memory,
         interval_seconds=settings.memory_maintenance_interval_seconds,
@@ -34,6 +48,8 @@ async def lifespan(app: FastAPI):
     )
 
     app.state.memory = memory
+    app.state.ai_router = ai_router
+    app.state.memory_intelligence = intelligence
     app.state.memory_automation = automation
 
     if settings.memory_automation_enabled:

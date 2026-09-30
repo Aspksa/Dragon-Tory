@@ -10,6 +10,8 @@ from tooru.memory.models import (
     MemoryExtractRequest,
     MemoryExtractResponse,
     MemoryFeedback,
+    MemoryIntelligenceRequest,
+    MemoryIntelligenceResult,
     MemoryItem,
     MemoryLink,
     MemoryLinkType,
@@ -50,6 +52,14 @@ def build_memory_context(
     request: Request,
 ) -> MemoryContextPack:
     return request.app.state.memory.context_pack(payload)
+
+
+@router.post("/intelligence", response_model=MemoryIntelligenceResult)
+async def memory_intelligence(
+    payload: MemoryIntelligenceRequest,
+    request: Request,
+) -> MemoryIntelligenceResult:
+    return await request.app.state.memory_intelligence.process(payload)
 
 
 @router.post("/extract", response_model=MemoryExtractResponse)
