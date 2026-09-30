@@ -8,6 +8,12 @@ from tooru.memory.models import (
     MemoryCreate,
     MemoryDelete,
     MemoryFeedback,
+    MemoryGuardianAuditEvent,
+    MemoryGuardianDecision,
+    MemoryGuardianOutcome,
+    MemoryGuardianRisk,
+    MemoryGuardianStatus,
+    MemoryIntelligenceDecision,
     MemoryItem,
     MemoryKind,
     MemoryLink,
@@ -137,6 +143,31 @@ class SQLiteMemoryStore:
                     started_at TEXT NOT NULL,
                     completed_at TEXT NOT NULL,
                     report_json TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_guardian_events (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    project_id TEXT,
+                    risk TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    analyzer TEXT NOT NULL,
+                    reviewer TEXT,
+                    decision_json TEXT NOT NULL,
+                    policy_reason TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_guardian_events_scope
+                ON memory_guardian_events(
+                    owner_id, scope, project_id, outcome, created_at DESC
                 )
                 """
             )
@@ -847,6 +878,136 @@ class SQLiteMemoryStore:
                     json.dumps(report, ensure_ascii=False),
                 ),
             )
+
+    def record_guardian_event(
+        self,
+        *,
+        owner_id: str,
+        scope: MemoryScope,
+        project_id: str | None,
+        guardian_decision: MemoryGuardianDecision,
+        analyzer: str,
+        reviewer: str | None,
+    ) -> MemoryGuardianAuditEvent:
+        event = MemoryGuardianAuditEvent(
+            id=str(uuid4()),
+            owner_id=owner_id,
+            scope=scope,
+            project_id=project_id,
+            risk=guardian_decision.risk,
+            outcome=guardian_decision.outcome,
+            analyzer=analyzer,
+            reviewer=reviewer,
+            decision=guardian_decision.decision,
+            policy_reason=guardian_decision.policy_reason,
+            created_at=self._now(),
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO memory_guardian_events (
+                    id, owner_id, scope, project_id, risk, outcome,
+                    analyzer, reviewer, decision_json, policy_reason, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.id,
+                    event.owner_id,
+                    event.scope.value,
+                    event.project_id,
+                    event.risk.value,
+                    event.outcome.value,
+                    event.analyzer,
+                    event.reviewer,
+                    event.decision.model_dump_json(),
+                    event.policy_reason,
+                    event.created_at,
+                ),
+            )
+        return event
+
+    def guardian_status(self) -> MemoryGuardianStatus:
+        status = MemoryGuardianStatus()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT outcome, COUNT(*) AS count
+                FROM memory_guardian_events
+                GROUP BY outcome
+                """
+            ).fetchall()
+            last = conn.execute(
+                """
+                SELECT created_at
+                FROM memory_guardian_events
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+
+        total = 0
+        counts = {
+            MemoryGuardianOutcome.APPLIED.value: 0,
+            MemoryGuardianOutcome.PENDING.value: 0,
+            MemoryGuardianOutcome.BLOCKED.value: 0,
+            MemoryGuardianOutcome.IGNORED.value: 0,
+        }
+        for row in rows:
+            counts[row["outcome"]] = int(row["count"])
+            total += int(row["count"])
+
+        status.total_events = total
+        status.applied = counts[MemoryGuardianOutcome.APPLIED.value]
+        status.pending = counts[MemoryGuardianOutcome.PENDING.value]
+        status.blocked = counts[MemoryGuardianOutcome.BLOCKED.value]
+        status.ignored = counts[MemoryGuardianOutcome.IGNORED.value]
+        status.last_event_at = last["created_at"] if last else None
+        return status
+
+    def guardian_events(
+        self,
+        *,
+        outcome: MemoryGuardianOutcome | None = None,
+        limit: int = 50,
+    ) -> list[MemoryGuardianAuditEvent]:
+        params: list[object] = []
+        where = ""
+        if outcome is not None:
+            where = "WHERE outcome = ?"
+            params.append(outcome.value)
+        params.append(limit)
+
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id, owner_id, scope, project_id, risk, outcome,
+                       analyzer, reviewer, decision_json, policy_reason, created_at
+                FROM memory_guardian_events
+                {where}
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+
+        return [
+            MemoryGuardianAuditEvent(
+                id=row["id"],
+                owner_id=row["owner_id"],
+                scope=MemoryScope(row["scope"]),
+                project_id=row["project_id"],
+                risk=MemoryGuardianRisk(row["risk"]),
+                outcome=MemoryGuardianOutcome(row["outcome"]),
+                analyzer=row["analyzer"],
+                reviewer=row["reviewer"],
+                decision=MemoryIntelligenceDecision.model_validate_json(
+                    row["decision_json"]
+                ),
+                policy_reason=row["policy_reason"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
 
     def _get_by_mutation_id(
         self, owner_id: str, client_mutation_id: str
