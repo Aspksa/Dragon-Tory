@@ -411,6 +411,39 @@ class SQLiteMemoryStore:
             ).fetchall()
         return [self._row_to_item(row) for row in rows]
 
+    def pinned_items(
+        self,
+        owner_id: str,
+        scope: MemoryScope,
+        project_id: str | None,
+        limit: int = 20,
+    ) -> list[MemoryItem]:
+        params: list[object] = [owner_id, scope.value]
+        project_clause = "project_id IS NULL"
+        if scope is MemoryScope.PROJECT:
+            project_clause = "project_id = ?"
+            params.append(project_id)
+
+        params.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT {self.SELECT_COLUMNS}
+                FROM memory_items
+                WHERE owner_id = ?
+                  AND scope = ?
+                  AND {project_clause}
+                  AND pinned = 1
+                  AND status = 'active'
+                  AND deleted_at IS NULL
+                  AND (expires_at IS NULL OR expires_at > ?)
+                ORDER BY importance DESC, updated_at DESC
+                LIMIT ?
+                """,
+                params[:-1] + [self._now(), params[-1]],
+            ).fetchall()
+        return [self._row_to_item(row) for row in rows]
+
     def search(self, request: MemorySearch) -> list[MemoryItem]:
         query = request.query.lower()
         matches = [
