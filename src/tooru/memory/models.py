@@ -259,3 +259,15 @@ class MemoryMaintenanceReport(BaseModel):
     active_memories: int = 0
     archived_memories: int = 0
     superseded_memories: int = 0
+
+
+class MemoryAutomationStatus(BaseModel):
+    started: bool
+    running: bool
+    interval_seconds: int
+    run_count: int
+    failure_count: int
+    last_started_at: str | None = None
+    last_completed_at: str | None = None
+    last_error: str | None = None
+    latest_report: MemoryMaintenanceReport | None = None
