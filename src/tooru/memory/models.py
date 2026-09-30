@@ -337,6 +337,10 @@ class MemoryGuardianStatus(BaseModel):
     pending: int = 0
     blocked: int = 0
     ignored: int = 0
+    queued_pending: int = 0
+    queued_applied: int = 0
+    queued_rejected: int = 0
+    queued_dead: int = 0
     last_event_at: str | None = None
 
 
