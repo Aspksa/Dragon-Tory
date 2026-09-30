@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import dataclass
 
 from pydantic import TypeAdapter, ValidationError
@@ -19,6 +20,8 @@ from tooru.memory.models import (
     MemoryUpdate,
 )
 
+
+logger = logging.getLogger(__name__)
 
 _DECISION_ADAPTER = TypeAdapter(list[MemoryIntelligenceDecision])
 
@@ -64,7 +67,12 @@ class MemoryIntelligence:
                     existing,
                 )
                 analyzer = primary_name
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Memory analyzer %s failed; using local fallback: %s",
+                    primary_name,
+                    exc,
+                )
                 decisions = self._heuristic_decisions(request, existing)
                 used_fallback = True
         else:
@@ -86,7 +94,12 @@ class MemoryIntelligence:
                     decisions,
                 )
                 reviewer = reviewer_name
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Memory reviewer %s failed; keeping primary decisions: %s",
+                    reviewer_name,
+                    exc,
+                )
                 used_fallback = True
 
         decisions = self._sanitize_decisions(request, decisions, existing)
@@ -122,7 +135,8 @@ class MemoryIntelligence:
                 project_id=request.project_id,
                 query=query[-2_000:] or "memory",
                 limit=self.config.context_limit,
-            )
+            ),
+            track_usage=False,
         )
         return [hit.memory for hit in hits]
 
