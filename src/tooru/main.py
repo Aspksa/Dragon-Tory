@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from tooru.ai.router import AIRouter
 from tooru.api.health import router as health_router
+from tooru.api.home import router as home_router
 from tooru.api.memory import router as memory_router
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
@@ -94,6 +95,7 @@ def create_app() -> FastAPI:
         version=settings.version,
         lifespan=lifespan,
     )
+    app.include_router(home_router)
     app.include_router(health_router)
     app.include_router(memory_router)
     return app
