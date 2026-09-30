@@ -47,3 +47,31 @@ jobs:
       - name: Validate portable launcher
         shell: cmd
         run: Start.bat --check
+
+      - name: Validate Russian Windows path and OEM code page
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP "Русский путь\Дракончик Тоору"
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $target -Recurse -Force
+
+          $launcher = Join-Path $target "Start.bat"
+          $command = 'chcp 866 >nul & call "' + $launcher + '" --check'
+          cmd.exe /d /c $command
+          if ($LASTEXITCODE -ne 0) {
+            throw "Start.bat failed from a Cyrillic path under code page 866."
+          }
+
+      - name: Validate bootstrap Python source policy
+        shell: pwsh
+        run: |
+          $content = Get-Content -LiteralPath "scripts\windows\bootstrap.ps1" -Raw
+          if ($content -notmatch 'https://www\.python\.org/ftp/python/') {
+            throw "Bootstrap is not pinned to python.org."
+          }
+          if ($content -notmatch 'Get-AuthenticodeSignature') {
+            throw "Bootstrap does not verify the Python installer signature."
+          }
+          if ($content -notmatch 'pyproject\.toml') {
+            throw "Bootstrap does not derive dependencies from pyproject.toml."
+          }
