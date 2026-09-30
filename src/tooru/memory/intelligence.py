@@ -1,6 +1,6 @@
+from dataclasses import dataclass
 import json
 import logging
-from dataclasses import dataclass
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -67,7 +67,7 @@ class MemoryIntelligence:
                     existing,
                 )
                 analyzer = primary_name
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - provider boundary must fall back safely
                 logger.warning(
                     "Memory analyzer %s failed; using local fallback: %s",
                     primary_name,
@@ -94,7 +94,7 @@ class MemoryIntelligence:
                     decisions,
                 )
                 reviewer = reviewer_name
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - reviewer failure must not block memory
                 logger.warning(
                     "Memory reviewer %s failed; keeping primary decisions: %s",
                     reviewer_name,
