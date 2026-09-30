@@ -384,18 +384,29 @@ class SQLiteMemoryStore:
                 ),
             )
 
-    def vectors_for(self, memory_ids: list[str]) -> dict[str, list[float]]:
+    def vectors_for(
+        self,
+        memory_ids: list[str],
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> dict[str, list[float]]:
         if not memory_ids:
             return {}
         placeholders = ",".join("?" for _ in memory_ids)
+        params: list[object] = list(memory_ids)
+        provider_clause = ""
+        if provider is not None and model is not None:
+            provider_clause = "AND provider = ? AND model = ?"
+            params.extend([provider, model])
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
                 SELECT memory_id, vector_json
                 FROM memory_vectors
                 WHERE memory_id IN ({placeholders})
+                  {provider_clause}
                 """,
-                memory_ids,
+                params,
             ).fetchall()
         return {
             row["memory_id"]: json.loads(row["vector_json"])
