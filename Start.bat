@@ -33,6 +33,6 @@ set "EXITCODE=%ERRORLEVEL%"
 if not "%EXITCODE%"=="0" (
     echo.
     echo [ERROR] Dragon Tory startup failed with code %EXITCODE%.
-    pause
+    if /I not "%CI%"=="true" pause
 )
 endlocal & exit /b %EXITCODE%
