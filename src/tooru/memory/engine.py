@@ -98,7 +98,12 @@ class MemoryEngine:
     def search(self, request: MemorySearch) -> list[MemoryItem]:
         return [hit.memory for hit in self.recall(request)]
 
-    def recall(self, request: MemorySearch) -> list[MemoryRecallHit]:
+    def recall(
+        self,
+        request: MemorySearch,
+        *,
+        track_usage: bool = True,
+    ) -> list[MemoryRecallHit]:
         candidates = self.store.candidates(
             request,
             limit=max(200, request.limit * 20),
@@ -134,7 +139,8 @@ class MemoryEngine:
         ]
         hits.sort(key=lambda hit: hit.score, reverse=True)
         selected = hits[: request.limit]
-        self.store.touch_recall([hit.memory.id for hit in selected])
+        if track_usage:
+            self.store.touch_recall([hit.memory.id for hit in selected])
         return selected
 
     def context_pack(self, request: MemoryContextRequest) -> MemoryContextPack:
