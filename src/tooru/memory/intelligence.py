@@ -105,7 +105,7 @@ class MemoryIntelligence:
         applied: list[MemoryItem] = []
         if request.auto_apply:
             for decision in decisions:
-                item = self._apply_decision(request, decision)
+                item = self.apply_decision(request, decision)
                 if item is not None:
                     applied.append(item)
 
@@ -273,15 +273,16 @@ class MemoryIntelligence:
         )
         return self._parse_decisions(response.text)
 
-    def _apply_decision(
+    def apply_decision(
         self,
         request: MemoryIntelligenceRequest,
         decision: MemoryIntelligenceDecision,
+        *,
+        source: str = "memory-intelligence",
     ) -> MemoryItem | None:
         if decision.action is MemoryIntelligenceAction.IGNORE:
             return None
 
-        source = "memory-intelligence"
         if decision.action is MemoryIntelligenceAction.CREATE:
             return self.engine.add(
                 MemoryCreate(
