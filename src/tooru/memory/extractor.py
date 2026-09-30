@@ -13,6 +13,30 @@ class HeuristicMemoryExtractor:
 
     _rules = (
         (
+            MemoryKind.GOAL,
+            re.compile(
+                r"\b(моя цель|цель проекта|хочу сделать|хочу чтобы|планирую|goal|plan to)\b",
+                re.IGNORECASE,
+            ),
+            0.88,
+        ),
+        (
+            MemoryKind.EPISODE,
+            re.compile(
+                r"\b(сегодня сделали|вчера сделали|мы сделали|завершили|починили|исправили|today we|yesterday we|completed|fixed)\b",
+                re.IGNORECASE,
+            ),
+            0.72,
+        ),
+        (
+            MemoryKind.RELATIONSHIP,
+            re.compile(
+                r"\b(связан с|относится к|зависит от|используется в|connected to|depends on|belongs to)\b",
+                re.IGNORECASE,
+            ),
+            0.78,
+        ),
+        (
             MemoryKind.PREFERENCE,
             re.compile(
                 r"\b(я предпочитаю|мне нравится|мне удобнее|предпочитаю|i prefer|i like)\b",
