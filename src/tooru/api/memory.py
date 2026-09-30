@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from tooru.memory.models import (
+    MemoryAutomationStatus,
     MemoryConsolidateRequest,
     MemoryConsolidateResponse,
     MemoryContextPack,
@@ -86,6 +87,11 @@ async def run_maintenance(request: Request) -> MemoryMaintenanceReport:
 @router.get("/maintenance/latest", response_model=MemoryMaintenanceReport | None)
 def latest_maintenance(request: Request) -> MemoryMaintenanceReport | None:
     return request.app.state.memory_automation.latest_report
+
+
+@router.get("/maintenance/status", response_model=MemoryAutomationStatus)
+def maintenance_status(request: Request) -> MemoryAutomationStatus:
+    return request.app.state.memory_automation.status()
 
 
 @router.post("/sync", response_model=MemorySyncResponse)
