@@ -271,3 +271,69 @@ class MemoryAutomationStatus(BaseModel):
     last_completed_at: str | None = None
     last_error: str | None = None
     latest_report: MemoryMaintenanceReport | None = None
+
+
+class MemoryGuardianRisk(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    PROTECTED = "protected"
+
+
+class MemoryGuardianOutcome(StrEnum):
+    IGNORED = "ignored"
+    APPLIED = "applied"
+    PENDING = "pending"
+    BLOCKED = "blocked"
+
+
+class MemoryGuardianRequest(ScopedMemoryModel):
+    messages: list[ConversationMessage] = Field(min_length=1, max_length=200)
+    auto_apply: bool = True
+    use_ai: bool = True
+    primary_provider: str | None = Field(default=None, max_length=100)
+    reviewer_provider: str | None = Field(default=None, max_length=100)
+    device_id: str | None = Field(default=None, max_length=200)
+    session_id: str | None = Field(default=None, max_length=200)
+
+
+class MemoryGuardianDecision(BaseModel):
+    decision: MemoryIntelligenceDecision
+    risk: MemoryGuardianRisk
+    outcome: MemoryGuardianOutcome
+    policy_reason: str
+    memory_id: str | None = None
+
+
+class MemoryGuardianResult(BaseModel):
+    analyzer: str
+    reviewer: str | None = None
+    used_fallback: bool = False
+    decisions: list[MemoryGuardianDecision]
+    applied: list[MemoryItem]
+    pending_count: int = 0
+    blocked_count: int = 0
+    ignored_count: int = 0
+
+
+class MemoryGuardianAuditEvent(BaseModel):
+    id: str
+    owner_id: str
+    scope: MemoryScope
+    project_id: str | None = None
+    risk: MemoryGuardianRisk
+    outcome: MemoryGuardianOutcome
+    analyzer: str
+    reviewer: str | None = None
+    decision: MemoryIntelligenceDecision
+    policy_reason: str
+    created_at: str
+
+
+class MemoryGuardianStatus(BaseModel):
+    total_events: int = 0
+    applied: int = 0
+    pending: int = 0
+    blocked: int = 0
+    ignored: int = 0
+    last_event_at: str | None = None
