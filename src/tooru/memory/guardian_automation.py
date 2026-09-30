@@ -83,7 +83,7 @@ class MemoryGuardianAutomation:
                             self.rejected_count += 1
                         elif updated.status is MemoryGuardianQueueStatus.DEAD:
                             self.dead_count += 1
-                    except Exception as exc:  # noqa: BLE001 - one item must not stop queue
+                    except Exception as exc:
                         self.failure_count += 1
                         self.last_error = f"{type(exc).__name__}: {exc}"
                         logger.exception(
@@ -123,7 +123,7 @@ class MemoryGuardianAutomation:
 
             try:
                 await self.run_once()
-            except Exception as exc:  # noqa: BLE001 - daemon must survive failed cycle
+            except Exception as exc:
                 self.failure_count += 1
                 self.last_error = f"{type(exc).__name__}: {exc}"
                 logger.exception("Guardian automation cycle failed")
