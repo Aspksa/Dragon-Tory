@@ -55,3 +55,20 @@
 Chat Pipeline → Memory Guardian → Memory Intelligence → Memory Engine.
 
 См. docs/MEMORY_GUARDIAN.md.
+
+
+### Memory Guardian v2
+
+Guardian теперь имеет постоянную очередь важных решений:
+
+- одинаковые pending-решения автоматически дедуплицируются;
+- очередь переживает перезапуск приложения;
+- Claude-review может выполняться автоматически фоновым worker;
+- retry выполняется пакетами с задержкой между попытками;
+- после лимита ошибок запись уходит в dead-letter;
+- pending можно локально approve/reject/retry;
+- health-status показывает состояние очереди и автоматики;
+- pinned-память остаётся защищённой даже при ручном approve через Guardian.
+
+Пока реальные Claude/DeepSeek provider adapters не зарегистрированы в AIRouter,
+очередь безопасно ждёт reviewer и не применяет критические решения самовольно.
