@@ -273,6 +273,23 @@ class MemoryIntelligence:
         )
         return self._parse_decisions(response.text)
 
+    async def review_decisions(
+        self,
+        provider_name: str,
+        request: MemoryIntelligenceRequest,
+        decisions: list[MemoryIntelligenceDecision],
+    ) -> list[MemoryIntelligenceDecision]:
+        if not self.router.has_provider(provider_name):
+            raise LookupError(f"AI reviewer is not registered: {provider_name}")
+        existing = self._existing_context(request)
+        reviewed = await self._review_with_ai(
+            provider_name,
+            request,
+            existing,
+            decisions,
+        )
+        return self._sanitize_decisions(request, reviewed, existing)
+
     def apply_decision(
         self,
         request: MemoryIntelligenceRequest,
