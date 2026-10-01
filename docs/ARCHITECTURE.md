@@ -2,7 +2,7 @@
 
 ## Core rule
 
-Memory belongs to Dragon Tory, not to Claude or DeepSeek.
+Memory belongs to Dragon Tory, not to the external DeepSeek service.
 
 AI providers are replaceable. Personal and project memory remain persistent
 and isolated when providers change.
@@ -13,7 +13,7 @@ and isolated when providers change.
 2. Memory Engine v4 — structured, versioned, self-maintaining long-term memory.
 3. Memory Intelligence — decides what deserves durable memory.
 4. Tooru Memory Guardian — hidden risk/policy controller for automatic memory writes.
-5. AI Router — provider-independent routing layer.
+5. AI provider registry — internal DeepSeek connection layer.
 4. Tool Registry — controlled tools with permissions.
 5. Web UI — desktop/browser interface.
 6. Mobile clients — planned clients using the same backend contracts.
@@ -37,13 +37,14 @@ Capabilities:
 
 See docs/MEMORY_ENGINE.md.
 
-## AI routing
+## AI provider
 
-AIRouter does not own memory. It invokes registered providers.
+AIRouter does not own memory. It is now a small internal provider registry.
 
-Planned providers:
-- DeepSeek V4 Flash — economical default model;
-- Claude — advanced reasoning, architecture and review.
+Dragon Tory uses one cloud model:
+- DeepSeek V4 Flash — the only configured chat and memory AI provider.
+
+Important memory is checked with a second independent DeepSeek pass.
 
 ## Deliberately deferred
 
