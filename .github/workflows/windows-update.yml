@@ -184,9 +184,37 @@ jobs:
           }
 
           $statePath = Join-Path $env:UPDATE_TEST_ROOT "data\update\state.json"
-          $state = Get-Content -LiteralPath $statePath -Raw -Encoding utf8 | ConvertFrom-Json
-          if ($state.phase -ne "success") {
-            throw "Updater state is not success: $($state.phase)"
+          $state = $null
+          for ($i = 0; $i -lt 60; $i++) {
+            if (Test-Path -LiteralPath $statePath) {
+              try {
+                $candidate = Get-Content -LiteralPath $statePath -Raw -Encoding utf8 | ConvertFrom-Json
+                if ($candidate.phase -eq "success") {
+                  $state = $candidate
+                  break
+                }
+                if ($candidate.phase -eq "failed") {
+                  throw "Updater entered failed state: $($candidate.error)"
+                }
+              } catch {
+                if ($_.Exception.Message -like "Updater entered failed state:*") {
+                  throw
+                }
+              }
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $state) {
+            $lastPhase = "unknown"
+            if (Test-Path -LiteralPath $statePath) {
+              try {
+                $lastPhase = (
+                  Get-Content -LiteralPath $statePath -Raw -Encoding utf8 |
+                    ConvertFrom-Json
+                ).phase
+              } catch {}
+            }
+            throw "Updater state did not reach success. Last phase: $lastPhase"
           }
           if ([int]$state.progress_percent -ne 100) {
             throw "Updater progress did not reach 100 percent."
