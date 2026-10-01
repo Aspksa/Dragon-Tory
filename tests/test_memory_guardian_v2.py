@@ -35,7 +35,7 @@ class FakeProvider:
 
 
 class FailingProvider:
-    name = "claude"
+    name = "deepseek"
 
     async def generate(self, request: AIRequest) -> AIResponse:
         raise RuntimeError("review service unavailable")
@@ -57,7 +57,7 @@ def build_guardian(
         router,
         IntelligenceConfig(
             primary_provider="deepseek",
-            reviewer_provider="claude",
+            reviewer_provider="deepseek",
         ),
     )
     guardian = MemoryGuardian(
@@ -109,7 +109,7 @@ async def test_pending_queue_is_deduplicated_and_persistent(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
-async def test_pending_memory_retries_when_claude_becomes_available(
+async def test_pending_memory_retries_when_deepseek_becomes_available(
     tmp_path: Path,
 ) -> None:
     engine, _, router, guardian = build_guardian(tmp_path)
@@ -120,7 +120,7 @@ async def test_pending_memory_retries_when_claude_becomes_available(
 
     router.register(
         FakeProvider(
-            "claude",
+            "deepseek",
             {
                 "decisions": [
                     {
@@ -212,7 +212,7 @@ async def test_guardian_automation_processes_due_queue(tmp_path: Path) -> None:
 
     router.register(
         FakeProvider(
-            "claude",
+            "deepseek",
             {
                 "decisions": [
                     {
