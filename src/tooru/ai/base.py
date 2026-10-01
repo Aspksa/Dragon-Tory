@@ -14,6 +14,8 @@ class AIResponse:
     text: str
     provider: str
     model: str
+    retry_count: int = 0
+    duration_ms: float | None = None
 
 
 class AIProvider(Protocol):
