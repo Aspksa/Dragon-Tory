@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from tooru.ai.base import AIRequest
+from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.cloud.intelligence import (
     UnsupportedDocumentError,
     extract_document,
@@ -624,7 +625,14 @@ async def clean_room(
                 }
             )
             context_parts.append(
-                f"[Источник {number}: {chunk.label}]\n{text}"
+                f"[Источник {number}: {chunk.label}]\n"
+                + wrap_untrusted_text(
+                    text,
+                    source=(
+                        f"clean-room:{document_id}:"
+                        f"source:{number}"
+                    ),
+                )
             )
 
         response = await request.app.state.ai_router.generate(
@@ -635,7 +643,8 @@ async def clean_room(
                     "Используй только переданные фрагменты. "
                     "Не придумывай отсутствующие факты. "
                     "Не проси сохранять данные в память. "
-                    "Ссылайся на [Источник N]."
+                    "Ссылайся на [Источник N]. "
+                    + UNTRUSTED_CONTENT_POLICY
                 ),
                 messages=[
                     {
@@ -733,7 +742,14 @@ async def compare_documents(
                 text = chunk.text[:2_800]
                 context.append(
                     f"[Источник {counter} · Документ {side} · "
-                    f"{chunk.label}]\n{text}"
+                    f"{chunk.label}]\n"
+                    + wrap_untrusted_text(
+                        text,
+                        source=(
+                            f"compare:{item['id']}:"
+                            f"source:{counter}"
+                        ),
+                    )
                 )
                 sources.append(
                     {
@@ -753,7 +769,8 @@ async def compare_documents(
                     "Сравни два документа только по переданным источникам. "
                     "Разделяй подтверждённые различия и то, чего нельзя "
                     "установить. Для каждого важного вывода указывай "
-                    "[Источник N]."
+                    "[Источник N]. "
+                    + UNTRUSTED_CONTENT_POLICY
                 ),
                 messages=[
                     {
