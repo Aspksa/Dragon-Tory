@@ -1007,6 +1007,13 @@ class SQLiteMemoryStore:
             MemoryLinkType.SUMMARIZES.value,
             MemoryLinkType.TEMPORAL_SUCCESSOR.value,
             MemoryLinkType.TEMPORAL_PREDECESSOR.value,
+            MemoryLinkType.SAME_ENTITY.value,
+            MemoryLinkType.CAUSES.value,
+            MemoryLinkType.DEPENDS_ON.value,
+            MemoryLinkType.PART_OF.value,
+            MemoryLinkType.CORRECTS.value,
+            MemoryLinkType.DERIVED_FROM.value,
+            MemoryLinkType.REQUIRES.value,
         }
         placeholders = ",".join("?" for _ in seed_ids)
         relation_placeholders = ",".join("?" for _ in allowed_relations)
@@ -1045,6 +1052,55 @@ class SQLiteMemoryStore:
                     weights.get(source_id, 0.0),
                     weight,
                 )
+        first_hop = dict(weights)
+        if first_hop:
+            hop_ids = list(first_hop)[:200]
+            hop_placeholders = ",".join("?" for _ in hop_ids)
+            hop_params: list[object] = [
+                *hop_ids,
+                *hop_ids,
+                *sorted(allowed_relations),
+            ]
+            with self._connect() as conn:
+                hop_rows = conn.execute(
+                    f"""
+                    SELECT source_id, target_id, relation, weight
+                    FROM memory_links
+                    WHERE (
+                        source_id IN ({hop_placeholders})
+                        OR target_id IN ({hop_placeholders})
+                    )
+                      AND relation IN ({relation_placeholders})
+                    """,
+                    hop_params,
+                ).fetchall()
+            first_ids = set(hop_ids)
+            for row in hop_rows:
+                source_id = str(row["source_id"])
+                target_id = str(row["target_id"])
+                edge_weight = float(row["weight"])
+                if source_id in first_ids:
+                    neighbor_id = target_id
+                    parent_id = source_id
+                elif target_id in first_ids:
+                    neighbor_id = source_id
+                    parent_id = target_id
+                else:
+                    continue
+                if neighbor_id in seeds:
+                    continue
+                propagated = (
+                    first_hop.get(parent_id, 0.0)
+                    * edge_weight
+                    * 0.65
+                )
+                if propagated <= 0:
+                    continue
+                weights[neighbor_id] = max(
+                    weights.get(neighbor_id, 0.0),
+                    propagated,
+                )
+
         if not weights:
             return []
 
