@@ -533,6 +533,9 @@ class MemoryMaintenanceReport(BaseModel):
     expired_archived: int = 0
     stale_archived: int = 0
     summaries_created: int = 0
+    adaptive_reinforced: int = 0
+    adaptive_decayed: int = 0
+    adaptive_archived: int = 0
     active_memories: int = 0
     archived_memories: int = 0
     superseded_memories: int = 0
