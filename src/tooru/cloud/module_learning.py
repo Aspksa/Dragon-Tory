@@ -4,6 +4,7 @@ import json
 from typing import Any, ClassVar
 
 from tooru.ai.base import AIRequest
+from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.cloud.document_intelligence import OCRUnavailableError
 from tooru.cloud.intelligence import UnsupportedDocumentError
 from tooru.memory.models import MemoryCreate, MemoryKind, MemoryScope
@@ -215,7 +216,8 @@ class ModuleLearningService:
                     "суммы и валюту, сроки, оплату, поставку, обязательства, "
                     "ответственность, прекращение/продление, важные условия "
                     "и ссылки на связанные документы. Формат — компактные "
-                    "структурированные пункты, пригодные для памяти."
+                    "структурированные пункты, пригодные для памяти. "
+                    + UNTRUSTED_CONTENT_POLICY
                 ),
                 messages=[
                     {
@@ -224,7 +226,10 @@ class ModuleLearningService:
                             "Локально извлечённые данные:\n"
                             + local_summary
                             + "\n\nТекст документа:\n"
-                            + source_text
+                            + wrap_untrusted_text(
+                                source_text,
+                                source=f"module:{module_id}",
+                            )
                         ),
                     }
                 ],
