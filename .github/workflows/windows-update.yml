@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - "src/tooru/update/**"
+      - "src/tooru/ai/**"
+      - "src/tooru/core/**"
+      - "src/tooru/main.py"
+      - "src/tooru/cloud/**"
+      - "src/tooru/web/**"
       - "src/tooru/version.py"
       - "src/tooru/api/update.py"
       - "src/tooru/api/cloud_smart.py"
@@ -31,6 +36,11 @@ on:
   pull_request:
     paths:
       - "src/tooru/update/**"
+      - "src/tooru/ai/**"
+      - "src/tooru/core/**"
+      - "src/tooru/main.py"
+      - "src/tooru/cloud/**"
+      - "src/tooru/web/**"
       - "src/tooru/api/update.py"
       - "src/tooru/api/cloud_smart.py"
       - "src/tooru/api/cloud_intelligence.py"
