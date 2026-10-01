@@ -420,3 +420,26 @@ def test_graph_assisted_recall_brings_linked_context(tmp_path: Path) -> None:
     assert insurance.id in by_id
     assert by_id[insurance.id].graph_score > 0
 
+def test_repeated_episodes_remain_distinct_for_experience_learning(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    first = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.EPISODE,
+            content="Проверили договор поставки по рабочему чек-листу номер один.",
+        )
+    )
+    second = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.EPISODE,
+            content="Проверили договор поставки по рабочему чек-листу номер два.",
+        )
+    )
+
+    assert first.id != second.id
+

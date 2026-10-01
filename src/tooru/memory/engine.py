@@ -484,7 +484,7 @@ class MemoryEngine:
         return len(items)
 
     def _near_duplicate(self, memory: MemoryCreate) -> MemoryItem | None:
-        if memory.key is not None:
+        if memory.key is not None or memory.kind is MemoryKind.EPISODE:
             return None
 
         request = MemorySearch(

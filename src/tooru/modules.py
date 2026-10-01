@@ -6,10 +6,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "dashboard",
         "title": "Главная / Системный мозг",
-        "version": "01.08.00",
+        "version": "01.09.00",
         "area": "system",
         "description": "Real-time дашборд состояния, архитектуры, памяти, нагрузки и активных процессов.",
-        "last_update": "Cognitive Core III: Truth Engine, временное разрешение конфликтов и graph-assisted retrieval.",
+        "last_update": "Cognitive Core IV: планирование сложных задач, проверка результата и обучение на проверенном опыте.",
         "depends_on": ["memory", "drive", "updater"],
     },
     {
@@ -92,6 +92,15 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
         "description": "Месячный табель: календарь РФ, ручные отпуск/больничный и работа в выходной из служебных записок.",
         "last_update": "Добавлены официальные производственные календари РФ 2026/2027, сетка Т-13-подобного вида и ручные коды ОТ/Б.",
         "depends_on": ["employees", "memos"],
+    },
+    {
+        "id": "reasoning",
+        "title": "Мышление Тоору",
+        "version": "01.00.00",
+        "area": "system",
+        "description": "Планирование сложных задач, самопроверка результата и безопасное обучение на опыте.",
+        "last_update": "Reasoning Planner, Result Verifier и Guardian-gated Experience Learning.",
+        "depends_on": ["memory"],
     },
     {
         "id": "memory",

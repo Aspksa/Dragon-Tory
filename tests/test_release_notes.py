@@ -53,3 +53,15 @@ def test_release_0031_lists_truth_engine_changes() -> None:
         for change in modules["memory"]["changes"]
     )
 
+def test_release_0032_lists_reasoning_engine_changes() -> None:
+    release = release_notes_for("0.0.32")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert {"reasoning", "memory", "memos", "drive", "updater"} <= set(modules)
+    assert modules["reasoning"]["version"] == "01.00.00"
+    assert any(
+        "Result Verifier" in change
+        for change in modules["reasoning"]["changes"]
+    )
+
