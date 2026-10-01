@@ -225,7 +225,10 @@ class ModuleLearningService:
                     knowledge = await self._deep_summary(
                         module_id=module_id,
                         local_summary=local_summary,
-                        source_text=source["text"][:45_000],
+                        source_text=str(
+                            source.get("representative_text")
+                            or source["text"]
+                        )[:45_000],
                     )
                     external_ai_used = True
                     mode = "deepseek"
@@ -470,6 +473,47 @@ class ModuleLearningService:
                     separators=(",", ":"),
                 )
             )
+        checks = analysis.get("checks") or {}
+        warnings = checks.get("warnings") or []
+        if warnings:
+            values.append(
+                "Проверки документа: "
+                + json.dumps(
+                    warnings[:12],
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )[:4_000]
+            )
+        evidence = analysis.get("evidence") or []
+        if evidence:
+            compact_evidence = [
+                {
+                    key: item.get(key)
+                    for key in (
+                        "type",
+                        "value",
+                        "currency",
+                        "rate",
+                        "page",
+                        "table",
+                        "cell",
+                        "chunk_no",
+                        "excerpt",
+                    )
+                    if item.get(key) is not None
+                }
+                for item in evidence[:20]
+                if item.get("type") != "prompt_injection_signal"
+            ]
+            if compact_evidence:
+                values.append(
+                    "Доказательства: "
+                    + json.dumps(
+                        compact_evidence,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )[:6_000]
+                )
         if entities:
             compact = {
                 key: value
