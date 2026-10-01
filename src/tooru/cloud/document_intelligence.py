@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 
 import pymupdf
 
+from tooru.cloud.document_analysis_v2 import analyze_chunks
 from tooru.cloud.intelligence import (
     LEGACY_CONVERTIBLE_SUFFIXES,
     ExtractedChunk,
@@ -222,6 +223,9 @@ class DocumentIntelligence:
                     deadlines_json TEXT NOT NULL,
                     suggested_tags_json TEXT NOT NULL,
                     suggested_relations_json TEXT NOT NULL,
+                    structure_json TEXT NOT NULL DEFAULT '{}',
+                    checks_json TEXT NOT NULL DEFAULT '{}',
+                    evidence_json TEXT NOT NULL DEFAULT '[]',
                     extraction_method TEXT NOT NULL,
                     ocr_used INTEGER NOT NULL DEFAULT 0,
                     analyzed_at TEXT NOT NULL,
@@ -235,7 +239,85 @@ class DocumentIntelligence:
                 ON document_intelligence(kind, analyzed_at DESC)
                 """
             )
+            self._migrate_v2_schema(db)
             ensure_service_memo_schema(db)
+
+    @staticmethod
+    def _migrate_v2_schema(db: sqlite3.Connection) -> None:
+        existing = {
+            row["name"]
+            for row in db.execute(
+                "PRAGMA table_info(document_intelligence)"
+            ).fetchall()
+        }
+        migrations = {
+            "structure_json": "TEXT NOT NULL DEFAULT '{}'",
+            "checks_json": "TEXT NOT NULL DEFAULT '{}'",
+            "evidence_json": "TEXT NOT NULL DEFAULT '[]'",
+        }
+        for column, definition in migrations.items():
+            if column not in existing:
+                db.execute(
+                    f"ALTER TABLE document_intelligence "
+                    f"ADD COLUMN {column} {definition}"
+                )
+
+    @classmethod
+    def _aggregate_entities(
+        cls,
+        chunks: list[ExtractedChunk],
+    ) -> dict[str, Any]:
+        merged: dict[str, list[Any]] = {}
+        seen: dict[str, set[str]] = {}
+        for chunk in chunks:
+            local = cls._entities(chunk.text)
+            for key, values in local.items():
+                bucket = merged.setdefault(key, [])
+                keys = seen.setdefault(key, set())
+                for value in values:
+                    marker = json.dumps(
+                        value,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                    if marker in keys:
+                        continue
+                    keys.add(marker)
+                    bucket.append(value)
+                    if len(bucket) >= 200:
+                        break
+        return merged
+
+    @classmethod
+    def _aggregate_deadlines(
+        cls,
+        chunks: list[ExtractedChunk],
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for chunk_no, chunk in enumerate(chunks, start=1):
+            for item in cls._deadlines(chunk.text):
+                key = (
+                    str(item.get("date") or "")
+                    + "|"
+                    + str(item.get("context") or "").casefold()
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                result.append(
+                    {
+                        **item,
+                        "chunk_no": chunk_no,
+                        "label": chunk.label,
+                        "page": chunk.page,
+                        "table": chunk.table,
+                        "cell": chunk.cell,
+                    }
+                )
+                if len(result) >= 200:
+                    return result
+        return result
 
     @staticmethod
     def _find_libreoffice() -> str | None:
@@ -722,11 +804,11 @@ class DocumentIntelligence:
                     if cleanup is not None:
                         cleanup.unlink(missing_ok=True)
 
-                text = "\n\n".join(chunk.text for chunk in chunks)
-                analysis_text = text[:250_000]
+                v2 = analyze_chunks(chunks)
+                analysis_text = str(v2["representative_text"])
                 kind, confidence = self._classify(item["name"], analysis_text)
-                entities = self._entities(analysis_text)
-                deadlines = self._deadlines(analysis_text)
+                entities = self._aggregate_entities(chunks)
+                deadlines = self._aggregate_deadlines(chunks)
                 tags = self._suggested_tags(kind, entities, analysis_text)
                 relations = self._relation_suggestions(
                     document_id,
@@ -746,10 +828,10 @@ class DocumentIntelligence:
                         INSERT OR REPLACE INTO document_intelligence (
                             document_id, version, kind, confidence, summary_local,
                             entities_json, deadlines_json, suggested_tags_json,
-                            suggested_relations_json, extraction_method, ocr_used,
-                            analyzed_at
+                            suggested_relations_json, structure_json, checks_json,
+                            evidence_json, extraction_method, ocr_used, analyzed_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             document_id,
@@ -761,6 +843,9 @@ class DocumentIntelligence:
                             json.dumps(deadlines, ensure_ascii=False),
                             json.dumps(tags, ensure_ascii=False),
                             json.dumps(relations, ensure_ascii=False),
+                            json.dumps(v2["structure"], ensure_ascii=False),
+                            json.dumps(v2["checks"], ensure_ascii=False),
+                            json.dumps(v2["evidence"], ensure_ascii=False),
                             method,
                             int(ocr_used),
                             analyzed_at,
@@ -800,6 +885,9 @@ class DocumentIntelligence:
             "deadlines_json",
             "suggested_tags_json",
             "suggested_relations_json",
+            "structure_json",
+            "checks_json",
+            "evidence_json",
         ):
             item[key.removesuffix("_json")] = json.loads(item.pop(key))
         return item
@@ -1458,6 +1546,7 @@ class DocumentIntelligence:
         finally:
             if cleanup is not None:
                 cleanup.unlink(missing_ok=True)
+        v2 = analyze_chunks(chunks)
         text = "\n\n".join(chunk.text for chunk in chunks)
         return {
             "document_id": document_id,
@@ -1468,6 +1557,10 @@ class DocumentIntelligence:
             "extraction_method": method,
             "ocr_used": ocr_used,
             "text": text[:120_000],
+            "structure": v2["structure"],
+            "checks": v2["checks"],
+            "evidence": v2["evidence"],
+            "representative_text": v2["representative_text"][:120_000],
         }
 
     def local_version_diff(
