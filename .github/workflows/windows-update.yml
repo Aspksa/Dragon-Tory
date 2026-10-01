@@ -88,6 +88,9 @@ jobs:
             throw "Old Dragon Tory instance did not start."
           }
 
+          $chat = Invoke-RestMethod -Uri "http://127.0.0.1:8787/v1/chats" -Method Post -ContentType "application/json" -Body '{"title":"Чат до обновления"}' -TimeoutSec 5
+          "PRESERVED_CHAT_ID=$($chat.id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Run real self updater
         shell: pwsh
         run: |
@@ -158,6 +161,14 @@ jobs:
           $page = (Invoke-WebRequest -Uri "http://127.0.0.1:8787/" -UseBasicParsing -TimeoutSec 5).Content
           if ($page -match "Клод|Anthropic|chatProject|chatProvider") {
             throw "Web UI still contains legacy Claude/project/model controls."
+          }
+
+          $preservedChat = Invoke-RestMethod -Uri ("http://127.0.0.1:8787/v1/chats/" + $env:PRESERVED_CHAT_ID) -TimeoutSec 5
+          if ($preservedChat.title -ne "Чат до обновления") {
+            throw "Persistent chat history did not survive self-update."
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT "data\chat\tooru_chat.sqlite3"))) {
+            throw "Chat history database is missing after self-update."
           }
 
           if (-not (Test-Path -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT "backups"))) {
