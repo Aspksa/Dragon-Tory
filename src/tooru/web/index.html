@@ -22,19 +22,49 @@
     textarea{min-height:88px;resize:vertical}.field{margin-bottom:15px}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}
     button.primary,button.secondary{border:0;border-radius:11px;padding:11px 15px;font-weight:700;cursor:pointer}
     button.primary{background:#1947b8;color:white}button.secondary{background:#eef2f8;color:#344054}
-    .chat-layout{display:grid;grid-template-columns:290px minmax(0,1fr);gap:14px;align-items:start}
-    .chat-sidebar{height:68vh;display:flex;flex-direction:column;gap:10px;padding:14px}
-    .chat-list{overflow:auto;display:grid;gap:7px;align-content:start}
-    .chat-item{border:1px solid #e4e7ec;background:#fff;border-radius:11px;padding:10px;cursor:pointer}
-    .chat-item:hover,.chat-item.active{background:#f0f4ff;border-color:#c7d7ff}
-    .chat-item-title{font-size:13px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .chat-item-meta{font-size:11px;color:#667085;margin-top:4px}
-    .chat-main{min-width:0}.chat-head{background:#fff;border:1px solid #e4e7ec;border-radius:14px;padding:12px 14px;margin-bottom:10px}
-    .chatbox{height:52vh;overflow:auto;background:#fff;border:1px solid #e4e7ec;border-radius:16px;padding:16px;margin-bottom:14px}
-    .msg-wrap{margin:8px 0}.msg-actions{display:flex;gap:6px;margin-top:4px}.msg-actions button{border:0;background:transparent;color:#667085;font-size:11px;cursor:pointer;padding:3px 6px}
-    .msg-actions button:hover{color:#1947b8}
-    .msg{max-width:82%;padding:11px 13px;border-radius:14px;margin:8px 0;white-space:pre-wrap;line-height:1.45}
-    .msg.user{margin-left:auto;background:#1947b8;color:#fff}.msg.assistant{background:#f2f4f7}.msg.system{background:#fff4e5;color:#7a2e0e;font-size:13px}
+    .chat-layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start}
+    .chat-sidebar{height:72vh;display:flex;flex-direction:column;gap:10px;padding:12px;box-shadow:none}
+    .new-chat-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%}
+    .chat-search-wrap{position:relative}.chat-search-wrap::before{content:"⌕";position:absolute;left:12px;top:9px;color:#98a2b3;font-size:17px}
+    .chat-search-wrap input{padding-left:35px;background:#f8fafc;border-color:#eaecf0}
+    .chat-list{overflow:auto;display:grid;gap:5px;align-content:start;padding-right:2px}
+    .chat-item{border:1px solid transparent;background:transparent;border-radius:12px;padding:10px 11px;cursor:pointer;transition:.15s ease}
+    .chat-item:hover{background:#f8fafc}.chat-item.active{background:#eef4ff;border-color:#d6e4ff}
+    .chat-item-title{font-size:13px;font-weight:720;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#344054}
+    .chat-item.active .chat-item-title{color:#1947b8}.chat-item-meta{font-size:10.5px;color:#98a2b3;margin-top:4px}
+    .chat-main{min-width:0;max-width:920px;margin:0 auto;width:100%}
+    .chat-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 2px 12px;border-bottom:1px solid #eef0f3;margin-bottom:4px}
+    .chat-title{font-size:16px;font-weight:800}.chat-head-actions{display:flex;gap:6px}
+    .icon-btn{border:0;background:transparent;color:#667085;border-radius:9px;padding:7px 9px;cursor:pointer;font-size:13px}
+    .icon-btn:hover{background:#f2f4f7;color:#1947b8}
+    .chatbox{height:54vh;overflow:auto;background:transparent;border:0;padding:18px 8px 22px;margin-bottom:6px;scroll-behavior:smooth}
+    .empty-chat{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#667085;gap:8px}
+    .empty-chat .dragon{font-size:42px}.empty-chat strong{color:#344054;font-size:18px}
+    .msg-wrap{margin:14px 0;display:flex;flex-direction:column}.msg-wrap.user{align-items:flex-end}.msg-wrap.assistant{align-items:flex-start}
+    .msg{max-width:86%;line-height:1.58;font-size:14px;overflow-wrap:anywhere}
+    .msg.user{background:#1947b8;color:#fff;padding:11px 14px;border-radius:17px 17px 5px 17px;white-space:pre-wrap}
+    .msg.assistant{max-width:94%;padding:3px 2px;color:#182230}
+    .msg.system{background:#fff4e5;color:#7a2e0e;font-size:13px;padding:9px 11px;border-radius:10px}
+    .msg-actions{display:flex;gap:2px;margin-top:5px}.msg-actions button{border:0;background:transparent;color:#98a2b3;font-size:11px;cursor:pointer;padding:4px 7px;border-radius:7px}
+    .msg-actions button:hover{background:#f2f4f7;color:#344054}
+    .markdown p{margin:0 0 10px}.markdown p:last-child{margin-bottom:0}.markdown strong{font-weight:800}
+    .markdown h2,.markdown h3,.markdown h4{margin:14px 0 7px;line-height:1.25}.markdown h2{font-size:19px}.markdown h3{font-size:17px}.markdown h4{font-size:15px}
+    .markdown .md-list{padding-left:5px;margin:4px 0}.inline-code{font-family:Consolas,"Cascadia Code",monospace;background:#f2f4f7;border:1px solid #e4e7ec;border-radius:5px;padding:1px 5px;font-size:.92em}
+    .code-block{background:#101828;color:#f2f4f7;border-radius:12px;overflow:hidden;margin:11px 0;max-width:100%}
+    .code-head{display:flex;justify-content:space-between;align-items:center;padding:7px 11px;background:#1d2939;color:#d0d5dd;font-size:11px}
+    .copy-code{border:0;background:transparent;color:#d0d5dd;cursor:pointer;font-size:11px}.copy-code:hover{color:#fff}
+    .code-block pre{margin:0;padding:13px 14px;overflow:auto}.code-block code{font-family:Consolas,"Cascadia Code",monospace;font-size:12.5px;white-space:pre}
+    .thinking{display:flex;gap:5px;align-items:center;padding:12px 2px;color:#667085;font-size:13px}.thinking i{width:6px;height:6px;background:#98a2b3;border-radius:50%;animation:dot 1.15s infinite}.thinking i:nth-child(2){animation-delay:.16s}.thinking i:nth-child(3){animation-delay:.32s}
+    @keyframes dot{0%,70%,100%{opacity:.25;transform:translateY(0)}35%{opacity:1;transform:translateY(-3px)}}
+    .composer{background:#fff;border:1px solid #d0d5dd;border-radius:18px;padding:10px 10px 8px;box-shadow:0 8px 30px rgba(16,24,40,.07);transition:.15s ease}
+    .composer:focus-within{border-color:#84adff;box-shadow:0 0 0 3px #eef4ff,0 8px 30px rgba(16,24,40,.07)}
+    .composer textarea{border:0!important;box-shadow:none!important;outline:0;resize:none;min-height:48px;max-height:180px;padding:5px 7px 8px;background:transparent}
+    .composer-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}.composer-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .mode-select{width:auto;min-width:104px;border:0;background:#f2f4f7;padding:7px 9px;border-radius:9px;font-size:12px;color:#475467}
+    .memory-chip{display:flex;align-items:center;gap:6px;background:#f2f4f7;border-radius:9px;padding:7px 9px;color:#475467;font-size:12px;cursor:pointer}.memory-chip input{width:auto;margin:0}
+    .composer-action{width:39px;height:39px;border:0;border-radius:50%;background:#1947b8;color:#fff;font-size:19px;font-weight:800;cursor:pointer;display:grid;place-items:center;flex:0 0 auto;transition:.15s ease}
+    .composer-action:hover{transform:translateY(-1px);background:#153b99}.composer-action.stop{background:#344054;font-size:15px}.composer-action.empty{opacity:.4}
+    .chat-status{min-height:20px;margin:6px 5px 0;color:#98a2b3;font-size:11px}
     .diag-table{width:100%;border-collapse:collapse}.diag-table td{padding:9px 4px;border-bottom:1px solid #eef0f3}.diag-table td:last-child{text-align:right;font-weight:700}
     .statusbar{font-size:13px;margin-top:10px;color:#667085}.secret-note{font-size:12px;color:#667085;margin-top:6px}
     .sidebar-bottom{margin-top:auto;padding-top:16px}
@@ -51,7 +81,7 @@
     .file-list div{border-bottom:1px dashed #e4e7ec;padding:2px 0}.file-list div:last-child{border-bottom:0}
     button:disabled{opacity:.5;cursor:not-allowed}
     a{color:#1947b8;text-decoration:none;font-weight:650}
-    @media(max-width:800px){.app{grid-template-columns:1fr}aside{height:auto;position:static;border-right:0;border-bottom:1px solid #e6eaf0}.sidebar-bottom{margin-top:14px}nav{grid-template-columns:repeat(4,1fr)}.nav{text-align:center;padding:9px 4px;font-size:12px}main{padding:18px}.chat-layout{grid-template-columns:1fr}.chat-sidebar{height:260px}.chatbox{height:48vh}}
+    @media(max-width:800px){.app{grid-template-columns:1fr}aside{height:auto;position:static;border-right:0;border-bottom:1px solid #e6eaf0}.sidebar-bottom{margin-top:14px}nav{grid-template-columns:repeat(4,1fr)}.nav{text-align:center;padding:9px 4px;font-size:12px}main{padding:18px}.chat-layout{grid-template-columns:1fr}.chat-sidebar{height:230px}.chatbox{height:48vh}.chat-head-actions{gap:2px}.composer-tools{gap:4px}}
   </style>
 </head>
 <body>
@@ -84,37 +114,43 @@
     </section>
 
     <section id="chat" class="view">
-      <h2>Чат</h2><p class="lead">История диалогов хранится локально. Долговременная память Тоору остаётся отдельной системой.</p>
       <div class="chat-layout">
         <div class="chat-sidebar card">
-          <button id="newChat" class="primary">+ Новый чат</button>
-          <input id="chatSearch" placeholder="Поиск по чатам…">
+          <button id="newChat" class="primary new-chat-btn"><span>＋</span><span>Новый чат</span></button>
+          <div class="chat-search-wrap"><input id="chatSearch" placeholder="Поиск по чатам…"></div>
           <div id="chatList" class="chat-list"><div class="muted">Загрузка истории…</div></div>
         </div>
         <div class="chat-main">
           <div class="chat-head">
-            <div class="row" style="justify-content:space-between">
-              <div>
-                <b id="chatTitle">Новый чат</b>
-                <div id="chatMeta" class="muted">Локальная история · DeepSeek</div>
-              </div>
-              <div class="row">
-                <button id="renameChat" class="secondary">Переименовать</button>
-                <button id="deleteChat" class="secondary">Удалить</button>
-              </div>
+            <div>
+              <div id="chatTitle" class="chat-title">Новый чат</div>
+              <div id="chatMeta" class="muted">DeepSeek · локальная история</div>
+            </div>
+            <div class="chat-head-actions">
+              <button id="renameChat" class="icon-btn" title="Переименовать чат">✎</button>
+              <button id="deleteChat" class="icon-btn" title="Удалить чат">🗑</button>
             </div>
           </div>
-          <div id="chatBox" class="chatbox"><div class="msg system">Создайте новый чат или выберите диалог из истории.</div></div>
-          <textarea id="chatInput" placeholder="Напишите сообщение Тоору…"></textarea>
-          <div class="row" style="margin-top:10px">
-            <label class="muted"><input id="chatRemember" type="checkbox" checked style="width:auto"> запоминать через Хранителя памяти</label>
+          <div id="chatBox" class="chatbox">
+            <div class="empty-chat"><div class="dragon">🐉</div><strong>Чем помочь?</strong><span>Напишите сообщение Дракончику Тоору.</span></div>
           </div>
-          <div class="row">
-            <button id="sendChat" class="primary">Отправить</button>
-            <button id="stopChat" class="secondary" disabled>Остановить</button>
-            <button id="retryChat" class="secondary" disabled>Повторить ответ</button>
-            <span id="chatStatus" class="statusbar"></span>
+          <div class="composer">
+            <textarea id="chatInput" rows="1" placeholder="Сообщение Дракончику Тоору…"></textarea>
+            <div class="composer-footer">
+              <div class="composer-tools">
+                <select id="chatMode" class="mode-select" title="Формат ответа">
+                  <option value="brief">Кратко</option>
+                  <option value="normal" selected>Обычно</option>
+                  <option value="detailed">Подробно</option>
+                  <option value="code">Код</option>
+                  <option value="analysis">Анализ</option>
+                </select>
+                <label class="memory-chip" title="Разрешить Хранителю памяти сохранять важное"><input id="chatRemember" type="checkbox" checked> Память</label>
+              </div>
+              <button id="composerAction" class="composer-action empty" title="Отправить">↑</button>
+            </div>
           </div>
+          <div id="chatStatus" class="chat-status"></div>
         </div>
       </div>
     </section>
@@ -242,94 +278,162 @@ document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>showView(b.dataset.vi
 $("openUpdate").onclick=()=>showView("updates",$("openUpdate"));
 
 function fmtChatDate(value){if(!value)return"";const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleString()}
-function addMsg(role,text){
-  const wrap=document.createElement("div");wrap.className="msg-wrap";
-  const d=document.createElement("div");d.className="msg "+role;d.textContent=text;wrap.appendChild(d);
+function escapeHtml(value){return String(value).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]))}
+function inlineMarkdown(value){
+  let s=escapeHtml(value);
+  s=s.replace(/`([^`\n]+)`/g,'<code class="inline-code">$1</code>');
+  s=s.replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>");
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<em>$2</em>");
+  return s;
+}
+function renderTextMarkdown(value){
+  const lines=String(value).split("\n");let html="",paragraph=[];
+  const flush=()=>{if(!paragraph.length)return;html+="<p>"+inlineMarkdown(paragraph.join("\n")).replace(/\n/g,"<br>")+"</p>";paragraph=[]};
+  lines.forEach(line=>{
+    const heading=line.match(/^(#{2,4})\s+(.+)$/);
+    const list=line.match(/^\s*[-*]\s+(.+)$/);
+    if(heading){flush();const level=heading[1].length;html+="<h"+level+">"+inlineMarkdown(heading[2])+"</h"+level+">"}
+    else if(list){flush();html+='<div class="md-list">• '+inlineMarkdown(list[1])+"</div>"}
+    else if(!line.trim()){flush()}
+    else paragraph.push(line);
+  });
+  flush();return html;
+}
+function renderMarkdown(text){
+  const source=String(text);let out="",last=0;const re=/```([^\n`]*)\n?([\s\S]*?)```/g;let match;
+  while((match=re.exec(source))!==null){
+    out+=renderTextMarkdown(source.slice(last,match.index));
+    const lang=(match[1]||"код").trim()||"код";
+    out+='<div class="code-block"><div class="code-head"><span>'+escapeHtml(lang)+'</span><button class="copy-code">Копировать</button></div><pre><code>'+escapeHtml(match[2].replace(/\n$/,""))+'</code></pre></div>';
+    last=re.lastIndex;
+  }
+  out+=renderTextMarkdown(source.slice(last));return out;
+}
+function wireCodeCopy(root){
+  root.querySelectorAll(".copy-code").forEach(btn=>btn.onclick=async()=>{
+    const code=btn.closest(".code-block").querySelector("code").textContent;
+    try{await navigator.clipboard.writeText(code);btn.textContent="Скопировано";setTimeout(()=>btn.textContent="Копировать",1200)}catch{btn.textContent="Ошибка"}
+  });
+}
+function emptyChat(){
+  $("chatBox").innerHTML='<div class="empty-chat"><div class="dragon">🐉</div><strong>Чем помочь?</strong><span>Напишите сообщение Дракончику Тоору.</span></div>';
+}
+function addMsg(role,text,{retry=false}={}){
+  const wrap=document.createElement("div");wrap.className="msg-wrap "+role;
+  const d=document.createElement("div");d.className="msg "+role;
+  if(role==="assistant"){d.classList.add("markdown");d.innerHTML=renderMarkdown(text);wireCodeCopy(d)}else d.textContent=text;
+  wrap.appendChild(d);
   if(role==="assistant"){
     const actions=document.createElement("div");actions.className="msg-actions";
     const copy=document.createElement("button");copy.textContent="Копировать";copy.onclick=async()=>{try{await navigator.clipboard.writeText(text);copy.textContent="Скопировано";setTimeout(()=>copy.textContent="Копировать",1200)}catch{copy.textContent="Ошибка"}};
-    actions.appendChild(copy);wrap.appendChild(actions);
+    actions.appendChild(copy);
+    if(retry){const again=document.createElement("button");again.textContent="Повторить";again.onclick=retryChat;actions.appendChild(again)}
+    wrap.appendChild(actions);
   }
   $("chatBox").appendChild(wrap);$("chatBox").scrollTop=$("chatBox").scrollHeight;
 }
 function renderChatMessages(messages){
   $("chatBox").innerHTML="";
-  if(!messages.length){addMsg("system","Напишите первое сообщение.");$("retryChat").disabled=true;return}
-  messages.forEach(m=>addMsg(m.role,m.content));
-  $("retryChat").disabled=!messages.some(m=>m.role==="user");
+  if(!messages.length){emptyChat();return}
+  let lastAssistant=-1;messages.forEach((m,i)=>{if(m.role==="assistant")lastAssistant=i});
+  messages.forEach((m,i)=>addMsg(m.role,m.content,{retry:m.role==="assistant"&&i===lastAssistant}));
 }
+function showThinking(){
+  removeThinking();const wrap=document.createElement("div");wrap.id="thinkingBubble";wrap.className="msg-wrap assistant";
+  wrap.innerHTML='<div class="thinking"><span>Тоору думает</span><i></i><i></i><i></i></div>';$("chatBox").appendChild(wrap);$("chatBox").scrollTop=$("chatBox").scrollHeight;
+}
+function removeThinking(){const e=$("thinkingBubble");if(e)e.remove()}
+function draftKey(chatId=activeChatId){return "tooru:chat-draft:"+(chatId||"new")}
+function saveDraft(){if(activeChatId)try{localStorage.setItem(draftKey(),$("chatInput").value)}catch{}}
+function restoreDraft(){let value="";if(activeChatId)try{value=localStorage.getItem(draftKey())||""}catch{};$("chatInput").value=value;resizeComposer();updateComposerAction()}
+function clearDraft(){if(activeChatId)try{localStorage.removeItem(draftKey())}catch{}}
+function resizeComposer(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(180,Math.max(48,el.scrollHeight))+"px"}
+let chatGenerating=false;
+function setGenerating(active){
+  chatGenerating=active;const btn=$("composerAction");
+  btn.classList.toggle("stop",active);btn.classList.toggle("empty",!active&&!$("chatInput").value.trim());
+  btn.textContent=active?"■":"↑";btn.title=active?"Остановить генерацию":"Отправить";
+  $("chatInput").disabled=active;$("chatMode").disabled=active;$("chatRemember").disabled=active;
+}
+function updateComposerAction(){if(chatGenerating)return;$("composerAction").classList.toggle("empty",!$("chatInput").value.trim())}
 async function loadChatList(query=""){
   try{
     const d=await api("/v1/chats?limit=100"+(query?"&query="+encodeURIComponent(query):""));
     const box=$("chatList");box.innerHTML="";
-    if(!d.items.length){box.innerHTML='<div class="muted">Чаты не найдены.</div>';return}
+    if(!d.items.length){box.innerHTML='<div class="muted" style="padding:10px">Чаты не найдены.</div>';return}
     d.items.forEach(item=>{
       const el=document.createElement("div");el.className="chat-item"+(item.id===activeChatId?" active":"");el.dataset.chatId=item.id;
       const title=document.createElement("div");title.className="chat-item-title";title.textContent=item.title;
       const meta=document.createElement("div");meta.className="chat-item-meta";meta.textContent=(item.message_count||0)+" сообщ. · "+fmtChatDate(item.updated_at);
       el.append(title,meta);el.onclick=()=>loadChat(item.id);box.appendChild(el);
     });
-  }catch(e){$("chatList").innerHTML='<div class="bad">Ошибка истории: '+e.message+'</div>'}
+  }catch(e){$("chatList").innerHTML='<div class="bad" style="padding:10px">Ошибка истории: '+escapeHtml(e.message)+'</div>'}
 }
 async function loadChat(chatId){
+  if(chatGenerating)return;saveDraft();
   try{
     const d=await api("/v1/chats/"+encodeURIComponent(chatId));
-    activeChatId=d.id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;$("chatMeta").textContent=(d.message_count||0)+" сообщений · "+fmtChatDate(d.updated_at);
-    renderChatMessages(d.messages||[]);await loadChatList($("chatSearch").value.trim());$("chatInput").focus();
+    activeChatId=d.id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;$("chatMeta").textContent=(d.message_count||0)+" сообщений · "+fmtChatDate(d.updated_at)+" · DeepSeek";
+    renderChatMessages(d.messages||[]);restoreDraft();await loadChatList($("chatSearch").value.trim());$("chatInput").focus();
   }catch(e){$("chatStatus").textContent="Не удалось открыть чат: "+e.message}
 }
 async function createNewChat(){
+  if(chatGenerating)return;saveDraft();
   try{
     const d=await api("/v1/chats",{method:"POST",body:JSON.stringify({})});
-    activeChatId=d.id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;$("chatMeta").textContent="Новый локальный чат";renderChatMessages([]);await loadChatList();$("chatInput").focus();
+    activeChatId=d.id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;$("chatMeta").textContent="Новый чат · DeepSeek";emptyChat();restoreDraft();await loadChatList();$("chatInput").focus();
   }catch(e){$("chatStatus").textContent="Ошибка создания чата: "+e.message}
 }
 async function ensureChatReady(){
   if(chatLoaded){await loadChatList($("chatSearch").value.trim());return}
-  chatLoaded=true;
-  const d=await api("/v1/chats?limit=100");
-  if(d.items.length){await loadChat(d.items[0].id)}else{await createNewChat()}
+  chatLoaded=true;const d=await api("/v1/chats?limit=100");if(d.items.length)await loadChat(d.items[0].id);else await createNewChat();
 }
 async function sendChat(){
+  if(chatGenerating)return stopChat();
   const text=$("chatInput").value.trim();if(!text)return;
   if(!activeChatId)await createNewChat();if(!activeChatId)return;
-  $("chatInput").value="";addMsg("user",text);$("sendChat").disabled=true;$("stopChat").disabled=false;$("retryChat").disabled=true;$("chatStatus").textContent="Тоору думает…";
+  clearDraft();$("chatInput").value="";resizeComposer();updateComposerAction();
+  if($("chatBox").querySelector(".empty-chat"))$("chatBox").innerHTML="";
+  addMsg("user",text);showThinking();setGenerating(true);$("chatStatus").textContent="DeepSeek формирует ответ…";
   currentRequestId=(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random());currentAbortController=new AbortController();
   try{
-    const d=await api("/v1/chat",{method:"POST",signal:currentAbortController.signal,body:JSON.stringify({chat_id:activeChatId,request_id:currentRequestId,message:text,remember:$("chatRemember").checked})});
-    activeChatId=d.chat_id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;addMsg("assistant",d.answer);$("chatStatus").textContent="DeepSeek · "+d.model+" · контекст памяти: "+d.context_memories+" · память: "+d.memory_status;$("retryChat").disabled=false;await loadChatList($("chatSearch").value.trim());
+    const d=await api("/v1/chat",{method:"POST",signal:currentAbortController.signal,body:JSON.stringify({chat_id:activeChatId,request_id:currentRequestId,message:text,remember:$("chatRemember").checked,response_mode:$("chatMode").value})});
+    removeThinking();activeChatId=d.chat_id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;addMsg("assistant",d.answer,{retry:true});
+    $("chatStatus").textContent="DeepSeek · использовано воспоминаний: "+d.context_memories;await loadChatList($("chatSearch").value.trim());
   }catch(e){
-    if(e.name==="AbortError"){$("chatStatus").textContent="Генерация остановлена."}else{addMsg("system","Ошибка: "+e.message);$("chatStatus").textContent="Ошибка DeepSeek API"}
+    removeThinking();if(e.name==="AbortError"){$("chatStatus").textContent="Ответ остановлен."}else{addMsg("system","Ошибка: "+e.message);$("chatStatus").textContent="Ошибка DeepSeek API"}
     await loadChat(activeChatId);
-  }finally{$("sendChat").disabled=false;$("stopChat").disabled=true;currentRequestId=null;currentAbortController=null}
+  }finally{setGenerating(false);currentRequestId=null;currentAbortController=null;$("chatInput").focus()}
 }
 async function stopChat(){
-  if(!currentRequestId)return;
-  const id=currentRequestId;
-  try{await api("/v1/chat/cancel/"+encodeURIComponent(id),{method:"POST"});}catch{}
+  if(!currentRequestId)return;const id=currentRequestId;
+  $("chatStatus").textContent="Останавливаю ответ…";
+  try{await api("/v1/chat/cancel/"+encodeURIComponent(id),{method:"POST"})}catch{}
   if(currentAbortController)currentAbortController.abort();
 }
 async function retryChat(){
-  if(!activeChatId)return;
-  $("retryChat").disabled=true;$("sendChat").disabled=true;$("stopChat").disabled=false;$("chatStatus").textContent="Тоору повторяет ответ…";
+  if(!activeChatId||chatGenerating)return;
+  showThinking();setGenerating(true);$("chatStatus").textContent="Тоору формирует новый вариант…";
   currentRequestId=(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random());currentAbortController=new AbortController();
   try{
-    const d=await api("/v1/chat/"+encodeURIComponent(activeChatId)+"/retry",{method:"POST",signal:currentAbortController.signal,body:JSON.stringify({request_id:currentRequestId,remember:$("chatRemember").checked})});
-    $("chatStatus").textContent="Ответ обновлён · "+d.model;await loadChat(activeChatId);await loadChatList($("chatSearch").value.trim());
-  }catch(e){if(e.name==="AbortError")$("chatStatus").textContent="Генерация остановлена.";else $("chatStatus").textContent="Ошибка повтора: "+e.message}
-  finally{$("retryChat").disabled=false;$("sendChat").disabled=false;$("stopChat").disabled=true;currentRequestId=null;currentAbortController=null}
+    const d=await api("/v1/chat/"+encodeURIComponent(activeChatId)+"/retry",{method:"POST",signal:currentAbortController.signal,body:JSON.stringify({request_id:currentRequestId,remember:$("chatRemember").checked,response_mode:$("chatMode").value})});
+    $("chatStatus").textContent="Ответ обновлён · DeepSeek";await loadChat(activeChatId);await loadChatList($("chatSearch").value.trim());
+  }catch(e){removeThinking();if(e.name==="AbortError")$("chatStatus").textContent="Ответ остановлен.";else $("chatStatus").textContent="Ошибка повтора: "+e.message}
+  finally{removeThinking();setGenerating(false);currentRequestId=null;currentAbortController=null}
 }
 async function renameActiveChat(){
-  if(!activeChatId)return;const title=prompt("Новое название чата:",activeChatTitle);if(title===null||!title.trim())return;
+  if(!activeChatId||chatGenerating)return;const title=prompt("Новое название чата:",activeChatTitle);if(title===null||!title.trim())return;
   try{const d=await api("/v1/chats/"+encodeURIComponent(activeChatId),{method:"PATCH",body:JSON.stringify({title:title.trim()})});activeChatTitle=d.title;$("chatTitle").textContent=d.title;await loadChatList($("chatSearch").value.trim())}catch(e){$("chatStatus").textContent="Ошибка переименования: "+e.message}
 }
 async function deleteActiveChat(){
-  if(!activeChatId||!confirm("Удалить этот чат? Долговременная память Тоору не удалится."))return;
-  try{await api("/v1/chats/"+encodeURIComponent(activeChatId),{method:"DELETE"});activeChatId=null;const d=await api("/v1/chats?limit=100");if(d.items.length)await loadChat(d.items[0].id);else await createNewChat()}catch(e){$("chatStatus").textContent="Ошибка удаления: "+e.message}
+  if(!activeChatId||chatGenerating||!confirm("Удалить этот чат? Долговременная память Тоору останется."))return;
+  try{try{localStorage.removeItem(draftKey())}catch{}await api("/v1/chats/"+encodeURIComponent(activeChatId),{method:"DELETE"});activeChatId=null;const d=await api("/v1/chats?limit=100");if(d.items.length)await loadChat(d.items[0].id);else await createNewChat()}catch(e){$("chatStatus").textContent="Ошибка удаления: "+e.message}
 }
-$("newChat").onclick=createNewChat;$("sendChat").onclick=sendChat;$("stopChat").onclick=stopChat;$("retryChat").onclick=retryChat;$("renameChat").onclick=renameActiveChat;$("deleteChat").onclick=deleteActiveChat;
+$("newChat").onclick=createNewChat;$("composerAction").onclick=()=>chatGenerating?stopChat():sendChat();$("renameChat").onclick=renameActiveChat;$("deleteChat").onclick=deleteActiveChat;
+$("chatInput").addEventListener("input",()=>{saveDraft();resizeComposer();updateComposerAction()});
 $("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}});
 $("chatSearch").addEventListener("input",()=>{clearTimeout(chatSearchTimer);chatSearchTimer=setTimeout(()=>loadChatList($("chatSearch").value.trim()),250)});
+document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="n"){e.preventDefault();createNewChat()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();showView("chat",document.querySelector('.nav[data-view="chat"]'));$("chatSearch").focus();$("chatSearch").select()}});
 async function refreshDiag(){try{const d=await api("/v1/diagnostics/status");$("brandVersion").textContent=d.backend.version||"—";state($("homeBackend"),"Работает","ok");state($("homeAI"),d.ai.configured?"Подключён":"Не настроен",d.ai.configured?"ok":"warn");state($("homeGuardian"),d.guardian.queued_pending?"Ожидают: "+d.guardian.queued_pending:"Работает",d.guardian.queued_pending?"warn":"ok");$("homeMemories").textContent=d.memory_engine.total;$("homeChats").textContent=d.chat_history.chats;
 state($("dBackend"),"Работает","ok");state($("dAI"),d.ai.configured?"Подключён":"Нет ключа",d.ai.configured?"ok":"warn");state($("dGuardian"),"Работает","ok");state($("dMemoryAuto"),d.memory_automation.started?(d.memory_automation.running?"Выполняется":"Активна"):"Выключена",d.memory_automation.started?"ok":"warn");state($("dGuardianAuto"),d.guardian_automation.started?(d.guardian_automation.running?"Выполняется":"Активна"):"Выключена",d.guardian_automation.started?"ok":"warn");
 $("dRam").textContent=fmtBytes(d.system_memory.used_bytes)+" / "+fmtBytes(d.system_memory.total_bytes)+" ("+d.system_memory.percent+"%)";$("dProcessRam").textContent=fmtBytes(d.process.rss_bytes);$("dDisk").textContent=fmtBytes(d.disk.free_bytes);$("dChats").textContent=d.chat_history.chats+" чатов / "+d.chat_history.messages+" сообщений";
