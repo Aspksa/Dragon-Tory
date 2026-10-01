@@ -1943,9 +1943,12 @@ class SmartDrive:
                 normalized
                 for normalized in (
                     _normalize_date(value)
-                    for value in payload.get(
-                        "work_dates",
-                        current.get("work_dates", []),
+                    for value in (
+                        payload.get(
+                            "work_dates",
+                            current.get("work_dates", []),
+                        )
+                        or []
                     )
                 )
                 if normalized
