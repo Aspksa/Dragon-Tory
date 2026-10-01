@@ -168,7 +168,15 @@ def analyze_pending(
                     "external_ai_used": False,
                 },
             )
-        except Exception as exc:
+        except (
+            KeyError,
+            PermissionError,
+            UnsupportedDocumentError,
+            FileNotFoundError,
+            ValueError,
+            RuntimeError,
+            OSError,
+        ) as exc:
             skipped.append(
                 {
                     "document_id": document_id,

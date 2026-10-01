@@ -47,7 +47,7 @@ def test_document_intelligence_extracts_entities_deadlines_and_tags(
         "Договор действует до 14.11.2027.\n"
         "Стоимость услуг: € 1250,00.\n"
         "Контакт: owner@example.com\n"
-    ).encode("utf-8")
+    ).encode()
     document = _upload(store, "Договор Subaru.txt", text)
     store.update_passport(
         document["id"],
@@ -110,7 +110,7 @@ def test_local_version_diff_detects_dates_and_amounts(
         "Договор действует до 14.11.2027.\n"
         "Стоимость: EUR 1000.\n"
         "Условие первой версии документа."
-    ).encode("utf-8")
+    ).encode()
     document = _upload(store, "version-contract.txt", first)
     store.update_passport(
         document["id"],
@@ -123,7 +123,7 @@ def test_local_version_diff_detects_dates_and_amounts(
         "Договор действует до 14.11.2028.\n"
         "Стоимость: EUR 1500.\n"
         "Условие второй версии документа существенно изменено."
-    ).encode("utf-8")
+    ).encode()
     temp = store.incoming_dir / "version-two.upload"
     temp.write_bytes(second)
     updated = store.add_version(
