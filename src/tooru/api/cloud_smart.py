@@ -269,7 +269,7 @@ def create_vehicle(
         item = _smart(request).create_vehicle(payload.model_dump())
         try:
             sync_vehicle(request.app.state.memory_intake, item)
-        except Exception as sync_exc:
+        except Exception as sync_exc:  # noqa: BLE001 - best-effort side effect
             logger.warning("Garage memory auto-sync failed: %s", sync_exc)
         return item
     except Exception as exc:
@@ -289,7 +289,7 @@ def update_vehicle(
         )
         try:
             sync_vehicle(request.app.state.memory_intake, item)
-        except Exception as sync_exc:
+        except Exception as sync_exc:  # noqa: BLE001 - best-effort side effect
             logger.warning("Garage memory auto-sync failed: %s", sync_exc)
         return item
     except Exception as exc:
@@ -383,7 +383,7 @@ def update_dna(
         )
         try:
             sync_weekend_work(request.app.state.memory_intake, dna)
-        except Exception as sync_exc:
+        except Exception as sync_exc:  # noqa: BLE001 - best-effort side effect
             logger.warning("Timesheet memory auto-sync failed: %s", sync_exc)
         return dna
     except Exception as exc:
