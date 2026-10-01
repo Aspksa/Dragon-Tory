@@ -97,7 +97,7 @@ def test_hybrid_recall_tracks_usage_and_feedback(tmp_path: Path) -> None:
         )
     )
     assert hits
-    assert "Claude" in hits[0].memory.content
+    assert "DeepSeek V4 Flash" in hits[0].memory.content
 
     touched = engine.get(important.id)
     assert touched.access_count >= 1
