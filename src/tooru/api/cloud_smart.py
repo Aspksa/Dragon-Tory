@@ -54,6 +54,7 @@ class DNAUpdate(BaseModel):
     employee_name: str | None = Field(default=None, max_length=300)
     department: str | None = Field(default=None, max_length=300)
     work_date: str | None = Field(default=None, max_length=80)
+    work_dates: list[str] | None = Field(default=None, max_length=31)
     work_hours: float | None = Field(default=None, ge=0, le=24)
     work_reason: str | None = Field(default=None, max_length=2_000)
 
