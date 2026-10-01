@@ -104,10 +104,19 @@ class MemoryEngine:
         *,
         track_usage: bool = True,
     ) -> list[MemoryRecallHit]:
-        candidates = self.store.candidates(
+        primary_candidates = self.store.candidates(
+            request,
+            limit=max(500, request.limit * 50),
+        )
+        lexical_candidates = self.store.lexical_candidates(
             request,
             limit=max(200, request.limit * 20),
         )
+        candidates_by_id = {
+            item.id: item
+            for item in [*primary_candidates, *lexical_candidates]
+        }
+        candidates = list(candidates_by_id.values())
         if not candidates:
             return []
 
