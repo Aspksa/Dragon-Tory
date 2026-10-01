@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import deque
-from typing import Any
+from typing import Any, ClassVar
 
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.intake import MemoryIntakeGateway
@@ -773,7 +773,7 @@ class GreyMatterService:
         for group in by_signature.values():
             if len(group) < 2:
                 continue
-            canonical = sorted(
+            canonical = max(
                 group,
                 key=lambda item: (
                     item.pinned,
@@ -781,8 +781,7 @@ class GreyMatterService:
                     item.confidence,
                     item.updated_at,
                 ),
-                reverse=True,
-            )[0]
+            )
             for duplicate in group[1:]:
                 self._same_scope(canonical, duplicate)
                 self.store.add_link(
