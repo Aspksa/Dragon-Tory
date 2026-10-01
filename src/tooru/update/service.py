@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 
 class UpdateError(RuntimeError):
@@ -18,7 +18,7 @@ class UpdateError(RuntimeError):
 class UpdateService:
     """Checks GitHub and starts the detached Windows self-updater."""
 
-    RUNNING_PHASES = {
+    RUNNING_PHASES: ClassVar[set[str]] = {
         "starting",
         "checking",
         "downloading",
