@@ -15,11 +15,19 @@ class ChatRequest(BaseModel):
     request_id: str | None = Field(default=None, max_length=100)
     message: str = Field(min_length=1, max_length=20_000)
     remember: bool = True
+    response_mode: str = Field(
+        default="normal",
+        pattern="^(brief|normal|detailed|code|analysis)$",
+    )
 
 
 class RetryRequest(BaseModel):
     request_id: str | None = Field(default=None, max_length=100)
     remember: bool = True
+    response_mode: str = Field(
+        default="normal",
+        pattern="^(brief|normal|detailed|code|analysis)$",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -65,6 +73,7 @@ async def _run_generation(
     message: str,
     remember: bool,
     history: list[ConversationMessage],
+    response_mode: str,
     replace_after_sequence: int | None = None,
 ) -> ChatResponse:
     existing = request.app.state.chat_tasks.get(request_id)
@@ -79,6 +88,7 @@ async def _run_generation(
             message=message,
             remember=remember,
             history=history,
+            response_mode=response_mode,
         )
     )
     request.app.state.chat_tasks[request_id] = task
@@ -162,6 +172,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         message=payload.message,
         remember=payload.remember,
         history=history,
+        response_mode=payload.response_mode,
     )
 
 
@@ -203,6 +214,7 @@ async def retry_chat(
         message=message,
         remember=payload.remember,
         history=_history_to_messages(history_items),
+        response_mode=payload.response_mode,
         replace_after_sequence=user_sequence,
     )
 

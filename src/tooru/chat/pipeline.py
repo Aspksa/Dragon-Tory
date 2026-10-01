@@ -14,6 +14,20 @@ from tooru.memory.models import (
 PROJECT_ID = "dragon-tory"
 AI_PROVIDER = "deepseek"
 
+RESPONSE_MODE_PROMPTS = {
+    "brief": "Отвечай кратко и по существу, без лишних деталей.",
+    "normal": "Дай ясный и достаточно подробный ответ.",
+    "detailed": "Дай подробный структурированный ответ с важными деталями.",
+    "code": (
+        "Если задача связана с программированием, делай упор на готовый код, "
+        "точные шаги и короткие пояснения. Код оформляй в Markdown-блоках."
+    ),
+    "analysis": (
+        "Проведи глубокий анализ: раздели факты, предположения, риски и "
+        "практические выводы. Не выдумывай отсутствующие данные."
+    ),
+}
+
 
 @dataclass(slots=True)
 class ChatPipelineResult:
@@ -44,6 +58,7 @@ class ChatPipeline:
         message: str,
         remember: bool,
         history: list[ConversationMessage],
+        response_mode: str = "normal",
     ) -> ChatPipelineResult:
         context = self.memory.context_pack(
             MemoryContextRequest(
@@ -64,12 +79,18 @@ class ChatPipeline:
         ]
         messages.append({"role": "user", "content": message})
 
+        mode_instruction = RESPONSE_MODE_PROMPTS.get(
+            response_mode,
+            RESPONSE_MODE_PROMPTS["normal"],
+        )
         system_prompt = (
             "Ты Дракончик Тоору — локальный персональный ИИ-помощник. "
             "Отвечай на русском языке, если пользователь не попросил иначе. "
             "Используй личную и проектную память ниже как контекст и не "
             "выдумывай отсутствующие факты. Если память конфликтует с "
-            "текущим сообщением пользователя, уточни это.\n\n"
+            "текущим сообщением пользователя, уточни это. "
+            + mode_instruction
+            + "\n\n"
             + context.rendered_context
         )
 
