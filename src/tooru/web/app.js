@@ -1519,12 +1519,24 @@ let updatePollTimer=null;
 const phaseNames={idle:"Готово",checking:"Проверка GitHub…",current:"Актуальная версия",available:"Доступно обновление",starting:"Запуск процесса…",downloading:"Скачивание…",extracting:"Распаковка и сверка…",backing_up:"Резервная копия…",stopping:"Остановка…",installing:"Установка…",restarting:"Перезапуск…",verifying:"Проверка новой версии…",rolling_back:"Автоматический откат…",success:"Обновлено",failed:"Ошибка обновления",error:"Ошибка проверки"};
 function renderFiles(id,files){const box=$(id);box.innerHTML="";if(!files||!files.length){box.textContent="Нет файлов.";return}files.forEach(name=>{const row=document.createElement("div");row.textContent=name;box.appendChild(row)})}
 function fmtUpdateDate(value){if(!value)return"—";const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleString()}
+function renderReleaseNotes(containerId,release){
+  const box=$(containerId);if(!box)return;box.innerHTML="";
+  if(!release||!release.modules||!release.modules.length){box.innerHTML='<div class="muted">Для этой версии подробные заметки по модулям не сохранены.</div>';return}
+  release.modules.forEach(module=>{
+    const row=document.createElement("div");row.className="module-document";
+    const left=document.createElement("div");const title=document.createElement("div");title.className="cloud-name";title.textContent=module.title+" · v"+module.version;
+    const meta=document.createElement("div");meta.className="cloud-sub";meta.textContent=(module.changes||[]).map(x=>"• "+x).join("\n");meta.style.whiteSpace="pre-wrap";
+    left.append(title,meta);row.append(left);box.append(row);
+  });
+}
 function renderUpdate(d){
   const phase=phaseNames[d.phase]||d.message||d.phase||"—";
   state($("updateState"),phase,d.phase==="available"?"warn":(["failed","error"].includes(d.phase)?"bad":(["success","current"].includes(d.phase)?"ok":"")));
   $("updateLocal").textContent=d.local_version||"—";
   $("updateRemote").textContent=d.remote_version||"—";
   $("updateSha").textContent=d.remote_sha?d.remote_sha.slice(0,12):"—";
+  $("updateReleaseVersion").textContent=d.release?d.release.version:(d.local_version||"—");
+  renderReleaseNotes("updateReleaseNotes",d.release);
   const pct=Math.max(0,Math.min(100,Number(d.progress_percent||0)));
   $("updatePercent").textContent=pct+"%";
   $("updateProgressBar").style.width=pct+"%";
@@ -1543,7 +1555,20 @@ async function updateStatus(){
   catch(e){if(updateWasStarted){state($("updateState"),"Перезапуск…","warn");$("updateProgress").textContent="Сервер временно недоступен. Жду автоматического запуска…";startUpdatePolling()}else{state($("updateState"),"Недоступно","bad");$("updateProgress").textContent=e.message;$("checkUpdate").disabled=false;$("installUpdate").disabled=true}}
 }
 async function refreshUpdateHistory(){
-  try{const d=await api("/v1/update/history?limit=30");const box=$("updateHistory");box.innerHTML="";if(!d.items.length){box.innerHTML='<div class="card muted">История пока пуста.</div>';return}d.items.forEach(item=>{const el=document.createElement("div");el.className="history-item";const ok=item.result==="success";const files=(item.downloaded_files||[]).length;el.innerHTML='<div class="history-head"><div><div class="history-title '+(ok?"ok":"bad")+'">'+(item.description||"Обновление")+'</div><div class="update-meta">'+(item.from_version||"—")+' → '+(item.to_version||"—")+(item.sha?" · "+item.sha.slice(0,10):"")+'</div></div><div class="history-date">'+fmtUpdateDate(item.finished_at)+'</div></div><div class="update-meta" style="margin-top:8px">Скачано файлов: '+files+' · изменено: '+((item.changed_files||[]).length)+' · новых: '+((item.new_files||[]).length)+' · удалено: '+((item.removed_files||[]).length)+(item.rolled_back?" · выполнен автоматический откат":"")+'</div>'+(item.error?'<div class="statusbar bad">'+item.error+'</div>':"");box.appendChild(el)})}catch(e){$("updateHistory").innerHTML='<div class="card bad">Не удалось загрузить историю: '+e.message+'</div>'}
+  try{
+    const d=await api("/v1/update/history?limit=30");const box=$("updateHistory");box.innerHTML="";
+    if(!d.items.length){box.innerHTML='<div class="card muted">История пока пуста.</div>';return}
+    d.items.forEach(item=>{
+      const el=document.createElement("div");el.className="history-item";const ok=item.result==="success";const files=(item.downloaded_files||[]).length;
+      el.innerHTML='<div class="history-head"><div><div class="history-title '+(ok?"ok":"bad")+'">'+escapeHtml(item.description||"Обновление")+'</div><div class="update-meta">'+escapeHtml((item.from_version||"—")+' → '+(item.to_version||"—")+(item.sha?" · "+item.sha.slice(0,10):""))+'</div></div><div class="history-date">'+escapeHtml(fmtUpdateDate(item.finished_at))+'</div></div><div class="update-meta" style="margin-top:8px">Скачано файлов: '+files+' · изменено: '+((item.changed_files||[]).length)+' · новых: '+((item.new_files||[]).length)+' · удалено: '+((item.removed_files||[]).length)+(item.rolled_back?" · выполнен автоматический откат":"")+'</div>';
+      if(item.error){const err=document.createElement("div");err.className="statusbar bad";err.textContent=item.error;el.append(err)}
+      if(item.release&&item.release.modules&&item.release.modules.length){
+        const release=document.createElement("div");release.className="smart-list";release.style.marginTop="10px";
+        item.release.modules.forEach(module=>{const row=document.createElement("div");row.className="smart-line";const title=document.createElement("strong");title.textContent=module.title+" · v"+module.version;const body=document.createElement("div");body.className="muted";body.style.whiteSpace="pre-wrap";body.textContent=(module.changes||[]).map(x=>"• "+x).join("\n");row.append(title,body);release.append(row)});el.append(release);
+      }
+      box.appendChild(el);
+    })
+  }catch(e){$("updateHistory").innerHTML='<div class="card bad">Не удалось загрузить историю: '+escapeHtml(e.message)+'</div>'}
 }
 async function checkForUpdate(){
   $("checkUpdate").disabled=true;
