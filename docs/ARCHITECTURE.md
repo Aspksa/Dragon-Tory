@@ -10,7 +10,7 @@ and isolated when providers change.
 ## Layers
 
 1. API — FastAPI backend.
-2. Memory Engine v4 — structured, versioned, self-maintaining long-term memory.
+2. Memory Engine v5 — structured, versioned, self-maintaining long-term memory with FTS5 hybrid retrieval.
 3. Memory Intelligence — decides what deserves durable memory.
 4. Tooru Memory Guardian — hidden risk/policy controller for automatic memory writes.
 5. AI provider registry — internal DeepSeek connection layer.
@@ -18,7 +18,7 @@ and isolated when providers change.
 5. Web UI — desktop/browser interface.
 6. Mobile clients — planned clients using the same backend contracts.
 
-## Memory Engine v4
+## Memory Engine v5
 
 Capabilities:
 - hybrid semantic and lexical recall;
