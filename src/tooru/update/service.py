@@ -249,16 +249,16 @@ class UpdateService:
             self._append_history_from_state(failed, success=False)
             raise UpdateError(error)
 
-        self._write_state(
-            {
-                **state,
-                "updater_pid": process.pid,
-                "message": (
-                    "Процесс обновления запущен. "
-                    "Ожидание первого статуса…"
-                ),
-            }
+        current_after_launch = self._read_state()
+        if current_after_launch.get("phase") not in self.RUNNING_PHASES:
+            current_after_launch = state
+
+        current_after_launch["updater_pid"] = process.pid
+        current_after_launch.setdefault(
+            "message",
+            "Процесс обновления запущен. Ожидание первого статуса…",
         )
+        self._write_state(current_after_launch)
         return self.status()
 
     def _supervise_running_state(
