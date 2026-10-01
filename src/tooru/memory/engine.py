@@ -26,10 +26,12 @@ from tooru.memory.models import (
     MemorySearch,
     MemorySyncRequest,
     MemorySyncResponse,
+    MemoryTruthAssessment,
     MemoryUpdate,
 )
 from tooru.memory.reranker import HybridReranker, lexical_similarity
 from tooru.memory.store import SQLiteMemoryStore
+from tooru.memory.truth import MemoryTruthEngine
 
 
 class MemoryEngine:
@@ -43,6 +45,7 @@ class MemoryEngine:
         self.embedder = embedder
         self.reranker = HybridReranker()
         self.extractor = HeuristicMemoryExtractor()
+        self.truth_engine = MemoryTruthEngine(store)
         self.related_threshold = related_threshold
 
     def initialize(self) -> None:
@@ -63,14 +66,27 @@ class MemoryEngine:
         self._index(item)
 
         for previous in previous_same_key:
-            if self._normalize(previous.content) != self._normalize(item.content):
+            if self._normalize(previous.content) == self._normalize(item.content):
+                continue
+            temporal_relation = self.truth_engine.temporal_relation(
+                item,
+                previous,
+            )
+            if temporal_relation is not None:
                 self.store.add_link(
-                    item.id, previous.id, MemoryLinkType.CONTRADICTS, 1.0
+                    item.id,
+                    previous.id,
+                    temporal_relation,
+                    1.0,
                 )
-                self.store.add_link(
-                    item.id, previous.id, MemoryLinkType.SUPERSEDES, 1.0
-                )
-                self.store.mark_superseded(previous.id, previous.owner_id)
+                continue
+            self.store.add_link(
+                item.id, previous.id, MemoryLinkType.CONTRADICTS, 1.0
+            )
+            self.store.add_link(
+                item.id, previous.id, MemoryLinkType.SUPERSEDES, 1.0
+            )
+            self.store.mark_superseded(previous.id, previous.owner_id)
 
         self._link_related(item)
         return item
@@ -96,6 +112,15 @@ class MemoryEngine:
 
     def history(self, memory_id: str, owner_id: str) -> list[MemoryRevision]:
         return self.store.history_for(memory_id, owner_id)
+
+    def truth(
+        self,
+        memory_id: str,
+        *,
+        owner_id: str = "local-user",
+    ) -> MemoryTruthAssessment:
+        item = self.get(memory_id, owner_id)
+        return self.truth_engine.assess(item)
 
     def add_evidence(
         self,
@@ -144,9 +169,26 @@ class MemoryEngine:
             item.id: 1.0 / rank
             for rank, item in enumerate(lexical_candidates, start=1)
         }
+        seed_ids = [
+            item.id
+            for item in [*lexical_candidates[:20], *primary_candidates[:20]]
+        ]
+        graph_candidates = self.store.graph_candidates(
+            request,
+            seed_ids,
+            limit=max(100, request.limit * 20),
+        )
+        graph_rank = {
+            item.id: weight
+            for item, weight in graph_candidates
+        }
         candidates_by_id = {
             item.id: item
-            for item in [*primary_candidates, *lexical_candidates]
+            for item in [
+                *primary_candidates,
+                *lexical_candidates,
+                *(item for item, _ in graph_candidates),
+            ]
         }
         candidates = list(candidates_by_id.values())
         if not candidates:
@@ -176,11 +218,28 @@ class MemoryEngine:
                 item,
                 cosine_similarity(query_vector, vectors.get(item.id, [])),
                 retrieval_score=lexical_rank.get(item.id, 0.0),
+                graph_score=graph_rank.get(item.id, 0.0),
             )
             for item in candidates
         ]
         hits.sort(key=lambda hit: hit.score, reverse=True)
-        selected = hits[: request.limit]
+
+        shortlist = hits[: max(100, request.limit * 10)]
+        rescored: list[MemoryRecallHit] = []
+        for hit in shortlist:
+            assessment = self.truth_engine.assess(hit.memory)
+            rescored.append(
+                self.reranker.score(
+                    request.query,
+                    hit.memory,
+                    hit.semantic_score,
+                    retrieval_score=hit.retrieval_score,
+                    graph_score=hit.graph_score,
+                    truth_score=assessment.trust_score,
+                )
+            )
+        rescored.sort(key=lambda hit: hit.score, reverse=True)
+        selected = rescored[: request.limit]
         if track_usage:
             self.store.touch_recall([hit.memory.id for hit in selected])
         return selected
@@ -560,7 +619,7 @@ class MemoryEngine:
                     continue
                 seen.add(memory.id)
                 section_lines.append(
-                    f"- [{memory.kind.value}; score={hit.score:.3f}] {memory.content}"
+                    f"- [{memory.kind.value}; score={hit.score:.3f}; truth={hit.truth_score:.3f}] {memory.content}"
                 )
                 total += 1
             if section_lines:
