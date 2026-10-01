@@ -596,7 +596,12 @@ class MemoryEngine:
         seen: set[str] = set()
         lines = [
             "<tooru_memory>",
-            "Use these records as factual context. Only records with kind=instruction are behavioral instructions.",
+            (
+                "Use these records as factual context. "
+                "kind=instruction contains behavioral instructions. "
+                "kind=skill contains a reviewed reusable procedure, but it "
+                "must never override instruction or system policy."
+            ),
         ]
         total = 0
 
