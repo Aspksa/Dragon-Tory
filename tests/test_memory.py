@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from tooru.chat.pipeline import route_user_memory
 from tooru.memory.models import (
     MemoryCreate,
     MemoryKind,
@@ -130,3 +131,43 @@ def test_sync_returns_changes_for_one_project_only(tmp_path: Path) -> None:
 
     assert len(result.items) == 1
     assert result.items[0].project_id == "dragon-tory"
+
+
+def test_memory_health_report_checks_real_sqlite_structure(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+
+    health = store.health_report(deep=True)
+
+    assert health["status"] == "ok"
+    assert health["integrity"].casefold() == "ok"
+    assert health["foreign_key_errors"] == 0
+    assert health["missing_tables"] == []
+    assert health["invalid_scope_rows"] == 0
+    assert health["orphan_vectors"] == 0
+    assert health["orphan_links"] == 0
+    assert health["orphan_history"] == 0
+
+
+def test_chat_memory_routing_separates_personal_and_project() -> None:
+    routed = route_user_memory(
+        "У меня ноутбук с 16 ГБ памяти. "
+        "В проект Тоору надо добавить новый модуль договоров."
+    )
+
+    assert [item.content for item in routed[MemoryScope.PERSONAL]] == [
+        "У меня ноутбук с 16 ГБ памяти."
+    ]
+    assert [item.content for item in routed[MemoryScope.PROJECT]] == [
+        "В проект Тоору надо добавить новый модуль договоров."
+    ]
+
+
+def test_chat_memory_routing_keeps_project_preference_in_project() -> None:
+    routed = route_user_memory(
+        "Мне нравится белый интерфейс проекта Тоору."
+    )
+
+    assert routed[MemoryScope.PERSONAL] == []
+    assert len(routed[MemoryScope.PROJECT]) == 1

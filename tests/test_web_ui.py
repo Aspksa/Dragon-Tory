@@ -10,6 +10,8 @@ def test_web_ui_contains_main_sections() -> None:
 
     assert response.status_code == 200
     assert "Центр диагностики" in response.text
+    assert 'id="checkMemoryHealth"' in response.text
+    assert 'id="mHealth"' in response.text
     assert "Настройки" in response.text
     assert "Чат" in response.text
     assert "Мой диск Тори" in response.text

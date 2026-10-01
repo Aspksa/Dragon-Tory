@@ -34,6 +34,8 @@ class UpdateService:
         "rolling_back",
     }
     STALL_SECONDS: ClassVar[int] = 180
+    DEAD_PROCESS_GRACE_SECONDS: ClassVar[int] = 8
+    FALSE_FAILURE_WINDOW_SECONDS: ClassVar[int] = 30
 
     def __init__(
         self,
@@ -104,14 +106,58 @@ class UpdateService:
 
     def history(self, *, limit: int = 30) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 100))
+        items = self._raw_history()
+        items = self._without_reconciled_false_failures(items)
+        return list(reversed(items[-limit:]))
+
+    def _raw_history(self) -> list[dict[str, Any]]:
         try:
             raw = json.loads(self.history_path.read_text(encoding="utf-8-sig"))
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return []
         if not isinstance(raw, list):
             return []
-        items = [item for item in raw if isinstance(item, dict)]
-        return list(reversed(items[-limit:]))
+        return [item for item in raw if isinstance(item, dict)]
+
+    def _without_reconciled_false_failures(
+        self,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        successes = [
+            item
+            for item in items
+            if item.get("result") == "success" and item.get("sha")
+        ]
+        cleaned: list[dict[str, Any]] = []
+        for item in items:
+            if item.get("result") != "failed":
+                cleaned.append(item)
+                continue
+            error_text = str(item.get("error") or "")
+            race_signature = (
+                "Updater больше не запущен" in error_text
+                or "Updater завершился сразу после запуска" in error_text
+            )
+            if not race_signature or not item.get("sha"):
+                cleaned.append(item)
+                continue
+
+            failed_at = self._parse_datetime(item.get("finished_at"))
+            matched = False
+            for success in successes:
+                if str(success.get("sha")).lower() != str(item.get("sha")).lower():
+                    continue
+                success_at = self._parse_datetime(success.get("finished_at"))
+                if failed_at is None or success_at is None:
+                    continue
+                if abs((failed_at - success_at).total_seconds()) <= (
+                    self.FALSE_FAILURE_WINDOW_SECONDS
+                ):
+                    matched = True
+                    break
+            if not matched:
+                cleaned.append(item)
+        return cleaned
 
     def check(self) -> dict[str, Any]:
         current = self.status()
@@ -315,12 +361,19 @@ class UpdateService:
         time.sleep(0.5)
 
         if not psutil.pid_exists(updater_pid):
+            deadline = time.monotonic() + self.DEAD_PROCESS_GRACE_SECONDS
             latest = self._read_state()
-            if latest.get("phase") not in {
-                "success",
-                "failed",
-                "error",
-            }:
+            while time.monotonic() < deadline:
+                if latest.get("phase") in {"success", "failed", "error"}:
+                    break
+                if psutil.pid_exists(updater_pid):
+                    return self.status()
+                time.sleep(0.2)
+                latest = self._read_state()
+
+            if latest.get("phase") == "success":
+                return self.status()
+            if latest.get("phase") not in {"failed", "error"}:
                 latest.update(
                     {
                         "phase": "failed",
@@ -348,6 +401,28 @@ class UpdateService:
     ) -> dict[str, Any]:
         pid = state.get("updater_pid")
         if isinstance(pid, int) and pid > 0 and not psutil.pid_exists(pid):
+            latest = self._read_state()
+            if latest.get("phase") not in self.RUNNING_PHASES:
+                return latest
+
+            latest_heartbeat = latest.get("heartbeat_at")
+            if latest_heartbeat != state.get("heartbeat_at"):
+                state = latest
+
+            heartbeat = self._parse_datetime(state.get("heartbeat_at"))
+            age_seconds = (
+                (datetime.now(UTC) - heartbeat).total_seconds()
+                if heartbeat is not None
+                else self.DEAD_PROCESS_GRACE_SECONDS + 1
+            )
+            if age_seconds <= self.DEAD_PROCESS_GRACE_SECONDS:
+                return {
+                    **state,
+                    "message": (
+                        "Updater завершает фиксацию результата обновления…"
+                    ),
+                }
+
             failed = {
                 **state,
                 "phase": "failed",

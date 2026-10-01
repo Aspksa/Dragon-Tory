@@ -40,6 +40,14 @@ from tooru.memory.store import MemoryConflictError, MemoryNotFoundError
 router = APIRouter(prefix="/v1/memory", tags=["memory"])
 
 
+@router.get("/health")
+def memory_health(
+    request: Request,
+    deep: Annotated[bool, Query()] = False,
+) -> dict:
+    return request.app.state.memory.store.health_report(deep=deep)
+
+
 @router.post("", response_model=MemoryItem)
 def create_memory(payload: MemoryCreate, request: Request) -> MemoryItem:
     return request.app.state.memory.add(payload)

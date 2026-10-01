@@ -101,6 +101,7 @@ def diagnostics_status(request: Request) -> dict:
     disk = psutil.disk_usage(str(data_dir))
 
     guardian = request.app.state.memory_guardian.status()
+    memory_health = request.app.state.memory.store.health_report(deep=False)
     memory_automation = request.app.state.memory_automation.status()
     guardian_automation = (
         request.app.state.memory_guardian_automation.status()
@@ -148,6 +149,7 @@ def diagnostics_status(request: Request) -> dict:
         "memory_engine": {
             **_memory_counts(settings.memory_db_path),
             "database_bytes": _path_size(settings.memory_db_path),
+            "health": memory_health,
         },
         "chat_history": {
             **request.app.state.chat_store.counts(),

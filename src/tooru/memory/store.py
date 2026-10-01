@@ -40,6 +40,16 @@ class MemoryConflictError(RuntimeError):
 
 
 class SQLiteMemoryStore:
+    REQUIRED_TABLES = {
+        "memory_items",
+        "memory_vectors",
+        "memory_links",
+        "memory_history",
+        "memory_maintenance_runs",
+        "memory_guardian_events",
+        "memory_guardian_queue",
+    }
+
     SELECT_COLUMNS = """
         id, owner_id, scope, project_id, kind, memory_key, content,
         source, source_ref, confidence, importance, tags_json, pinned,
@@ -1302,6 +1312,182 @@ class SQLiteMemoryStore:
                 conn.execute(
                     f"ALTER TABLE memory_items ADD COLUMN {column} {definition}"
                 )
+
+    def health_report(self, *, deep: bool = False) -> dict:
+        report = {
+            "status": "ok",
+            "database_path": str(self.db_path),
+            "database_exists": self.db_path.exists(),
+            "integrity": "not_run",
+            "foreign_key_errors": 0,
+            "missing_tables": [],
+            "invalid_scope_rows": 0,
+            "orphan_vectors": 0,
+            "orphan_links": 0,
+            "orphan_history": 0,
+            "active_memories": 0,
+            "personal_memories": 0,
+            "project_memories": 0,
+            "active_vectors": 0,
+            "vector_coverage_percent": 0.0,
+            "guardian_pending": 0,
+            "guardian_dead": 0,
+            "journal_mode": None,
+            "error": None,
+        }
+        try:
+            with self._connect() as conn:
+                tables = {
+                    row["name"]
+                    for row in conn.execute(
+                        """
+                        SELECT name
+                        FROM sqlite_master
+                        WHERE type = 'table'
+                        """
+                    ).fetchall()
+                }
+                missing = sorted(self.REQUIRED_TABLES - tables)
+                report["missing_tables"] = missing
+                report["journal_mode"] = conn.execute(
+                    "PRAGMA journal_mode"
+                ).fetchone()[0]
+
+                if "memory_items" in tables:
+                    counts = conn.execute(
+                        """
+                        SELECT
+                            SUM(CASE WHEN deleted_at IS NULL
+                                AND status = 'active' THEN 1 ELSE 0 END)
+                                AS active_memories,
+                            SUM(CASE WHEN deleted_at IS NULL
+                                AND scope = 'personal' THEN 1 ELSE 0 END)
+                                AS personal_memories,
+                            SUM(CASE WHEN deleted_at IS NULL
+                                AND scope = 'project' THEN 1 ELSE 0 END)
+                                AS project_memories,
+                            SUM(CASE WHEN
+                                (scope = 'personal' AND project_id IS NOT NULL)
+                                OR
+                                (scope = 'project' AND project_id IS NULL)
+                                THEN 1 ELSE 0 END)
+                                AS invalid_scope_rows
+                        FROM memory_items
+                        """
+                    ).fetchone()
+                    for key in (
+                        "active_memories",
+                        "personal_memories",
+                        "project_memories",
+                        "invalid_scope_rows",
+                    ):
+                        report[key] = int(counts[key] or 0)
+
+                if {"memory_items", "memory_vectors"} <= tables:
+                    report["active_vectors"] = int(
+                        conn.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM memory_vectors v
+                            JOIN memory_items m ON m.id = v.memory_id
+                            WHERE m.deleted_at IS NULL
+                              AND m.status = 'active'
+                            """
+                        ).fetchone()[0]
+                        or 0
+                    )
+                    report["orphan_vectors"] = int(
+                        conn.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM memory_vectors v
+                            LEFT JOIN memory_items m ON m.id = v.memory_id
+                            WHERE m.id IS NULL
+                            """
+                        ).fetchone()[0]
+                        or 0
+                    )
+
+                if {"memory_items", "memory_links"} <= tables:
+                    report["orphan_links"] = int(
+                        conn.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM memory_links l
+                            LEFT JOIN memory_items s ON s.id = l.source_id
+                            LEFT JOIN memory_items t ON t.id = l.target_id
+                            WHERE s.id IS NULL OR t.id IS NULL
+                            """
+                        ).fetchone()[0]
+                        or 0
+                    )
+
+                if {"memory_items", "memory_history"} <= tables:
+                    report["orphan_history"] = int(
+                        conn.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM memory_history h
+                            LEFT JOIN memory_items m ON m.id = h.memory_id
+                            WHERE m.id IS NULL
+                            """
+                        ).fetchone()[0]
+                        or 0
+                    )
+
+                if "memory_guardian_queue" in tables:
+                    queue = conn.execute(
+                        """
+                        SELECT
+                            SUM(CASE WHEN status = 'pending'
+                                THEN 1 ELSE 0 END) AS pending,
+                            SUM(CASE WHEN status = 'dead'
+                                THEN 1 ELSE 0 END) AS dead
+                        FROM memory_guardian_queue
+                        """
+                    ).fetchone()
+                    report["guardian_pending"] = int(queue["pending"] or 0)
+                    report["guardian_dead"] = int(queue["dead"] or 0)
+
+                if report["active_memories"]:
+                    report["vector_coverage_percent"] = round(
+                        report["active_vectors"]
+                        / report["active_memories"]
+                        * 100,
+                        1,
+                    )
+
+                if deep:
+                    quick = conn.execute("PRAGMA quick_check").fetchone()
+                    report["integrity"] = (
+                        str(quick[0]) if quick is not None else "unknown"
+                    )
+                    report["foreign_key_errors"] = len(
+                        conn.execute("PRAGMA foreign_key_check").fetchall()
+                    )
+
+            hard_errors = (
+                bool(report["missing_tables"])
+                or report["invalid_scope_rows"] > 0
+                or report["orphan_vectors"] > 0
+                or report["orphan_links"] > 0
+                or report["orphan_history"] > 0
+                or report["foreign_key_errors"] > 0
+                or (
+                    deep
+                    and report["integrity"].casefold() != "ok"
+                )
+            )
+            warning = report["guardian_dead"] > 0
+            report["status"] = (
+                "error" if hard_errors else ("warning" if warning else "ok")
+            )
+        except sqlite3.DatabaseError as exc:
+            report["status"] = "error"
+            report["error"] = f"{type(exc).__name__}: {exc}"
+            if deep:
+                report["integrity"] = "error"
+        return report
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=5.0)

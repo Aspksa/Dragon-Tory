@@ -129,3 +129,61 @@ def test_atomic_history_write_leaves_no_shared_temp(tmp_path: Path) -> None:
     assert not list(
         service.history_path.parent.glob("history.json.*.tmp")
     )
+
+
+def test_dead_updater_gets_grace_before_false_failure(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    service._write_state(
+        {
+            "phase": "verifying",
+            "message": "verifying",
+            "updater_pid": 2_000_000_000,
+            "update_started_at": service._now(),
+            "heartbeat_at": service._now(),
+            "local_version": APP_VERSION,
+            "remote_version": APP_VERSION,
+            "remote_sha": "e" * 40,
+        }
+    )
+
+    status = service.status()
+
+    assert status["phase"] == "verifying"
+    assert status["running"] is True
+    assert "фиксацию результата" in status["message"]
+    assert service.history() == []
+
+
+def test_history_hides_reconciled_pid_race_failure(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    service.history_path.parent.mkdir(parents=True, exist_ok=True)
+    sha = "f" * 40
+    service.history_path.write_text(
+        json.dumps(
+            [
+                {
+                    "finished_at": "2026-10-01T10:00:00+00:00",
+                    "sha": sha,
+                    "result": "success",
+                    "description": "Обновление установлено.",
+                },
+                {
+                    "finished_at": "2026-10-01T10:00:04+00:00",
+                    "sha": sha,
+                    "result": "failed",
+                    "description": "Обновление завершилось ошибкой.",
+                    "error": (
+                        "Updater больше не запущен. "
+                        "Последние строки: update: [OK]"
+                    ),
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    items = service.history(limit=10)
+
+    assert len(items) == 1
+    assert items[0]["result"] == "success"

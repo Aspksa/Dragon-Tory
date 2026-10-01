@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 
 from tooru.ai.base import AIRequest
@@ -14,6 +15,25 @@ from tooru.memory.models import (
 PROJECT_ID = "dragon-tory"
 AI_PROVIDER = "deepseek"
 
+_PERSONAL_MEMORY_SIGNAL = re.compile(
+    r"\b("
+    r"я предпочитаю|мне нравится|мне удобнее|у меня|меня зовут|"
+    r"я живу|я работаю|мой день рождения|моя машина|мой автомобиль|"
+    r"мой ноутбук|мой компьютер|моя семья|i prefer|i like|i live|"
+    r"my name is|i work"
+    r")\b",
+    re.IGNORECASE,
+)
+_PROJECT_MEMORY_SIGNAL = re.compile(
+    r"\b("
+    r"проект|тоору|dragon tory|дракончик|репозитор|github|"
+    r"модул|интерфейс|верси|обновлен|код|api|база данных|"
+    r"договор|сч[её]т|оферт|служебн|приказ|распоряж|"
+    r"project|repository|module|interface"
+    r")",
+    re.IGNORECASE,
+)
+
 RESPONSE_MODE_PROMPTS = {
     "brief": "Отвечай кратко и по существу, без лишних деталей.",
     "normal": "Дай ясный и достаточно подробный ответ.",
@@ -27,6 +47,34 @@ RESPONSE_MODE_PROMPTS = {
         "практические выводы. Не выдумывай отсутствующие данные."
     ),
 }
+
+
+def route_user_memory(
+    user_message: str,
+) -> dict[MemoryScope, list[ConversationMessage]]:
+    routed: dict[MemoryScope, list[ConversationMessage]] = {
+        MemoryScope.PERSONAL: [],
+        MemoryScope.PROJECT: [],
+    }
+    parts = [
+        part.strip()
+        for part in re.split(r"(?<=[.!?。！？])\s+|[;\n]+", user_message)
+        if part.strip()
+    ]
+    for part in parts or [user_message.strip()]:
+        if not part:
+            continue
+        is_project = bool(_PROJECT_MEMORY_SIGNAL.search(part))
+        is_personal = bool(_PERSONAL_MEMORY_SIGNAL.search(part))
+        scope = (
+            MemoryScope.PERSONAL
+            if is_personal and not is_project
+            else MemoryScope.PROJECT
+        )
+        routed[scope].append(
+            ConversationMessage(role="user", content=part)
+        )
+    return routed
 
 
 @dataclass(slots=True)
@@ -105,7 +153,6 @@ class ChatPipeline:
 
         memory_status = await self._remember(
             user_message=message,
-            assistant_message=response.text,
             remember=remember,
         )
 
@@ -121,39 +168,40 @@ class ChatPipeline:
         self,
         *,
         user_message: str,
-        assistant_message: str,
         remember: bool,
     ) -> str:
         if not remember:
             return "disabled"
 
+        routed = route_user_memory(user_message)
+        summaries: list[str] = []
         try:
-            result = await self.guardian.process(
-                MemoryGuardianRequest(
-                    owner_id="local-user",
-                    scope=MemoryScope.PROJECT,
-                    project_id=PROJECT_ID,
-                    messages=[
-                        ConversationMessage(
-                            role="user",
-                            content=user_message,
+            for scope in (MemoryScope.PERSONAL, MemoryScope.PROJECT):
+                messages = routed[scope]
+                if not messages:
+                    continue
+                result = await self.guardian.process(
+                    MemoryGuardianRequest(
+                        owner_id="local-user",
+                        scope=scope,
+                        project_id=(
+                            PROJECT_ID
+                            if scope is MemoryScope.PROJECT
+                            else None
                         ),
-                        ConversationMessage(
-                            role="assistant",
-                            content=assistant_message,
-                        ),
-                    ],
-                    auto_apply=True,
-                    use_ai=True,
-                    primary_provider=AI_PROVIDER,
-                    reviewer_provider=AI_PROVIDER,
+                        messages=messages,
+                        auto_apply=True,
+                        use_ai=True,
+                        primary_provider=AI_PROVIDER,
+                        reviewer_provider=AI_PROVIDER,
+                    )
                 )
-            )
+                summaries.append(
+                    f"{scope.value}:applied={len(result.applied)},"
+                    f"pending={result.pending_count},"
+                    f"blocked={result.blocked_count}"
+                )
         except Exception as exc:  # noqa: BLE001 - keep chat answer
             return f"memory-error:{type(exc).__name__}"
 
-        return (
-            f"applied={len(result.applied)}, "
-            f"pending={result.pending_count}, "
-            f"blocked={result.blocked_count}"
-        )
+        return "; ".join(summaries) if summaries else "no-durable-signal"
