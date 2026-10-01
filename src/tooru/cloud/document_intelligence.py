@@ -122,6 +122,26 @@ def _extract_date_expressions(value: str) -> list[str]:
         add(int(match.group(1)), int(match.group(2)), year)
         add(int(match.group(3)), int(match.group(4)), year)
 
+    # 31 января и 1 февраля 2026
+    cross_month_pattern = re.compile(
+        rf"\b(\d{{1,2}})\s+({_MONTH_WORDS})\s*"
+        rf"(?:и|,|/|&)\s*(\d{{1,2}})\s+({_MONTH_WORDS})\s+"
+        rf"((?:19|20)\d{{2}})\b",
+        re.IGNORECASE,
+    )
+    for match in cross_month_pattern.finditer(text):
+        year = int(match.group(5))
+        add(
+            int(match.group(1)),
+            _RU_MONTHS[match.group(2).casefold()],
+            year,
+        )
+        add(
+            int(match.group(3)),
+            _RU_MONTHS[match.group(4).casefold()],
+            year,
+        )
+
     # 21 и 22 марта 2026 / 26 апреля 2026
     month_pattern = re.compile(
         rf"\b(\d{{1,2}})(?:\s*(?:и|,|/|&)\s*(\d{{1,2}}))?"
