@@ -380,8 +380,14 @@ async function checkForUpdate(){
 async function installUpdate(){
   if(!confirm("Скачать и установить обновление Дракончика Тоору? Локальная память, ключи, runtime и журналы будут сохранены."))return;
   updateWasStarted=true;$("installUpdate").disabled=true;$("checkUpdate").disabled=true;
-  try{renderUpdate(await api("/v1/update/install",{method:"POST",body:JSON.stringify({force:false})}));startUpdatePolling()}
-  catch(e){updateWasStarted=false;state($("updateState"),"Ошибка запуска","bad");$("updateProgress").textContent=e.message;await updateStatus();await refreshUpdateHistory()}
+  try{
+    renderUpdate(await api("/v1/update/install",{method:"POST",body:JSON.stringify({force:false})}));
+    startUpdatePolling();
+  }catch(e){
+    state($("updateState"),"Проверка процесса…","warn");
+    $("updateProgress").textContent="Соединение с сервером прервалось. Это нормально при перезапуске; проверяю состояние обновления…";
+    startUpdatePolling();
+  }
 }
 function startUpdatePolling(){
   if(updatePollTimer)return;
