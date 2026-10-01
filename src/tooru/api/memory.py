@@ -10,6 +10,8 @@ from tooru.memory.models import (
     MemoryContextRequest,
     MemoryCreate,
     MemoryDelete,
+    MemoryEvidence,
+    MemoryEvidenceCreate,
     MemoryExtractRequest,
     MemoryExtractResponse,
     MemoryFeedback,
@@ -245,6 +247,44 @@ def get_memory_history(
 ) -> list[MemoryRevision]:
     try:
         return request.app.state.memory.history(memory_id, owner_id)
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.get("/{memory_id}/evidence", response_model=list[MemoryEvidence])
+def get_memory_evidence(
+    memory_id: str,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[MemoryEvidence]:
+    try:
+        return request.app.state.memory.evidence(
+            memory_id,
+            owner_id=owner_id,
+            limit=limit,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.post(
+    "/{memory_id}/evidence",
+    response_model=MemoryEvidence,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_memory_evidence(
+    memory_id: str,
+    payload: MemoryEvidenceCreate,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+) -> MemoryEvidence:
+    try:
+        return request.app.state.memory.add_evidence(
+            memory_id,
+            payload,
+            owner_id=owner_id,
+        )
     except MemoryNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
