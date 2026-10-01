@@ -11,9 +11,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
-from pypdf import PdfReader
+import pymupdf
 
 from tooru.cloud.intelligence import (
+    LEGACY_CONVERTIBLE_SUFFIXES,
     ExtractedChunk,
     UnsupportedDocumentError,
     extract_document,
@@ -235,6 +236,30 @@ class DocumentIntelligence:
             )
 
     @staticmethod
+    def _find_libreoffice() -> str | None:
+        for command in ("soffice", "libreoffice"):
+            found = shutil.which(command)
+            if found:
+                return found
+        candidates = (
+            Path(r"C:\Program Files\LibreOffice\program\soffice.exe"),
+            Path(r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"),
+        )
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+        return None
+
+    def converter_status(self) -> dict[str, Any]:
+        executable = self._find_libreoffice()
+        return {
+            "available": bool(executable),
+            "engine": "LibreOffice" if executable else None,
+            "executable": executable,
+            "legacy_formats": ["DOC", "DOCM", "PPT", "PPTM", "WPS"],
+        }
+
+    @staticmethod
     def _find_tesseract() -> str | None:
         found = shutil.which("tesseract")
         if found:
@@ -335,24 +360,82 @@ class DocumentIntelligence:
             raise OCRUnavailableError(
                 "PDF выглядит как скан, но локальный Tesseract OCR не найден."
             )
-        reader = PdfReader(str(path))
         chunks: list[ExtractedChunk] = []
-        with tempfile.TemporaryDirectory(
-            dir=str(self.cloud_store.incoming_dir)
-        ) as temp_dir:
-            root = Path(temp_dir)
-            for page_no, page in enumerate(reader.pages, start=1):
-                for image_no, image in enumerate(page.images, start=1):
-                    suffix = Path(image.name or "scan.png").suffix or ".png"
-                    image_path = root / f"p{page_no}-{image_no}{suffix}"
-                    image_path.write_bytes(image.data)
+        document = pymupdf.open(str(path))
+        try:
+            with tempfile.TemporaryDirectory(
+                dir=str(self.cloud_store.incoming_dir)
+            ) as temp_dir:
+                root = Path(temp_dir)
+                matrix = pymupdf.Matrix(2.0, 2.0)
+                for page_no, page in enumerate(document, start=1):
+                    image_path = root / f"page-{page_no}.png"
+                    pixmap = page.get_pixmap(
+                        matrix=matrix,
+                        alpha=False,
+                    )
+                    pixmap.save(str(image_path))
                     for chunk in self._ocr_file(
                         image_path,
                         label=f"OCR · страница {page_no}",
                     ):
                         chunk.page = page_no
                         chunks.append(chunk)
+        finally:
+            document.close()
         return chunks
+
+    def _convert_legacy(
+        self,
+        path: Path,
+        *,
+        name: str,
+    ) -> tuple[list[ExtractedChunk], str]:
+        executable = self._find_libreoffice()
+        if not executable:
+            raise UnsupportedDocumentError(
+                "Для старого формата "
+                + Path(name).suffix.upper()
+                + " нужен LibreOffice. Dragon Tory может установить "
+                "его через Windows bootstrap или использовать DOCX/PPTX."
+            )
+        suffix = Path(name).suffix.lower()
+        target = "pptx" if suffix in {".ppt", ".pptm"} else "docx"
+        with tempfile.TemporaryDirectory(
+            dir=str(self.cloud_store.incoming_dir)
+        ) as temp_dir:
+            root = Path(temp_dir)
+            source = root / ("source" + suffix)
+            shutil.copy2(path, source)
+            result = subprocess.run(
+                [
+                    str(executable),
+                    "--headless",
+                    "--convert-to",
+                    target,
+                    "--outdir",
+                    str(root),
+                    str(source),
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=180,
+                check=False,
+            )
+            converted = root / f"source.{target}"
+            if result.returncode != 0 or not converted.is_file():
+                raise UnsupportedDocumentError(
+                    "LibreOffice не смог преобразовать старый документ: "
+                    + (result.stderr.strip() or result.stdout.strip() or "ошибка")
+                )
+            chunks = extract_document(
+                converted,
+                name=converted.name,
+                content_type="application/octet-stream",
+            )
+            return chunks, f"libreoffice_{target}"
 
     def extract(
         self,
@@ -373,17 +456,25 @@ class DocumentIntelligence:
         except UnsupportedDocumentError:
             chunks = []
 
+        if suffix in LEGACY_CONVERTIBLE_SUFFIXES:
+            converted, method = self._convert_legacy(
+                path,
+                name=name,
+            )
+            if converted:
+                return converted, method, False
         if suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}:
             return self._ocr_file(path, label="OCR · изображение"), "ocr_image", True
         if suffix == ".pdf" or content_type == "application/pdf":
             ocr_chunks = self._ocr_pdf(path)
             if ocr_chunks:
-                return ocr_chunks, "ocr_pdf_images", True
+                return ocr_chunks, "ocr_pdf_pages", True
         if chunks:
             return chunks, "native_text", False
         raise UnsupportedDocumentError(
             "Из документа не удалось получить текст. Для сканов нужен "
-            "локальный Tesseract OCR с нужным языковым пакетом."
+            "локальный Tesseract OCR с русским/английским языковым пакетом; "
+            "для старых DOC/PPT нужен LibreOffice."
         )
 
     @staticmethod
