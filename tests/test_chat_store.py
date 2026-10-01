@@ -46,7 +46,7 @@ def test_chat_store_rename_delete_and_retry(tmp_path: Path) -> None:
     renamed = store.rename(chat_id, "Новый заголовок")
     assert renamed["title"] == "Новый заголовок"
 
-    message, history = store.retry_context(chat_id)
+    message, history, sequence = store.retry_context(chat_id)
     assert message == "Последний вопрос"
     assert [item["content"] for item in history] == [
         "Первый вопрос",
@@ -56,7 +56,35 @@ def test_chat_store_rename_delete_and_retry(tmp_path: Path) -> None:
         "Первый вопрос",
         "Первый ответ",
         "Последний вопрос",
+        "Старый ответ",
+    ]
+
+    store.replace_after(
+        chat_id,
+        sequence=sequence,
+        assistant_content="Новый ответ",
+    )
+    assert [item["content"] for item in store.messages(chat_id)] == [
+        "Первый вопрос",
+        "Первый ответ",
+        "Последний вопрос",
+        "Новый ответ",
     ]
 
     store.delete(chat_id)
     assert store.list() == []
+
+
+
+def test_chat_history_survives_store_reopen(tmp_path: Path) -> None:
+    path = tmp_path / "persistent.sqlite3"
+    first = ChatStore(path)
+    first.initialize()
+    chat_id = first.create("Сохраняемый чат")["id"]
+    first.add_message(chat_id, role="user", content="Сообщение")
+
+    second = ChatStore(path)
+    second.initialize()
+
+    assert second.get(chat_id)["title"] == "Сохраняемый чат"
+    assert second.messages(chat_id)[0]["content"] == "Сообщение"
