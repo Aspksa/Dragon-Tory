@@ -54,6 +54,15 @@ class UpdateService:
         self.launch_log_path = (
             self.project_root / "logs" / "update-launcher.log"
         )
+        self.child_stdout_path = (
+            self.project_root / "logs" / "update-child.stdout.log"
+        )
+        self.child_stderr_path = (
+            self.project_root / "logs" / "update-child.stderr.log"
+        )
+        self.update_log_path = (
+            self.project_root / "logs" / "update.log"
+        )
         self.updater_script = (
             self.project_root / "scripts" / "windows" / "update.ps1"
         )
@@ -533,16 +542,28 @@ class UpdateService:
         self._append_history_from_state(failed, success=False)
 
     def _launch_log_tail(self) -> str:
-        try:
-            lines = self.launch_log_path.read_text(
-                encoding="utf-8",
-                errors="replace",
-            ).splitlines()
-        except OSError:
-            return "Журнал запуска пуст."
-        if not lines:
-            return "Журнал запуска пуст."
-        return "Последние строки: " + " | ".join(lines[-8:])[:1200]
+        chunks: list[str] = []
+        for label, path in (
+            ("launcher", self.launch_log_path),
+            ("child stderr", self.child_stderr_path),
+            ("child stdout", self.child_stdout_path),
+            ("update", self.update_log_path),
+        ):
+            try:
+                lines = path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                ).splitlines()
+            except OSError:
+                continue
+            if lines:
+                chunks.append(
+                    f"{label}: " + " | ".join(lines[-6:])
+                )
+
+        if not chunks:
+            return "Журналы запуска пусты."
+        return "Последние строки: " + " || ".join(chunks)[:1800]
 
     @staticmethod
     def _parse_datetime(value: Any) -> datetime | None:
