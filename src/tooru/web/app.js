@@ -1084,7 +1084,8 @@ function renderHomeBrain(){
   homeFlowFrame=requestAnimationFrame(animate);
 }
 function homeLiveKpis(id){
-  const d=homeLastDiag||{};if(id==="deepseek"){const s=(d.ai||{}).stats||{};return[["Состояние",d.ai&&d.ai.configured?"Подключён":"Не настроен"],["Запросов",s.requests||0],["Успешно",s.successes||0],["Ошибок",s.failures||0]]}
+  const d=homeLastDiag||{};if(id==="dashboard"&&homeObservability){const s=homeObservability.stats||{};return[["Сейчас",(homeObservability.active||[]).length],["AI latency",homeObsDuration(s.ai_avg_ms)],["AI retry",s.ai_retries||0],["Guardian block",s.guardian_blocked||0],["Записей памяти",s.memory_writes||0]]}
+  if(id==="deepseek"){const s=(d.ai||{}).stats||{};return[["Состояние",d.ai&&d.ai.configured?"Подключён":"Не настроен"],["Запросов",s.requests||0],["Успешно",s.successes||0],["Ошибок",s.failures||0],["Последний",homeObsDuration(s.last_duration_ms)],["Retry всего",s.total_retries||0]]}
   if(id==="memory"){const m=d.memory_engine||{};return[["Активных",m.active||0],["Личных",m.personal||0],["Проектных",m.project||0],["Векторов",m.vectors||0]]}
   if(id==="guardian"){const g=d.guardian||{};return[["Ожидают",g.queued_pending||0],["Применено",g.queued_applied||0],["Отклонено",g.queued_rejected||0],["Dead-letter",g.queued_dead||0]]}
   if(id==="chat"){const h=d.chat_history||{};return[["Чатов",h.chats||0],["Сообщений",h.messages||0],["База",fmtBytes(h.database_bytes||0)]]}
@@ -1189,12 +1190,12 @@ function renderHomeObservability(data){
     currentBox.classList.add(current.status==="error"?"error":"running");
     currentBox.querySelector("b").textContent=label;
     const source=current.document_id?("Document ID: "+current.document_id):(current.source_id?("Источник: "+current.source_id):"Выполняется локально");
-    currentBox.querySelector("span").textContent=source;
+    currentBox.querySelector("div span").textContent=source;
   }else{
     state.textContent="Сейчас активных анализов нет";
     brainState.textContent="перетаскивание · колесо = масштаб · клик = детали";
     currentBox.querySelector("b").textContent="Тоору ожидает задачу";
-    currentBox.querySelector("span").textContent="Активных анализов сейчас нет.";
+    currentBox.querySelector("div span").textContent="Активных анализов сейчас нет.";
   }
   const box=$("homeTraceList");box.innerHTML="";
   const chains=homeObservability.chains||[];
