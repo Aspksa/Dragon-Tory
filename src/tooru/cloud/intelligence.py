@@ -19,8 +19,8 @@ from odf.table import Table, TableCell, TableRow
 from odf.text import H, P
 from openpyxl import load_workbook
 from pptx import Presentation
-from pyxlsb import open_workbook as open_xlsb
 from pypdf import PdfReader
+from pyxlsb import open_workbook as open_xlsb
 from striprtf.striprtf import rtf_to_text
 
 
