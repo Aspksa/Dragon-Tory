@@ -439,7 +439,6 @@ def delete_timesheet_manual(
         _smart(request).delete_timesheet_manual_entry(entry_id)
     except Exception as exc:
         raise _http_error(exc) from exc
-    return None
 
 
 @router.get("/timesheet/weekend-work")
