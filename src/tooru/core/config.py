@@ -3,10 +3,11 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+APP_VERSION = "00.00.03"
+
 
 class Settings(BaseSettings):
     app_name: str = "Dragon Tory"
-    version: str = "00.00.03"
     host: str = "127.0.0.1"
     port: int = 8787
     data_dir: Path = Path("./data")
@@ -55,6 +56,10 @@ class Settings(BaseSettings):
         env_file=".env",
         extra="ignore",
     )
+
+    @property
+    def version(self) -> str:
+        return APP_VERSION
 
     @property
     def memory_db_path(self) -> Path:
