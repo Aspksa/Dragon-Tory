@@ -118,6 +118,10 @@ def analyze_document(document_id: str, request: Request) -> dict[str, Any]:
             result,
         )
         result["automation"] = automation
+        if str(result.get("kind") or "").casefold() == "служебная записка":
+            result["memo_card"] = request.app.state.memo_organizer.process(
+                document_id
+            )
         _smart(request).record_provenance(
             document_id,
             "document_intelligence_analyzed",
@@ -164,6 +168,9 @@ def analyze_pending(
                 document_id,
                 result,
             )
+            memo_card = None
+            if str(result.get("kind") or "").casefold() == "служебная записка":
+                memo_card = request.app.state.memo_organizer.process(document_id)
             analyzed.append(
                 {
                     "document_id": document_id,
@@ -171,6 +178,7 @@ def analyze_pending(
                     "kind": result["kind"],
                     "ocr_used": result["ocr_used"],
                     "automation": automation,
+                    "memo_card": memo_card,
                 }
             )
             smart.record_provenance(
@@ -204,6 +212,62 @@ def analyze_pending(
         "skipped": skipped,
         "requested_limit": limit,
     }
+
+
+@router.get("/files/{document_id}/memo-card")
+def get_memo_card(document_id: str, request: Request) -> dict[str, Any]:
+    try:
+        return request.app.state.memo_organizer.get(document_id)
+    except Exception as exc:
+        raise _error(exc) from exc
+
+
+@router.post("/files/{document_id}/memo-process")
+async def process_memo(
+    document_id: str,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        if not _smart(request).permission(document_id, "content_read"):
+            raise PermissionError(
+                "ИИ-договор не разрешает Тоору читать содержимое записки."
+            )
+        try:
+            analysis = _service(request).get(document_id)
+        except KeyError:
+            analysis = _service(request).analyze(document_id)
+            _smart(request).apply_intelligence_defaults(document_id, analysis)
+        if str(analysis.get("kind") or "").casefold() != "служебная записка":
+            dna = _smart(request).get_dna(document_id)
+            if str(dna.get("kind") or "").casefold() != "служебная записка":
+                raise ValueError(
+                    "Это правило применяется только к служебным запискам."
+                )
+
+        card = request.app.state.memo_organizer.process(document_id)
+        learning = ModuleLearningService(
+            memory_intake=request.app.state.memory_intake,
+            smart=request.app.state.cloud_smart,
+            intelligence=request.app.state.document_intelligence,
+            ai_router=request.app.state.ai_router,
+        )
+        ai_study: dict[str, Any] | None = None
+        try:
+            ai_study = await learning.study_document("memos", document_id)
+        except Exception as exc:  # noqa: BLE001 - local memo processing must survive AI
+            ai_study = {
+                "memory_id": None,
+                "reason": f"{type(exc).__name__}: {str(exc)[:500]}",
+                "external_ai_used": False,
+            }
+        return {
+            "ok": True,
+            "document_id": document_id,
+            "card": card,
+            "ai_study": ai_study,
+        }
+    except Exception as exc:
+        raise _error(exc) from exc
 
 
 @router.get("/files/{document_id}")
