@@ -102,11 +102,13 @@ class ChatPipeline:
         router: AIRouter,
         guardian: MemoryGuardian,
         cloud_store=None,
+        grey_matter=None,
     ) -> None:
         self.memory = memory
         self.router = router
         self.guardian = guardian
         self.cloud_store = cloud_store
+        self.grey_matter = grey_matter
         self.reasoning = CognitiveReasoning(
             router=router,
             memory=memory,
@@ -274,6 +276,14 @@ class ChatPipeline:
                 ):
                     answer = verification.revised_answer
 
+            previous_assistant = next(
+                (
+                    item.content
+                    for item in reversed(history)
+                    if item.role == "assistant"
+                ),
+                "",
+            )
             memory_status = await self._remember(
                 user_message=message,
                 assistant_answer=answer,
@@ -281,6 +291,7 @@ class ChatPipeline:
                 session_id=session_id,
                 plan=plan,
                 verification=verification,
+                previous_assistant=previous_assistant,
             )
 
         return ChatPipelineResult(
@@ -343,6 +354,7 @@ class ChatPipeline:
         session_id: str | None,
         plan: ReasoningPlan | None = None,
         verification: ResultVerification | None = None,
+        previous_assistant: str = "",
     ) -> str:
         if not remember:
             return "disabled"
@@ -461,5 +473,19 @@ class ChatPipeline:
                 summaries.append("episode:pending=1")
         except Exception as exc:  # noqa: BLE001 - episodic memory must not break chat
             summaries.append(f"episode-error:{type(exc).__name__}")
+
+        if self.grey_matter is not None and previous_assistant:
+            try:
+                summaries.append(
+                    self.grey_matter.learn_chat_correction(
+                        user_message=user_message,
+                        previous_assistant=previous_assistant,
+                        session_id=session_id,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001 - correction learning must not break chat
+                summaries.append(
+                    f"correction-error:{type(exc).__name__}"
+                )
 
         return "; ".join(summaries) if summaries else "no-durable-signal"
