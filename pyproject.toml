@@ -42,6 +42,9 @@ dev = [
 e2e = [
   "playwright>=1.49,<2.0",
 ]
+semantic = [
+  "fastembed>=0.7,<1.0",
+]
 
 [project.scripts]
 dragon-tory = "tooru.main:run"
