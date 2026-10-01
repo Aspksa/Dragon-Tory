@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from ipaddress import ip_address
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
@@ -174,6 +176,16 @@ async def lifespan(app: FastAPI):
         await automation.stop()
 
 
+def _is_loopback_host(value: str | None) -> bool:
+    host = (value or "").strip().split("%", 1)[0]
+    if host.casefold() in {"localhost", "testclient"}:
+        return True
+    try:
+        return ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
@@ -181,6 +193,23 @@ def create_app() -> FastAPI:
         version=settings.version,
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def local_api_guard(request: Request, call_next):
+        if settings.allow_remote_api or _is_loopback_host(
+            request.client.host if request.client else None
+        ):
+            return await call_next(request)
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": (
+                    "Dragon Tory API доступен только локально. "
+                    "Удалённый доступ требует отдельного защищённого "
+                    "слоя аутентификации и авторизации."
+                )
+            },
+        )
     app.include_router(home_router)
     app.include_router(health_router)
     app.include_router(chat_router)
@@ -200,6 +229,11 @@ app = create_app()
 
 def run() -> None:
     settings = get_settings()
+    if not settings.allow_remote_api and not _is_loopback_host(settings.host):
+        raise RuntimeError(
+            "Небезопасная привязка API заблокирована: используйте "
+            "127.0.0.1/localhost, пока не настроен защищённый удалённый доступ."
+        )
     uvicorn.run(
         "tooru.main:app",
         host=settings.host,
