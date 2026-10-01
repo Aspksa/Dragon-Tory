@@ -8,8 +8,8 @@ from fastapi import FastAPI
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
 from tooru.api.chat import router as chat_router
-from tooru.api.cloud import router as cloud_router
 from tooru.api.chats import router as chats_router
+from tooru.api.cloud import router as cloud_router
 from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
