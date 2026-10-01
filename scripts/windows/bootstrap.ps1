@@ -430,7 +430,7 @@ function Test-RuntimeDependencies {
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $probe = "import importlib.util as u; mods=('fastapi','uvicorn','pydantic_settings'); raise SystemExit(0 if all(u.find_spec(m) for m in mods) else 1)"
+        $probe = "import importlib.util as u; mods=('fastapi','uvicorn','pydantic_settings','openai','anthropic','psutil'); raise SystemExit(0 if all(u.find_spec(m) for m in mods) else 1)"
         & $VenvPython -c $probe 1>$null 2>$null
         $probeExit = $LASTEXITCODE
         if ($probeExit -ne 0) {
