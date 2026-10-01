@@ -352,6 +352,8 @@ class MemoryEngine:
             MemoryKind.NOTE: "Заметки",
             MemoryKind.INSTRUCTION: "Правила",
             MemoryKind.RELATIONSHIP: "Связи",
+            MemoryKind.SKILL: "Навыки",
+            MemoryKind.LESSON: "Уроки",
         }
         sections: list[str] = []
         for kind, items in grouped.items():
