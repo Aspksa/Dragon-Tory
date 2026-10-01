@@ -213,6 +213,24 @@ class SmartDrive:
             self._ensure_column(
                 db,
                 "document_dna",
+                "work_dates_json",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "work_date_conflict",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "work_date_source",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
                 "work_hours",
                 "REAL",
             )
@@ -1786,6 +1804,15 @@ class SmartDrive:
         if row is None:
             raise KeyError(document_id)
         dna = dict(row)
+        try:
+            dna["work_dates"] = json.loads(
+                dna.get("work_dates_json") or "[]"
+            )
+        except (TypeError, json.JSONDecodeError):
+            dna["work_dates"] = []
+        dna["work_date_conflict"] = bool(
+            dna.get("work_date_conflict")
+        )
         dna["counterparty_record"] = None
         if dna.get("counterparty_id"):
             with self._connect() as db:
@@ -1886,6 +1913,30 @@ class SmartDrive:
                     current.get("work_date"),
                 )
             ),
+            "work_dates": [
+                normalized
+                for normalized in (
+                    _normalize_date(value)
+                    for value in payload.get(
+                        "work_dates",
+                        current.get("work_dates", []),
+                    )
+                )
+                if normalized
+            ][:31],
+            "work_date_conflict": bool(
+                payload.get(
+                    "work_date_conflict",
+                    current.get("work_date_conflict", False),
+                )
+            ),
+            "work_date_source": str(
+                payload.get(
+                    "work_date_source",
+                    current.get("work_date_source", ""),
+                )
+                or ""
+            )[:80],
             "work_hours": payload.get(
                 "work_hours",
                 current.get("work_hours"),
@@ -1898,6 +1949,17 @@ class SmartDrive:
                 or ""
             )[:2_000],
         }
+
+        if (
+            actor != "tooru-local"
+            and ("work_date" in payload or "work_dates" in payload)
+        ):
+            values["work_date_conflict"] = False
+            values["work_date_source"] = "manual"
+        if values["work_dates"] and not values["work_date"]:
+            values["work_date"] = values["work_dates"][0]
+        if values["work_date"] and not values["work_dates"]:
+            values["work_dates"] = [values["work_date"]]
 
         if values["counterparty_id"]:
             counterparty = self.get_counterparty(
@@ -1915,8 +1977,9 @@ class SmartDrive:
                     amount_currency = ?, terms_summary = ?,
                     counterparty_id = ?, document_subtype = ?,
                     employee_name = ?, department = ?,
-                    work_date = ?, work_hours = ?, work_reason = ?,
-                    updated_at = ?
+                    work_date = ?, work_dates_json = ?,
+                    work_date_conflict = ?, work_date_source = ?,
+                    work_hours = ?, work_reason = ?, updated_at = ?
                 WHERE document_id = ?
                 """,
                 (
@@ -1937,6 +2000,9 @@ class SmartDrive:
                     values["employee_name"],
                     values["department"],
                     values["work_date"],
+                    json.dumps(values["work_dates"], ensure_ascii=False),
+                    int(values["work_date_conflict"]),
+                    values["work_date_source"],
                     values["work_hours"],
                     values["work_reason"],
                     utc_now(),
