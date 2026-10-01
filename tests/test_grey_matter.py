@@ -353,6 +353,20 @@ def test_chat_correction_becomes_guarded_lesson(tmp_path: Path) -> None:
     assert "Петров" in lessons[0].content
 
 
+def test_fix_command_is_not_mistaken_for_chat_correction(
+    tmp_path: Path,
+) -> None:
+    _, _, grey = make_stack(tmp_path)
+
+    status = grey.learn_chat_correction(
+        user_message="Исправь код модуля памяти и добавь тест.",
+        previous_assistant="Предыдущий технический ответ.",
+        session_id="chat-fix-command",
+    )
+
+    assert status == "correction:no-signal"
+
+
 def test_explicit_fact_correction_is_not_silently_applied(tmp_path: Path) -> None:
     engine, guardian, grey = make_stack(tmp_path)
     wrong = engine.add(
