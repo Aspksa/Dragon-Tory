@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from tooru.ai.base import AIRequest
 from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.ai.router import AIRouter
+from tooru.chat.reasoning import CognitiveReasoning, ReasoningPlan, ResultVerification
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import MemoryGuardian
 from tooru.memory.models import (
@@ -106,6 +107,11 @@ class ChatPipeline:
         self.router = router
         self.guardian = guardian
         self.cloud_store = cloud_store
+        self.reasoning = CognitiveReasoning(
+            router=router,
+            memory=memory,
+            guardian=guardian,
+        )
 
     async def run(
         self,
@@ -169,6 +175,24 @@ class ChatPipeline:
             response_mode,
             RESPONSE_MODE_PROMPTS["normal"],
         )
+        reasoning_context = context.rendered_context + document_context
+        plan: ReasoningPlan | None = None
+        verification: ResultVerification | None = None
+        if self.reasoning.should_plan(
+            message,
+            response_mode=response_mode,
+            recent_history=[
+                item.content
+                for item in history[-6:]
+                if item.role in {"user", "assistant"}
+            ],
+        ):
+            plan = await self.reasoning.plan(
+                task=message,
+                context=reasoning_context,
+                conversation_summary=conversation_summary,
+            )
+
         system_prompt = (
             "Ты Дракончик Тоору — локальный персональный ИИ-помощник. "
             "Отвечай на русском языке, если пользователь не попросил иначе. "
@@ -193,6 +217,13 @@ class ChatPipeline:
                 else ""
             )
             + document_context
+            + (
+                "\n\nВнутренний рабочий план. Используй его как порядок "
+                "работы, но не упоминай его пользователю без необходимости:\n"
+                + plan.model_dump_json()
+                if plan is not None
+                else ""
+            )
         )
 
         with observation_context(
@@ -222,16 +253,34 @@ class ChatPipeline:
                 module="chat",
                 operation="chat_response",
             )
+            answer = response.text
+            if plan is not None:
+                verification = await self.reasoning.verify(
+                    task=message,
+                    plan=plan,
+                    answer=answer,
+                    context=reasoning_context,
+                )
+                if (
+                    verification.revised_answer
+                    and (
+                        not verification.passed
+                        or verification.score < 0.85
+                    )
+                ):
+                    answer = verification.revised_answer
 
             memory_status = await self._remember(
                 user_message=message,
-                assistant_answer=response.text,
+                assistant_answer=answer,
                 remember=remember,
                 session_id=session_id,
+                plan=plan,
+                verification=verification,
             )
 
         return ChatPipelineResult(
-            answer=response.text,
+            answer=answer,
             provider=response.provider,
             model=response.model,
             context_memories=context.total_memories,
@@ -288,6 +337,8 @@ class ChatPipeline:
         assistant_answer: str,
         remember: bool,
         session_id: str | None,
+        plan: ReasoningPlan | None = None,
+        verification: ResultVerification | None = None,
     ) -> str:
         if not remember:
             return "disabled"
@@ -329,6 +380,37 @@ class ChatPipeline:
             + "\n\nРезультат Тоору:\n"
             + assistant_answer.strip()[:5_000]
         )
+        if plan is not None:
+            episode_content += (
+                "\n\nПлан решения:\n"
+                + "\n".join(
+                    f"- {step}"
+                    for step in plan.steps[:8]
+                )
+            )
+        if verification is not None:
+            episode_content += (
+                "\n\nПроверка результата: "
+                f"passed={verification.passed}; "
+                f"score={verification.score:.3f}"
+            )
+            if verification.issues:
+                episode_content += (
+                    "\nЗамечания: "
+                    + "; ".join(verification.issues[:5])
+                )
+
+        episode_tags = ["episode", "chat-outcome"]
+        if plan is not None:
+            episode_tags.append("planned-outcome")
+        if (
+            verification is not None
+            and verification.passed
+            and verification.score
+            >= self.reasoning.config.verification_learning_threshold
+        ):
+            episode_tags.append("verified-outcome")
+
         try:
             episode = MemoryCreate(
                 owner_id="local-user",
@@ -340,12 +422,12 @@ class ChatPipeline:
                 source_ref=(f"chat:{session_id}" if session_id else "chat"),
                 confidence=0.95,
                 importance=0.55,
-                tags=["episode", "chat-outcome"],
+                tags=episode_tags,
                 session_id=session_id,
             )
             guarded = self.guardian.ingest_structured(
                 episode,
-                reason="Successful chat task/result episode.",
+                reason="Chat task/result episode with optional verification.",
                 auto_apply=True,
             )
             if guarded.memory_id:
@@ -361,6 +443,16 @@ class ChatPipeline:
                     owner_id=episode.owner_id,
                 )
                 summaries.append("episode:applied=1")
+                if verification is not None:
+                    summaries.append(
+                        await self.reasoning.learn_from_experience(
+                            task=user_message,
+                            answer=assistant_answer,
+                            verification=verification,
+                            episode_id=guarded.memory_id,
+                            session_id=session_id,
+                        )
+                    )
             elif guarded.queue_id:
                 summaries.append("episode:pending=1")
         except Exception as exc:  # noqa: BLE001 - episodic memory must not break chat
