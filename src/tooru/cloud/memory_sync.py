@@ -83,18 +83,18 @@ def weekend_work_memory(dna: dict[str, Any]) -> MemoryCreate | None:
     )
 
 
-def sync_vehicle(memory_intake, item: dict[str, Any]) -> None:
-    memory_intake.ingest(
+def sync_vehicle(memory_intake, item: dict[str, Any]):
+    return memory_intake.ingest(
         vehicle_memory(item),
         reason="Garage record changed; refresh durable project context.",
     )
 
 
-def sync_weekend_work(memory_intake, dna: dict[str, Any]) -> None:
+def sync_weekend_work(memory_intake, dna: dict[str, Any]):
     memory = weekend_work_memory(dna)
     if memory is None:
-        return
-    memory_intake.ingest(
+        return None
+    return memory_intake.ingest(
         memory,
         reason="Weekend-work DNA changed; refresh durable timesheet context.",
     )
