@@ -76,12 +76,48 @@ class WebResearchService:
             raise InternetResearchError(
                 "Заблокирован небезопасный или локальный интернет-адрес."
             )
+        service = self
+
+        class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+            def redirect_request(
+                self,
+                req,
+                fp,
+                code,
+                msg,
+                headers,
+                newurl,
+            ):
+                target = urllib.parse.urljoin(req.full_url, newurl)
+                if not service._is_safe_public_url(target):
+                    raise InternetResearchError(
+                        "Заблокирован редирект на локальный "
+                        "или небезопасный адрес."
+                    )
+                return super().redirect_request(
+                    req,
+                    fp,
+                    code,
+                    msg,
+                    headers,
+                    target,
+                )
+
         request = urllib.request.Request(url, headers=self._headers())
+        opener = urllib.request.build_opener(SafeRedirectHandler())
         try:
-            with urllib.request.urlopen(
+            with opener.open(
                 request,
                 timeout=self.timeout_seconds,
             ) as response:
+                final_url = response.geturl()
+                if (
+                    not trusted_search_endpoint
+                    and not self._is_safe_public_url(final_url)
+                ):
+                    raise InternetResearchError(
+                        "Конечный интернет-адрес заблокирован политикой безопасности."
+                    )
                 content_type = (
                     response.headers.get("Content-Type", "")
                     .split(";", 1)[0]
@@ -102,7 +138,7 @@ class WebResearchService:
                 if len(raw) > self.max_page_bytes:
                     raw = raw[: self.max_page_bytes]
                 charset = response.headers.get_content_charset() or "utf-8"
-                return raw.decode(charset, errors="replace"), response.geturl()
+                return raw.decode(charset, errors="replace"), final_url
         except InternetResearchError:
             raise
         except Exception as exc:
