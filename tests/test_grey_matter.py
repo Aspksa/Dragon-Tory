@@ -64,13 +64,13 @@ def test_fastembed_provider_supports_local_semantic_vectors(monkeypatch) -> None
     )
 
     provider = FastEmbedProvider(
-        model="intfloat/multilingual-e5-small",
+        model="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         dimensions=384,
     )
     vectors = provider.embed(["автомобиль", "машина"])
 
     assert provider.name == "fastembed"
-    assert provider.model == "intfloat/multilingual-e5-small"
+    assert provider.model == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     assert provider.dimensions == 3
     assert vectors[0] == [1.0, 0.5, 0.25]
     assert vectors[1] == [2.0, 0.5, 0.25]
