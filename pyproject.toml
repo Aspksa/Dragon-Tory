@@ -41,7 +41,13 @@ version = {attr = "tooru.version.__version__"}
 
 [tool.setuptools.package-data]
 # Keep the system-brain graph library available in offline portable installs.
-tooru = ["web/*.html", "web/vendor/*.js", "web/vendor/*.txt"]
+tooru = [
+  "web/*.html",
+  "web/*.css",
+  "web/*.js",
+  "web/vendor/*.js",
+  "web/vendor/*.txt",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
