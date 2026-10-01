@@ -105,19 +105,19 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "grey_matter",
         "title": "Серое вещество",
-        "version": "01.00.00",
+        "version": "02.00.00",
         "area": "system",
         "description": "Метакогнитивный слой: сущности, причинность, uncertainty, иерархия, цели, multi-hop, исправления и навыки.",
-        "last_update": "Добавлены все 12 направлений Cognitive Core V и фоновая консолидация.",
+        "last_update": "Adaptive Grey Matter: стратегия поиска, калибровка доверия, кластеры противоречий, причинные веса и безопасное забывание.",
         "depends_on": ["memory", "reasoning"],
     },
     {
         "id": "memory",
         "title": "Память Тоору",
-        "version": "03.00.00",
+        "version": "03.01.00",
         "area": "system",
         "description": "Раздельная личная и проектная долговременная память, Guardian, поиск и обслуживание.",
-        "last_update": "Semantic-ready embeddings, source reliability, hierarchy, skills/lessons и двухшаговый graph recall.",
+        "last_update": "Adaptive recall, truth-feedback calibration, historical as_of, contradiction clusters и audited forgetting.",
         "depends_on": [],
     },
     {
