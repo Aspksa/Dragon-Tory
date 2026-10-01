@@ -226,6 +226,8 @@ class MemoryIntelligence:
                 ],
                 max_tokens=3_000,
             ),
+            module="memory",
+            operation="memory_extract",
         )
         return self._parse_decisions(response.text)
 
@@ -269,6 +271,8 @@ class MemoryIntelligence:
                 ],
                 max_tokens=3_000,
             ),
+            module="memory",
+            operation="memory_review",
         )
         return self._parse_decisions(response.text)
 
