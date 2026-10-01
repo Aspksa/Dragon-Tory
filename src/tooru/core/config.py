@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
 
     deepseek_api_key: str | None = None
+    deepseek_base_url: str = "https://foundation-models.api.cloud.ru/v1"
+    deepseek_model: str = "deepseek-ai/DeepSeek-V4-Flash"
     claude_api_key: str | None = None
 
     memory_embedding_provider: str = "hash"
