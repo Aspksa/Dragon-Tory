@@ -141,6 +141,42 @@ def _history_to_messages(
     ]
 
 
+async def _refresh_chat_working_memory(
+    request: Request,
+    chat_id: str,
+) -> None:
+    store = request.app.state.chat_store
+    chat = store.get(chat_id)
+    total = int(chat.get("message_count") or 0)
+    covered = int(chat.get("summary_message_count") or 0)
+    target = max(0, total - 20)
+    if target <= covered:
+        return
+
+    all_messages = store.messages(chat_id)
+    batch_end = min(target, covered + 40)
+    batch = all_messages[covered:batch_end]
+    messages = [
+        ConversationMessage(role=item["role"], content=item["content"])
+        for item in batch
+        if item["role"] in {"user", "assistant"}
+    ]
+    if not messages:
+        return
+    try:
+        summary = await request.app.state.chat_pipeline.summarize_conversation(
+            existing_summary=str(chat.get("summary") or ""),
+            messages=messages,
+        )
+    except Exception:  # noqa: BLE001 - summary failure must not break chat
+        return
+    store.update_summary(
+        chat_id,
+        summary=summary,
+        covered_messages=batch_end,
+    )
+
+
 async def _run_generation(
     *,
     request: Request,
@@ -165,6 +201,10 @@ async def _run_generation(
             remember=remember,
             history=history,
             response_mode=response_mode,
+            conversation_summary=str(
+                request.app.state.chat_store.get(chat_id).get("summary") or ""
+            ),
+            session_id=chat_id,
         )
     )
     request.app.state.chat_tasks[request_id] = task
@@ -196,6 +236,7 @@ async def _run_generation(
             sequence=replace_after_sequence,
             assistant_content=result.answer,
         )
+    await _refresh_chat_working_memory(request, chat_id)
     chat = request.app.state.chat_store.get(chat_id)
     return ChatResponse(
         chat_id=chat_id,
@@ -360,7 +401,8 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         ) from exc
 
     chat_id = str(chat_item["id"])
-    history = _history_to_messages(store.messages(chat_id, limit=40))
+    working = store.working_memory(chat_id, recent_limit=40)
+    history = _history_to_messages(working["recent_messages"])
     store.add_message(
         chat_id,
         role="user",
@@ -398,6 +440,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
                 role="assistant",
                 content=answer,
             )
+            await _refresh_chat_working_memory(request, chat_id)
             chat_item = store.get(chat_id)
             return ChatResponse(
                 chat_id=chat_id,
