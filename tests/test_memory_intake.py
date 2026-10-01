@@ -4,8 +4,8 @@ from tooru.ai.router import AIRouter
 from tooru.memory.embedding import HashEmbeddingProvider
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import GuardianConfig, MemoryGuardian
-from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.intake import MemoryIntakeGateway
+from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.models import MemoryCreate, MemoryKind, MemoryScope
 from tooru.memory.store import SQLiteMemoryStore
 
