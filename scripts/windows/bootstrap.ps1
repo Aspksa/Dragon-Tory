@@ -430,7 +430,7 @@ function Test-RuntimeDependencies {
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $probe = "import importlib.util as u; mods=('fastapi','uvicorn','pydantic_settings','openai','anthropic','psutil'); raise SystemExit(0 if all(u.find_spec(m) for m in mods) else 1)"
+        $probe = "import importlib.util as u; mods=('fastapi','uvicorn','pydantic_settings','openai','psutil'); raise SystemExit(0 if all(u.find_spec(m) for m in mods) else 1)"
         & $VenvPython -c $probe 1>$null 2>$null
         $probeExit = $LASTEXITCODE
         if ($probeExit -ne 0) {
@@ -481,6 +481,15 @@ function Install-RuntimeDependencies {
         }
         if ($installExit -ne 0) {
             throw "pip could not install Dragon Tory or one or more required libraries. Exit code: $installExit"
+        }
+
+        $legacyAnthropic = & $VenvPython -m pip show anthropic 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-LauncherLog "INFO" "Removing legacy Anthropic/Claude package from .venv."
+            & $VenvPython -m pip uninstall --yes anthropic | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not remove legacy anthropic package."
+            }
         }
 
         Write-LauncherLog "INFO" "Checking installed Python dependency consistency."
