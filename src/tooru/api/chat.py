@@ -111,7 +111,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
                 f"pending={guardian_result.pending_count}, "
                 f"blocked={guardian_result.blocked_count}"
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - memory failure must not discard AI answer
             memory_status = f"memory-error:{type(exc).__name__}"
 
     return ChatResponse(
