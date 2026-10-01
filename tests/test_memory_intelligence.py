@@ -20,13 +20,16 @@ from tooru.memory.store import SQLiteMemoryStore
 
 
 class FakeProvider:
-    def __init__(self, name: str, payload: dict):
+    def __init__(self, name: str, payload: dict | list[dict]):
         self.name = name
-        self.payload = payload
+        self.payloads = payload if isinstance(payload, list) else [payload]
+        self.calls = 0
 
     async def generate(self, request: AIRequest) -> AIResponse:
+        payload = self.payloads[min(self.calls, len(self.payloads) - 1)]
+        self.calls += 1
         return AIResponse(
-            text=json.dumps(self.payload, ensure_ascii=False),
+            text=json.dumps(payload, ensure_ascii=False),
             provider=self.name,
             model=f"fake-{self.name}",
         )
@@ -108,7 +111,7 @@ async def test_intelligence_context_lookup_does_not_reinforce_memory(
 
 
 @pytest.mark.asyncio
-async def test_ai_can_create_memory_and_claude_can_review(tmp_path: Path) -> None:
+async def test_deepseek_can_analyze_and_review_memory(tmp_path: Path) -> None:
     engine = make_engine(tmp_path)
     router = AIRouter()
     primary = {
@@ -130,7 +133,7 @@ async def test_ai_can_create_memory_and_claude_can_review(tmp_path: Path) -> Non
         "decisions": [
             {
                 "action": "create",
-                "content": "Проект использует DeepSeek как основную модель и Claude как экспертную.",
+                "content": "Проект использует DeepSeek как единственную модель с повторной проверкой.",
                 "kind": "decision",
                 "key": "project.ai_models",
                 "importance": 0.98,
@@ -141,14 +144,13 @@ async def test_ai_can_create_memory_and_claude_can_review(tmp_path: Path) -> Non
             }
         ]
     }
-    router.register(FakeProvider("deepseek", primary))
-    router.register(FakeProvider("claude", reviewed))
+    router.register(FakeProvider("deepseek", [primary, reviewed]))
     intelligence = MemoryIntelligence(
         engine,
         router,
         IntelligenceConfig(
             primary_provider="deepseek",
-            reviewer_provider="claude",
+            reviewer_provider="deepseek",
         ),
     )
 
@@ -159,14 +161,14 @@ async def test_ai_can_create_memory_and_claude_can_review(tmp_path: Path) -> Non
             messages=[
                 ConversationMessage(
                     role="user",
-                    content="Для проекта используем DeepSeek и Claude.",
+                    content="Для проекта используем только DeepSeek с повторной проверкой.",
                 )
             ],
         )
     )
 
     assert result.analyzer == "deepseek"
-    assert result.reviewer == "claude"
+    assert result.reviewer == "deepseek"
     assert result.used_fallback is False
     assert len(result.applied) == 1
     assert result.applied[0].key == "project.ai_models"
