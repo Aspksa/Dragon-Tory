@@ -408,11 +408,9 @@ class GreyMatterService:
                 item.id,
                 MemoryLinkType.DEPENDS_ON,
             ):
-                dependency_id = (
-                    link.target_id
-                    if link.source_id == item.id
-                    else link.source_id
-                )
+                if link.source_id != item.id:
+                    continue
+                dependency_id = link.target_id
                 if dependency_id not in done_ids:
                     unmet_dependency = True
                     break
