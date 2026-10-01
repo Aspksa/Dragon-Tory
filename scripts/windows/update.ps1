@@ -218,7 +218,7 @@ function Build-FileManifest {
             Sort-Object
     )
 
-    $DownloadedFiles = @($remoteFiles)
+    $script:DownloadedFiles = @($remoteFiles)
     $remoteSet = @{}
     foreach ($relative in $remoteFiles) {
         $remoteSet[$relative.ToLowerInvariant()] = $true
@@ -231,12 +231,12 @@ function Build-FileManifest {
         }
 
         if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-            $NewFiles += $relative
+            $script:NewFiles += $relative
             continue
         }
 
         if ((Get-Sha256Hex $source) -ne (Get-Sha256Hex $target)) {
-            $ChangedFiles += $relative
+            $script:ChangedFiles += $relative
         }
     }
 
@@ -250,15 +250,15 @@ function Build-FileManifest {
             ForEach-Object {
                 $relative = Get-RelativePathText $ProjectRoot $_.FullName
                 if (-not $remoteSet.ContainsKey($relative.ToLowerInvariant())) {
-                    $RemovedFiles += $relative
+                    $script:RemovedFiles += $relative
                 }
             }
     }
 
-    $DownloadedFiles = @($DownloadedFiles | Sort-Object -Unique)
-    $ChangedFiles = @($ChangedFiles | Sort-Object -Unique)
-    $NewFiles = @($NewFiles | Sort-Object -Unique)
-    $RemovedFiles = @($RemovedFiles | Sort-Object -Unique)
+    $script:DownloadedFiles = @($script:DownloadedFiles | Sort-Object -Unique)
+    $script:ChangedFiles = @($script:ChangedFiles | Sort-Object -Unique)
+    $script:NewFiles = @($script:NewFiles | Sort-Object -Unique)
+    $script:RemovedFiles = @($script:RemovedFiles | Sort-Object -Unique)
 }
 
 function Copy-ProjectSnapshot {
