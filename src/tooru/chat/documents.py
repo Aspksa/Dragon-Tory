@@ -184,9 +184,12 @@ class ChatDocumentAssistant:
                     "раздели их на понятные пункты, явно отметь неопределённости "
                     "и не добавляй ничего, чего нет в исходных данных. "
                     "Для дат работы в выходной день приоритет имеет блок "
-                    "Локально извлечённые факты. Если там work_date_conflict=true, "
-                    "обязательно опиши расхождение имени файла и тела документа "
-                    "и НЕ выбирай одну из конфликтующих дат как правильную. "
+                    "Локально извлечённые факты. Если "
+                    "verified_work_date_source=manual, даты verified_work_dates "
+                    "считай подтверждёнными пользователем и не заменяй автоматикой. "
+                    "Если verified_work_date_conflict=true, обязательно опиши "
+                    "расхождение имени файла и тела документа и НЕ выбирай одну "
+                    "из конфликтующих дат как правильную. "
                     + UNTRUSTED_CONTENT_POLICY
                 ),
                 messages=[
@@ -264,6 +267,7 @@ class ChatDocumentAssistant:
                 document_id,
                 analysis,
             )
+            dna_after = self.smart.get_dna(document_id)
 
             path, cleanup = self.cloud_store.materialize_plaintext(document_id)
             try:
@@ -299,6 +303,11 @@ class ChatDocumentAssistant:
                 "entities": analysis.get("entities"),
                 "deadlines": analysis.get("deadlines"),
                 "suggested_tags": analysis.get("suggested_tags"),
+                "verified_work_dates": dna_after.get("work_dates") or [],
+                "verified_work_date_source": dna_after.get("work_date_source") or "",
+                "verified_work_date_conflict": bool(
+                    dna_after.get("work_date_conflict")
+                ),
             }
 
             ai_studied = False
@@ -345,7 +354,7 @@ class ChatDocumentAssistant:
                 )
 
             entities = analysis.get("entities") or {}
-            date_conflict = bool(entities.get("work_date_conflict"))
+            date_conflict = bool(dna_after.get("work_date_conflict"))
             if date_conflict:
                 body_dates = ", ".join(
                     str(value)
