@@ -13,6 +13,12 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Настройки" in response.text
     assert "Чат" in response.text
     assert "DeepSeek" in response.text
+    assert 'id="newChat"' in response.text
+    assert 'id="chatSearch"' in response.text
+    assert 'id="renameChat"' in response.text
+    assert 'id="deleteChat"' in response.text
+    assert 'id="stopChat"' in response.text
+    assert 'id="retryChat"' in response.text
     assert 'id="chatProject"' not in response.text
     assert 'id="chatProvider"' not in response.text
     assert "Клод" not in response.text
@@ -33,6 +39,9 @@ def test_diagnostics_status_is_available() -> None:
     assert payload["backend"]["status"] == "ok"
     assert "system_memory" in payload
     assert "memory_engine" in payload
+    assert "chat_history" in payload
+    assert "chats" in payload["chat_history"]
+    assert "messages" in payload["chat_history"]
 
 
 def test_chat_requires_configured_provider() -> None:
@@ -41,10 +50,7 @@ def test_chat_requires_configured_provider() -> None:
             return
         response = client.post(
             "/v1/chat",
-            json={
-                "message": "Привет",
-                "project_id": "dragon-tory",
-            },
+            json={"message": "Привет"},
         )
 
     assert response.status_code == 503
