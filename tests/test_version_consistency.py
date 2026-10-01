@@ -12,5 +12,5 @@ def test_all_runtime_versions_have_one_source() -> None:
 
 
 def test_display_version_format() -> None:
-    assert display_version("0.0.4") == "00.00.04"
+    assert display_version(__version__) == APP_VERSION
     assert display_version("1.12.7") == "01.12.07"
