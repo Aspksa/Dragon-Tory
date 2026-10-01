@@ -680,6 +680,7 @@ class GreyMatterService:
             owner_id=owner_id,
             scope=scope,
             project_id=project_id,
+            include_archived=True,
             limit=limit,
         )
         if not events:
@@ -793,6 +794,7 @@ class GreyMatterService:
                     ContradictionMember(
                         memory_id=item.id,
                         content=item.content[:2_000],
+                        status=item.status,
                         trust_score=truth.trust_score,
                         valid_from=item.valid_from,
                         valid_to=item.valid_to,
@@ -807,13 +809,21 @@ class GreyMatterService:
                 if len(members) > 1
                 else 0.0
             )
+            active_members = [
+                member
+                for member in members
+                if member.status is MemoryStatus.ACTIVE
+            ]
             clusters.append(
                 ContradictionCluster(
                     cluster_id=min(component),
                     members=members,
                     recommended_memory_id=members[0].memory_id,
                     trust_gap=round(max(0.0, gap), 6),
-                    unresolved=(len(members) > 1 and gap < 0.20),
+                    unresolved=(
+                        len(active_members) > 1
+                        and gap < 0.20
+                    ),
                 )
             )
         return clusters
