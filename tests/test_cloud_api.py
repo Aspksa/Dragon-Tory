@@ -239,3 +239,56 @@ def test_document_recognition_status_lists_extended_formats() -> None:
     assert {"DOC", "PPT"} <= set(payload["supported_via_converter"])
     assert "converter" in payload
     assert isinstance(payload["converter"]["available"], bool)
+
+
+
+def test_service_memo_process_api_returns_folder_and_fact_card() -> None:
+    with TestClient(app) as client:
+        document = _upload(
+            client,
+            "СЗ ремонт 2026.txt",
+            (
+                "Служебная записка № 77 от 01.10.2026\n"
+                "Подразделение: Гараж\n"
+                "От кого: Иванов И.И.\n"
+                "Кому: Руководителю\n"
+                "Тема: Ремонт и техническое состояние\n"
+                "Прошу выполнить ремонт автомобиля А123АА77."
+            ).encode("utf-8"),
+        )
+        document_id = document["id"]
+
+        passport = client.patch(
+            f"/v1/cloud/files/{document_id}/passport",
+            json={
+                "ai_access": "memory",
+                "confidentiality": "personal",
+                "scope": "project",
+                "project_id": "dragon-tory",
+            },
+        )
+        assert passport.status_code == 200
+
+        dna = client.patch(
+            f"/v1/cloud/smart/files/{document_id}/dna",
+            json={"kind": "служебная записка"},
+        )
+        assert dna.status_code == 200
+
+        processed = client.post(
+            f"/v1/cloud/intelligence/files/{document_id}/memo-process"
+        )
+        assert processed.status_code == 200
+        card = processed.json()["card"]
+        assert card["document_year"] == "2026"
+        assert card["topic"] == "Ремонт и техническое состояние"
+        assert "Служебные записки" in card["folder_path"]
+        assert card["facts"]["document_number"]["value"] == "77"
+
+        fetched = client.get(
+            f"/v1/cloud/intelligence/files/{document_id}/memo-card"
+        )
+        assert fetched.status_code == 200
+        assert fetched.json()["folder_path"] == card["folder_path"]
+
+        client.delete(f"/v1/cloud/files/{document_id}")
