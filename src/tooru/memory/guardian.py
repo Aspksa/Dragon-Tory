@@ -22,6 +22,7 @@ from tooru.memory.models import (
     MemoryKind,
 )
 from tooru.memory.store import MemoryNotFoundError, SQLiteMemoryStore
+from tooru.observability.context import current_observation
 
 
 @dataclass(slots=True)
@@ -50,10 +51,12 @@ class MemoryGuardian:
         intelligence: MemoryIntelligence,
         store: SQLiteMemoryStore,
         config: GuardianConfig,
+        observability=None,
     ):
         self.intelligence = intelligence
         self.store = store
         self.config = config
+        self.observability = observability
 
     def ingest_structured(
         self,
@@ -547,6 +550,64 @@ class MemoryGuardian:
             analyzer=analyzer,
             reviewer=reviewer,
         )
+        if self.observability is None:
+            return
+        try:
+            context = current_observation()
+            outcome = guardian_decision.outcome.value
+            event_status = {
+                "applied": "success",
+                "pending": "pending",
+                "blocked": "blocked",
+                "ignored": "ignored",
+            }.get(outcome, outcome)
+            decision = guardian_decision.decision
+            self.observability.event(
+                category="guardian",
+                stage="decision",
+                operation=decision.action.value,
+                status=event_status,
+                module=context.module or "memory",
+                trace_id=context.trace_id,
+                source_type=context.source_type,
+                source_id=context.source_id,
+                document_id=context.document_id,
+                memory_id=guardian_decision.memory_id,
+                message=guardian_decision.policy_reason,
+                details={
+                    "risk": guardian_decision.risk.value,
+                    "outcome": outcome,
+                    "kind": decision.kind.value,
+                    "key": decision.key,
+                    "scope": request.scope.value,
+                    "project_id": request.project_id,
+                    "analyzer": analyzer,
+                    "reviewer": reviewer,
+                    "queue_id": guardian_decision.queue_id,
+                },
+            )
+            if guardian_decision.memory_id:
+                self.observability.event(
+                    category="memory",
+                    stage="memory",
+                    operation=decision.action.value,
+                    status="success",
+                    module=context.module or "memory",
+                    trace_id=context.trace_id,
+                    source_type=context.source_type,
+                    source_id=context.source_id,
+                    document_id=context.document_id,
+                    memory_id=guardian_decision.memory_id,
+                    message="Запись сохранена в долговременную память.",
+                    details={
+                        "scope": request.scope.value,
+                        "project_id": request.project_id,
+                        "kind": decision.kind.value,
+                        "key": decision.key,
+                    },
+                )
+        except Exception:  # noqa: BLE001 - telemetry must never break memory
+            return
 
     @staticmethod
     def _to_intelligence_request(
