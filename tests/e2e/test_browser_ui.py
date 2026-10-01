@@ -3,7 +3,8 @@ import re
 import pytest
 
 playwright = pytest.importorskip("playwright.sync_api")
-from playwright.sync_api import expect, sync_playwright
+expect = playwright.expect
+sync_playwright = playwright.sync_playwright
 
 
 def test_dashboard_navigation_and_update_button_recovers() -> None:
