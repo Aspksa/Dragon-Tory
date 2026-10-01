@@ -224,7 +224,10 @@ class ModuleLearningService:
                         "role": "user",
                         "content": (
                             "Локально извлечённые данные:\n"
-                            + local_summary
+                            + wrap_untrusted_text(
+                                local_summary,
+                                source=f"module:{module_id}:local-summary",
+                            )
                             + "\n\nТекст документа:\n"
                             + wrap_untrusted_text(
                                 source_text,
