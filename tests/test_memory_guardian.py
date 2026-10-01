@@ -22,13 +22,16 @@ from tooru.memory.store import SQLiteMemoryStore
 
 
 class FakeProvider:
-    def __init__(self, name: str, payload: dict):
+    def __init__(self, name: str, payload: dict | list[dict]):
         self.name = name
-        self.payload = payload
+        self.payloads = payload if isinstance(payload, list) else [payload]
+        self.calls = 0
 
     async def generate(self, request: AIRequest) -> AIResponse:
+        payload = self.payloads[min(self.calls, len(self.payloads) - 1)]
+        self.calls += 1
         return AIResponse(
-            text=json.dumps(self.payload, ensure_ascii=False),
+            text=json.dumps(payload, ensure_ascii=False),
             provider=self.name,
             model=f"fake-{self.name}",
         )
@@ -47,7 +50,7 @@ def make_guardian(
         router,
         IntelligenceConfig(
             primary_provider="deepseek",
-            reviewer_provider="claude",
+            reviewer_provider="deepseek",
         ),
     )
     guardian = MemoryGuardian(
@@ -108,13 +111,13 @@ async def test_high_impact_fallback_waits_for_reviewer(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_high_impact_memory_applies_after_claude_review(tmp_path: Path) -> None:
+async def test_high_impact_memory_applies_after_deepseek_review(tmp_path: Path) -> None:
     router = AIRouter()
     primary = {
         "decisions": [
             {
                 "action": "create",
-                "content": "Claude проверяет критические изменения памяти.",
+                "content": "DeepSeek повторно проверяет критические изменения памяти.",
                 "kind": "decision",
                 "key": "memory.guardian.reviewer",
                 "importance": 0.95,
@@ -129,7 +132,7 @@ async def test_high_impact_memory_applies_after_claude_review(tmp_path: Path) ->
         "decisions": [
             {
                 "action": "create",
-                "content": "Claude проверяет критические изменения памяти.",
+                "content": "DeepSeek повторно проверяет критические изменения памяти.",
                 "kind": "decision",
                 "key": "memory.guardian.reviewer",
                 "importance": 0.95,
@@ -140,8 +143,7 @@ async def test_high_impact_memory_applies_after_claude_review(tmp_path: Path) ->
             }
         ]
     }
-    router.register(FakeProvider("deepseek", primary))
-    router.register(FakeProvider("claude", reviewed))
+    router.register(FakeProvider("deepseek", [primary, reviewed]))
     _, guardian = make_guardian(tmp_path, router)
 
     result = await guardian.process(
@@ -151,13 +153,13 @@ async def test_high_impact_memory_applies_after_claude_review(tmp_path: Path) ->
             messages=[
                 ConversationMessage(
                     role="user",
-                    content="Claude должен проверять критическую память.",
+                    content="DeepSeek должен повторно проверять критическую память.",
                 )
             ],
         )
     )
 
-    assert result.reviewer == "claude"
+    assert result.reviewer == "deepseek"
     assert len(result.applied) == 1
     assert result.decisions[0].risk is MemoryGuardianRisk.HIGH
     assert result.decisions[0].outcome is MemoryGuardianOutcome.APPLIED
