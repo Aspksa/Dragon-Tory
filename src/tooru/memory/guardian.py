@@ -489,7 +489,7 @@ class MemoryGuardian:
                 )
 
         if (
-            decision.kind is MemoryKind.INSTRUCTION
+            decision.kind in {MemoryKind.INSTRUCTION, MemoryKind.SKILL}
             or decision.importance >= self.config.high_importance
         ):
             return (
