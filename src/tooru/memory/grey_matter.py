@@ -310,6 +310,28 @@ class GreyMatterService:
             1.0,
         )
 
+    def link_task_dependency(
+        self,
+        task_id: str,
+        dependency_id: str,
+        *,
+        owner_id: str = "local-user",
+    ) -> None:
+        task = self.memory.get(task_id, owner_id)
+        dependency = self.memory.get(dependency_id, owner_id)
+        if (
+            task.kind is not MemoryKind.TASK
+            or dependency.kind is not MemoryKind.TASK
+        ):
+            raise ValueError("task dependency requires two task memories")
+        self._same_scope(task, dependency)
+        self.store.add_link(
+            task.id,
+            dependency.id,
+            MemoryLinkType.DEPENDS_ON,
+            1.0,
+        )
+
     def set_task_state(
         self,
         task_id: str,
@@ -372,15 +394,30 @@ class GreyMatterService:
             item for item in tasks
             if "task:done" in item.tags
         ]
-        blocked = [
-            item for item in tasks
-            if "task:blocked" in item.tags
-        ]
-        open_items = [
-            item for item in tasks
-            if "task:done" not in item.tags
-            and "task:blocked" not in item.tags
-        ]
+        done_ids = {item.id for item in done}
+        blocked: list[Any] = []
+        open_items: list[Any] = []
+        for item in tasks:
+            if item.id in done_ids:
+                continue
+            explicit_block = "task:blocked" in item.tags
+            unmet_dependency = False
+            for link in self.memory.links_for(
+                item.id,
+                MemoryLinkType.DEPENDS_ON,
+            ):
+                dependency_id = (
+                    link.target_id
+                    if link.source_id == item.id
+                    else link.source_id
+                )
+                if dependency_id not in done_ids:
+                    unmet_dependency = True
+                    break
+            if explicit_block or unmet_dependency:
+                blocked.append(item)
+            else:
+                open_items.append(item)
         completion = len(done) / len(tasks) if tasks else 0.0
         return GoalProgress(
             goal_id=goal.id,
