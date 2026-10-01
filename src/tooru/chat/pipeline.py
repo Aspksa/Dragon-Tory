@@ -160,7 +160,7 @@ class ChatPipeline:
 
         messages = [
             {"role": item.role, "content": item.content}
-            for item in history[-20:]
+            for item in history[-40:]
             if item.role in {"user", "assistant"}
         ]
         messages.append({"role": "user", "content": message})
