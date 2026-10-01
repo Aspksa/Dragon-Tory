@@ -27,7 +27,6 @@ $LocalPython = Join-Path $PythonHome "python.exe"
 $DownloadsDir = Join-Path $RuntimeDir "downloads"
 $LogsDir = Join-Path $ProjectRoot "logs"
 $LauncherLog = Join-Path $LogsDir "launcher.log"
-$RequirementsFile = Join-Path $VenvDir ".dragon_tory_requirements.txt"
 $HashFile = Join-Path $VenvDir ".dragon_tory_pyproject.sha256"
 
 $HostAddress = "127.0.0.1"
@@ -359,30 +358,10 @@ function Install-RuntimeDependencies {
         }
     }
 
-    $env:DRAGON_PYPROJECT = $PyProject
-    $env:DRAGON_REQ = $RequirementsFile
-
-    $extractDependencies = @'
-import os
-import pathlib
-import tomllib
-
-pyproject = pathlib.Path(os.environ["DRAGON_PYPROJECT"])
-output = pathlib.Path(os.environ["DRAGON_REQ"])
-data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-dependencies = data["project"].get("dependencies", [])
-output.write_text("\n".join(dependencies) + "\n", encoding="utf-8")
-'@
-
-    & $VenvPython -c $extractDependencies
+    Write-LauncherLog "INFO" "Installing Dragon Tory and required libraries from pyproject.toml."
+    & $VenvPython -m pip install --disable-pip-version-check --no-input --editable $ProjectRoot
     if ($LASTEXITCODE -ne 0) {
-        throw "Could not read runtime dependencies from pyproject.toml."
-    }
-
-    Write-LauncherLog "INFO" "Installing required Python libraries from pyproject.toml."
-    & $VenvPython -m pip install --disable-pip-version-check --no-input -r $RequirementsFile
-    if ($LASTEXITCODE -ne 0) {
-        throw "pip could not install one or more required libraries."
+        throw "pip could not install Dragon Tory or one or more required libraries."
     }
 
     & $VenvPython -m pip check
@@ -393,6 +372,8 @@ output.write_text("\n".join(dependencies) + "\n", encoding="utf-8")
     if (-not (Test-RuntimeDependencies)) {
         throw "Required runtime libraries failed import validation."
     }
+
+    Write-LauncherLog "OK" "Python libraries passed pip check and import validation."
 }
 
 try {
