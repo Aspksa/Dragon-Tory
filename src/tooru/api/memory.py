@@ -1,8 +1,14 @@
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 
 from tooru.memory.models import (
+    EntityAlias,
+    EntityResolution,
+    GoalProgress,
+    GraphPathNode,
+    GreyMatterReport,
     MemoryAutomationStatus,
     MemoryConsolidateRequest,
     MemoryConsolidateResponse,
@@ -32,15 +38,64 @@ from tooru.memory.models import (
     MemoryMaintenanceReport,
     MemoryRecallHit,
     MemoryRevision,
+    MemoryScope,
     MemorySearch,
     MemorySyncRequest,
     MemorySyncResponse,
     MemoryTruthAssessment,
+    MemoryUncertaintyAssessment,
     MemoryUpdate,
 )
 from tooru.memory.store import MemoryConflictError, MemoryNotFoundError
 
 router = APIRouter(prefix="/v1/memory", tags=["memory"])
+
+
+class EntityResolveRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2_000)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+    scope: MemoryScope = MemoryScope.PROJECT
+    project_id: str | None = Field(default="dragon-tory", max_length=200)
+
+
+class EntityAliasRequest(BaseModel):
+    alias: str = Field(min_length=1, max_length=500)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class CausalChainRequest(BaseModel):
+    problem: str = Field(min_length=1, max_length=10_000)
+    cause: str = Field(min_length=1, max_length=10_000)
+    action: str = Field(min_length=1, max_length=10_000)
+    result: str = Field(min_length=1, max_length=10_000)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+    scope: MemoryScope = MemoryScope.PROJECT
+    project_id: str | None = Field(default="dragon-tory", max_length=200)
+    source_ref: str | None = Field(default=None, max_length=500)
+
+
+class TaskStateRequest(BaseModel):
+    state: str = Field(pattern="^(open|done|blocked)$")
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+
+
+class CorrectionRequest(BaseModel):
+    corrected_content: str = Field(min_length=1, max_length=100_000)
+    reason: str = Field(default="User correction.", max_length=2_000)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+
+
+class SourceFeedbackRequest(BaseModel):
+    confirmed: bool
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+
+
+class GreyConsolidateRequest(BaseModel):
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+    scope: MemoryScope = MemoryScope.PROJECT
+    project_id: str | None = Field(default="dragon-tory", max_length=200)
+    limit: int = Field(default=500, ge=2, le=2_000)
 
 
 @router.get("/health")
@@ -229,6 +284,254 @@ def maintenance_status(request: Request) -> MemoryAutomationStatus:
 @router.post("/sync", response_model=MemorySyncResponse)
 def sync_memory(payload: MemorySyncRequest, request: Request) -> MemorySyncResponse:
     return request.app.state.memory.sync(payload)
+
+
+@router.get("/grey-matter/status")
+def grey_matter_status(request: Request) -> dict:
+    embedder = request.app.state.memory.embedder
+    return {
+        "version": "01.00.00",
+        "embedding_provider": embedder.name,
+        "embedding_model": embedder.model,
+        "embedding_dimensions": embedder.dimensions,
+        "semantic_embeddings_active": embedder.name != "hash",
+        "capabilities": [
+            "semantic-memory",
+            "hierarchical-memory",
+            "entity-resolution",
+            "causal-memory",
+            "uncertainty",
+            "sleep-consolidation",
+            "goal-task-memory",
+            "multi-hop-graph",
+            "source-reliability",
+            "correction-learning",
+            "counterfactual-verification",
+            "skill-memory",
+        ],
+    }
+
+
+@router.post(
+    "/grey-matter/entities/resolve",
+    response_model=EntityResolution,
+)
+def resolve_entity(
+    payload: EntityResolveRequest,
+    request: Request,
+) -> EntityResolution:
+    try:
+        return request.app.state.grey_matter.resolve_entity(
+            payload.query,
+            owner_id=payload.owner_id,
+            scope=payload.scope,
+            project_id=payload.project_id,
+        )
+    except (MemoryNotFoundError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/grey-matter/entities/{memory_id}/aliases",
+    response_model=EntityAlias,
+)
+def learn_entity_alias(
+    memory_id: str,
+    payload: EntityAliasRequest,
+    request: Request,
+) -> EntityAlias:
+    try:
+        return request.app.state.grey_matter.learn_entity_alias(
+            memory_id,
+            payload.alias,
+            owner_id=payload.owner_id,
+            confidence=payload.confidence,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/grey-matter/causal-chain")
+def record_causal_chain(
+    payload: CausalChainRequest,
+    request: Request,
+) -> dict:
+    return request.app.state.grey_matter.record_causal_chain(
+        problem=payload.problem,
+        cause=payload.cause,
+        action=payload.action,
+        result=payload.result,
+        owner_id=payload.owner_id,
+        scope=payload.scope,
+        project_id=payload.project_id,
+        source_ref=payload.source_ref,
+    )
+
+
+@router.post("/grey-matter/goals/{goal_id}/tasks/{task_id}")
+def link_goal_task(
+    goal_id: str,
+    task_id: str,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+) -> dict:
+    try:
+        request.app.state.grey_matter.link_task_to_goal(
+            goal_id,
+            task_id,
+            owner_id=owner_id,
+        )
+        return {"ok": True, "goal_id": goal_id, "task_id": task_id}
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/grey-matter/tasks/{task_id}/state")
+def set_grey_task_state(
+    task_id: str,
+    payload: TaskStateRequest,
+    request: Request,
+) -> MemoryItem:
+    try:
+        return request.app.state.grey_matter.set_task_state(
+            task_id,
+            payload.state,
+            owner_id=payload.owner_id,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/grey-matter/goals/{goal_id}/progress",
+    response_model=GoalProgress,
+)
+def grey_goal_progress(
+    goal_id: str,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+) -> GoalProgress:
+    try:
+        return request.app.state.grey_matter.goal_progress(
+            goal_id,
+            owner_id=owner_id,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/grey-matter/corrections/{memory_id}")
+def grey_register_correction(
+    memory_id: str,
+    payload: CorrectionRequest,
+    request: Request,
+) -> dict:
+    try:
+        return request.app.state.grey_matter.register_correction(
+            memory_id,
+            payload.corrected_content,
+            owner_id=payload.owner_id,
+            reason=payload.reason,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.post("/grey-matter/sources/{memory_id}/feedback")
+def grey_source_feedback(
+    memory_id: str,
+    payload: SourceFeedbackRequest,
+    request: Request,
+) -> dict:
+    try:
+        return {
+            "items": request.app.state.grey_matter.record_source_feedback(
+                memory_id,
+                confirmed=payload.confirmed,
+                owner_id=payload.owner_id,
+            )
+        }
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.post(
+    "/grey-matter/consolidate",
+    response_model=GreyMatterReport,
+)
+def grey_consolidate(
+    payload: GreyConsolidateRequest,
+    request: Request,
+) -> GreyMatterReport:
+    return request.app.state.grey_matter.consolidate_scope(
+        owner_id=payload.owner_id,
+        scope=payload.scope,
+        project_id=payload.project_id,
+        limit=payload.limit,
+    )
+
+
+@router.get(
+    "/{memory_id}/uncertainty",
+    response_model=MemoryUncertaintyAssessment,
+)
+def memory_uncertainty(
+    memory_id: str,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+) -> MemoryUncertaintyAssessment:
+    try:
+        return request.app.state.grey_matter.uncertainty(
+            memory_id,
+            owner_id=owner_id,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.get(
+    "/{memory_id}/multi-hop",
+    response_model=list[GraphPathNode],
+)
+def memory_multi_hop(
+    memory_id: str,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+    depth: Annotated[int, Query(ge=1, le=6)] = 3,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[GraphPathNode]:
+    try:
+        return request.app.state.grey_matter.multi_hop(
+            memory_id,
+            owner_id=owner_id,
+            depth=depth,
+            limit=limit,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
 
 @router.get("/{memory_id}/links", response_model=list[MemoryLink])
