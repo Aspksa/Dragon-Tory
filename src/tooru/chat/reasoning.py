@@ -133,6 +133,173 @@ class CognitiveReasoning:
         self.guardian = guardian
         self.config = config or ReasoningConfig()
 
+    def route(
+        self,
+        message: str,
+        *,
+        response_mode: str,
+        recent_history: list[str] | None = None,
+    ) -> ReasoningRoute:
+        complexity = self._complexity_score(
+            message,
+            response_mode=response_mode,
+            recent_history=recent_history or [],
+        )
+        uncertainty, contradictions = self._memory_signals(message)
+        reasons: list[str] = []
+
+        if complexity >= self.config.tree_complexity_threshold:
+            reasons.append("high-complexity")
+        elif complexity >= self.config.hybrid_complexity_threshold:
+            reasons.append("moderate-complexity")
+        if uncertainty >= self.config.tree_uncertainty_threshold:
+            reasons.append("high-memory-uncertainty")
+        elif uncertainty >= self.config.hybrid_uncertainty_threshold:
+            reasons.append("memory-uncertainty")
+        if contradictions >= 2:
+            reasons.append("multiple-contradictions")
+        elif contradictions == 1:
+            reasons.append("contradiction")
+
+        if (
+            complexity >= self.config.tree_complexity_threshold
+            or uncertainty >= self.config.tree_uncertainty_threshold
+            or contradictions >= 2
+        ):
+            mode = ReasoningMode.TREE
+        elif (
+            complexity >= self.config.hybrid_complexity_threshold
+            or uncertainty >= self.config.hybrid_uncertainty_threshold
+            or contradictions >= 1
+        ):
+            mode = ReasoningMode.HYBRID
+        else:
+            mode = ReasoningMode.CHAIN
+            reasons.append("fast-path")
+
+        branch_count = 0
+        max_depth = 1
+        if mode is ReasoningMode.TREE:
+            branch_count = min(
+                self.config.tree_branch_limit,
+                5 if complexity >= 0.90 else 4 if complexity >= 0.82 else 3,
+            )
+            max_depth = 4 if complexity >= 0.90 else 3
+        elif mode is ReasoningMode.HYBRID:
+            branch_count = min(self.config.tree_branch_limit, 3)
+            max_depth = 2
+
+        return ReasoningRoute(
+            mode=mode,
+            complexity=round(complexity, 6),
+            memory_uncertainty=round(uncertainty, 6),
+            contradiction_count=contradictions,
+            branch_count=branch_count,
+            max_depth=max_depth,
+            reasons=reasons,
+        )
+
+    def should_escalate_after_verification(
+        self,
+        route: ReasoningRoute,
+        verification: ResultVerification,
+    ) -> bool:
+        if route.mode is ReasoningMode.TREE:
+            return False
+        if verification.used_fallback:
+            return False
+        return (
+            not verification.passed
+            or verification.score < self.config.verifier_escalation_score
+            or verification.uncertainty
+            >= self.config.verifier_escalation_uncertainty
+            or bool(verification.contradictions)
+            or len(verification.alternative_explanations) >= 2
+        )
+
+    def _complexity_score(
+        self,
+        message: str,
+        *,
+        response_mode: str,
+        recent_history: list[str],
+    ) -> float:
+        text = message.strip()
+        score = 0.08
+        if response_mode in {"analysis", "code", "detailed"}:
+            score += 0.22
+        if len(text) >= 280:
+            score += 0.12
+        if len(text) >= 900:
+            score += 0.15
+        if text.count("\n") >= 3:
+            score += 0.08
+        if self._complex_signal.search(text):
+            score += 0.18
+        action_count = len(
+            re.findall(
+                r"\b(сделай|добавь|проверь|исправь|обнови|создай|удали|"
+                r"проанализируй|сравни|подключи|оцени|выбери)\b",
+                text,
+                flags=re.IGNORECASE,
+            )
+        )
+        score += min(0.20, action_count * 0.06)
+        if re.search(
+            r"(?i)\b(?:или|вариант|альтернатив|противореч|риск|"
+            r"trade.?off|alternative|compare|decision)\w*\b",
+            text,
+        ):
+            score += 0.12
+        if self._continuation_signal.match(text):
+            previous = " ".join(recent_history[-2:])
+            if len(previous) >= 240 or self._complex_signal.search(previous):
+                score += 0.20
+        return max(0.0, min(1.0, score))
+
+    def _memory_signals(self, message: str) -> tuple[float, int]:
+        try:
+            hits = self.memory.recall(
+                MemorySearch(
+                    owner_id="local-user",
+                    scope=MemoryScope.PROJECT,
+                    project_id=PROJECT_ID,
+                    query=message,
+                    limit=8,
+                ),
+                track_usage=False,
+            )
+        except Exception:  # noqa: BLE001 - routing must never break chat
+            return 0.0, 0
+
+        if not hits:
+            return 0.0, 0
+
+        weighted_uncertainty = 0.0
+        weight_total = 0.0
+        contradictions: set[tuple[str, str]] = set()
+        for index, hit in enumerate(hits[:6]):
+            weight = 1.0 / (index + 1)
+            weighted_uncertainty += hit.uncertainty_score * weight
+            weight_total += weight
+            try:
+                links = self.memory.links_for(
+                    hit.memory.id,
+                    MemoryLinkType.CONTRADICTS,
+                )
+            except Exception:  # noqa: BLE001 - optional graph signal
+                links = []
+            for link in links:
+                contradictions.add(
+                    tuple(sorted((link.source_id, link.target_id)))
+                )
+        uncertainty = (
+            weighted_uncertainty / weight_total
+            if weight_total > 0
+            else 0.0
+        )
+        return max(0.0, min(1.0, uncertainty)), len(contradictions)
+
     def should_plan(
         self,
         message: str,
