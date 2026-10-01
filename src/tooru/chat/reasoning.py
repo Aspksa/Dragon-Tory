@@ -155,7 +155,7 @@ class CognitiveReasoning:
             return ReasoningPlan.model_validate(
                 self._json_payload(response.text)
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - planner fallback must preserve chat
             return ReasoningPlan(
                 objective=task.strip()[:2_000] or "Выполнить задачу пользователя.",
                 known_facts=[],
@@ -228,7 +228,7 @@ class CognitiveReasoning:
                 cleaned = result.revised_answer.strip()
                 result.revised_answer = cleaned or None
             return result
-        except Exception:
+        except Exception:  # noqa: BLE001 - verifier fallback must preserve chat
             return ResultVerification(
                 passed=False,
                 score=0.0,
@@ -340,7 +340,7 @@ class CognitiveReasoning:
             if guarded.queue_id:
                 return "learning:rule-pending=1"
             return "learning:rule-blocked=1"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - learning must never break chat
             return "learning:error=" + type(exc).__name__
 
     async def _propose_rule(
@@ -396,7 +396,7 @@ class CognitiveReasoning:
             cleaned = "\n".join(lines).strip()
         payload = json.loads(cleaned)
         if not isinstance(payload, dict):
-            raise ValueError("reasoning response must be a JSON object")
+            raise TypeError("reasoning response must be a JSON object")
         return payload
 
     @staticmethod
