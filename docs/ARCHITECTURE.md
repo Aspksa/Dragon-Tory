@@ -68,6 +68,11 @@ Additional cognitive layers:
 - Guardian Entity Merge — entity identity changes require reviewed proposal + finalize.
 - Adaptive Forgetting — conservative reinforcement, decay and audited archive for safe memory kinds.
 - Scale Benchmark — manual 1k/10k/100k retrieval benchmark with Hit@K and MRR.
+- Adaptive Reasoning Router — automatically selects Chain, Tree or Hybrid from task complexity and memory risk.
+- Chain Fast Path — simple tasks avoid Planner/Tree/Verifier overhead when unnecessary.
+- Bounded Reasoning Tree — 3–5 short evidence/risk branches with a hard one-escalation limit.
+- Hybrid Escalation — starts linear and invokes Tree only after low verifier score, contradictions or high uncertainty.
+- Reasoning Observability — internal route is recorded without exposing a manual mode toggle.
 
 See docs/MEMORY_ENGINE.md.
 
