@@ -430,7 +430,7 @@ function Test-RuntimeDependencies {
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        $probe = "import importlib.util as u; mods=('fastapi','uvicorn','pydantic_settings','openai','psutil'); raise SystemExit(0 if all(u.find_spec(m) for m in mods) else 1)"
+        $probe = "import importlib.util as u; mods=('fastapi','uvicorn','pydantic_settings','openai','psutil','pypdf','docx','openpyxl','pptx','odf','striprtf','bs4','charset_normalizer','xlrd','pyxlsb','extract_msg','ebooklib','pymupdf'); raise SystemExit(0 if all(u.find_spec(m) for m in mods) else 1)"
         & $VenvPython -c $probe 1>$null 2>$null
         $probeExit = $LASTEXITCODE
         if ($probeExit -ne 0) {
@@ -513,6 +513,92 @@ function Install-RuntimeDependencies {
     Write-LauncherLog "OK" "Python libraries passed pip check and import validation."
 }
 
+function Find-TesseractEngine {
+    $command = Get-Command "tesseract.exe" -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles "Tesseract-OCR\tesseract.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "Tesseract-OCR\tesseract.exe")
+    )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Find-LibreOfficeEngine {
+    $command = Get-Command "soffice.exe" -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles "LibreOffice\program\soffice.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "LibreOffice\program\soffice.exe")
+    )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Install-DocumentEngine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PackageId,
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    $winget = Get-Command "winget.exe" -ErrorAction SilentlyContinue
+    if ($null -eq $winget) {
+        Write-LauncherLog "WARN" "$Label не найден, а winget недоступен. Тоору продолжит работу без этого движка."
+        return
+    }
+
+    Write-LauncherLog "INFO" "Устанавливается $Label для распознавания документов."
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & $winget.Source install --id $PackageId -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity 2>&1
+        $exitCode = $LASTEXITCODE
+        foreach ($line in $output) {
+            Add-Content -LiteralPath $LauncherLog -Value ([string]$line) -Encoding UTF8
+        }
+        if ($exitCode -ne 0) {
+            Write-LauncherLog "WARN" "$Label не удалось установить автоматически (winget exit $exitCode)."
+        } else {
+            Write-LauncherLog "OK" "$Label установлен."
+        }
+    } catch {
+        Write-LauncherLog "WARN" "$Label не удалось установить автоматически: $($_.Exception.Message)"
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+}
+
+function Ensure-DocumentEngines {
+    if ($env:TOORU_SKIP_DOCUMENT_ENGINES -eq "1") {
+        Write-LauncherLog "INFO" "Проверка системных движков документов пропущена переменной окружения."
+        return
+    }
+
+    if (-not (Find-TesseractEngine)) {
+        Install-DocumentEngine -PackageId "UB-Mannheim.TesseractOCR" -Label "Tesseract OCR"
+    } else {
+        Write-LauncherLog "OK" "Tesseract OCR доступен."
+    }
+
+    if (-not (Find-LibreOfficeEngine)) {
+        Install-DocumentEngine -PackageId "TheDocumentFoundation.LibreOffice" -Label "LibreOffice"
+    } else {
+        Write-LauncherLog "OK" "LibreOffice доступен для старых DOC/PPT."
+    }
+}
+
 try {
     Assert-ProjectLayout
 
@@ -593,6 +679,8 @@ try {
     } else {
         Write-LauncherLog "OK" "Required Python libraries are already installed and consistent."
     }
+
+    Ensure-DocumentEngines
 
     New-Item -ItemType Directory -Path (Join-Path $ProjectRoot "data") -Force | Out-Null
 
