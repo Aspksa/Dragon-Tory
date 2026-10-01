@@ -43,6 +43,7 @@ jobs:
           $target = Join-Path $env:RUNNER_TEMP "Обновление\Дракончик Тоору"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
           Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $target -Recurse -Force
+          Remove-Item -LiteralPath (Join-Path $target ".git") -Recurse -Force -ErrorAction SilentlyContinue
 
           $versionFile = Join-Path $target "src\tooru\version.py"
           $versionText = Get-Content -LiteralPath $versionFile -Raw -Encoding utf8
