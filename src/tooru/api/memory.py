@@ -399,6 +399,35 @@ def link_goal_task(
         ) from exc
 
 
+@router.post(
+    "/grey-matter/tasks/{task_id}/depends-on/{dependency_id}"
+)
+def link_task_dependency(
+    task_id: str,
+    dependency_id: str,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+) -> dict:
+    try:
+        request.app.state.grey_matter.link_task_dependency(
+            task_id,
+            dependency_id,
+            owner_id=owner_id,
+        )
+        return {
+            "ok": True,
+            "task_id": task_id,
+            "depends_on": dependency_id,
+        }
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
 @router.post("/grey-matter/tasks/{task_id}/state")
 def set_grey_task_state(
     task_id: str,
