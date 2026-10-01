@@ -14,9 +14,9 @@ and isolated when providers change.
 3. Memory Intelligence — decides what deserves durable memory.
 4. Tooru Memory Guardian — hidden risk/policy controller for automatic memory writes.
 5. AI provider registry — internal DeepSeek connection layer.
-4. Tool Registry — controlled tools with permissions.
-5. Web UI — desktop/browser interface.
-6. Mobile clients — planned clients using the same backend contracts.
+6. Tool Registry — controlled tools with permissions.
+7. Web UI — desktop/browser interface.
+8. Mobile clients — planned clients using the same backend contracts.
 
 ## Memory Engine v5
 
