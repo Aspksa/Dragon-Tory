@@ -1,4 +1,4 @@
-# Memory Engine v5
+# Memory Engine v5.1
 
 Dragon Tory owns its memory. DeepSeek is the configured reasoning provider,
 but it does not own long-term memory.
@@ -36,6 +36,25 @@ usage feedback and pinning.
 The default hash embedding remains an offline deterministic fallback. A real
 OpenAI-compatible embedding endpoint can be configured when stronger semantic
 similarity is required.
+
+## Temporal truth
+
+Memory records can now distinguish four clocks:
+
+- `observed_at` — when Dragon Tory learned the fact;
+- `event_at` — when the described event happened;
+- `valid_from` — when the fact became true;
+- `valid_to` — when the fact stopped being true.
+
+This prevents a newer fact from erasing the historical period in which an older fact was correct.
+
+## Evidence and provenance
+
+Each durable memory can have zero or more evidence records with source type, source reference, document id, page, excerpt, extraction method and confidence.
+Structured Memory Intake attaches provenance automatically when a source reference is available. Chat outcome episodes attach the originating chat as evidence.
+
+`GET /v1/memory/{memory_id}/evidence` returns evidence.
+`POST /v1/memory/{memory_id}/evidence` adds local evidence.
 
 ## History and provenance
 
