@@ -193,6 +193,21 @@ jobs:
             throw "Dragon Tory did not restart on $env:UPDATE_TEST_CURRENT_VERSION after API-triggered update."
           }
 
+          # Reproduce the browser polling that previously raced with updater exit.
+          for ($i = 0; $i -lt 24; $i++) {
+            try {
+              $updateStatus = Invoke-RestMethod -Uri "http://127.0.0.1:8787/v1/update/status" -TimeoutSec 3
+              if ($updateStatus.phase -eq "failed") {
+                throw "Status polling produced a false failed state: $($updateStatus.error)"
+              }
+            } catch {
+              if ($_.Exception.Message -like "Status polling produced a false failed state:*") {
+                throw
+              }
+            }
+            Start-Sleep -Milliseconds 250
+          }
+
       - name: Verify restart and protected local data
         shell: pwsh
         run: |
@@ -258,6 +273,20 @@ jobs:
           }
           if (@($last.downloaded_files).Count -lt 1) {
             throw "History does not contain downloaded file manifest."
+          }
+
+          $apiHistory = Invoke-RestMethod -Uri "http://127.0.0.1:8787/v1/update/history?limit=30" -TimeoutSec 5
+          $sameSha = @($apiHistory.items | Where-Object { $_.sha -eq $state.remote_sha })
+          $falseFailures = @(
+            $sameSha | Where-Object {
+              $_.result -eq "failed" -and (
+                [string]$_.error -match "Updater больше не запущен" -or
+                [string]$_.error -match "Updater завершился сразу после запуска"
+              )
+            }
+          )
+          if ($falseFailures.Count -gt 0) {
+            throw "Update history contains reconciled false PID-race failures."
           }
 
           $dataSentinel = Get-Content -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT "data\preserve.txt") -Raw
