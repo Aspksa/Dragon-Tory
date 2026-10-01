@@ -232,3 +232,42 @@ def test_memo_rule_rejects_non_memo_document(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="только к служебным запискам"):
         organizer.process(document["id"])
+
+
+
+def test_service_memo_respects_read_only_memory_permission(
+    tmp_path: Path,
+) -> None:
+    store, smart, intelligence, organizer = _stack(tmp_path)
+    document = _upload(
+        store,
+        "memo-read-only.txt",
+        (
+            "Служебная записка № 5 от 10.10.2026\n"
+            "Тема: Командировка сотрудника\n"
+            "Прошу направить сотрудника в командировку."
+        ),
+    )
+    store.update_passport(
+        document["id"],
+        ai_access="read",
+        confidentiality="personal",
+        scope="project",
+        project_id="dragon-tory",
+    )
+    smart.reconcile_contract(document["id"])
+    smart.update_dna(
+        document["id"],
+        {"kind": "служебная записка"},
+    )
+    analysis = intelligence.analyze(document["id"])
+    smart.apply_intelligence_defaults(document["id"], analysis)
+
+    card = organizer.process(document["id"])
+
+    assert card["memory_status"] == "permission-denied"
+    assert card["memory_id"] is None
+    assert any(
+        "не разрешает запись в память" in item
+        for item in card["review"]
+    )
