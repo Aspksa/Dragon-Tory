@@ -2130,18 +2130,26 @@ class SmartDrive:
             date_conflict = bool(entities.get("work_date_conflict"))
 
             if weekend_detected:
+                manual_work_dates = bool(
+                    dna.get("work_dates")
+                    and str(dna.get("work_date_source") or "") == "manual"
+                )
                 if not str(dna.get("document_subtype") or "").strip():
                     payload["document_subtype"] = "Работа в выходной день"
                     fields.append("document_subtype")
 
-                payload["work_date_conflict"] = date_conflict
-                payload["work_date_source"] = str(
-                    entities.get("work_date_source") or ""
-                )
-                fields.extend(["work_date_conflict", "work_date_source"])
+                if not manual_work_dates:
+                    payload["work_date_conflict"] = date_conflict
+                    payload["work_date_source"] = str(
+                        entities.get("work_date_source") or ""
+                    )
+                    fields.extend(
+                        ["work_date_conflict", "work_date_source"]
+                    )
 
                 if (
-                    not date_conflict
+                    not manual_work_dates
+                    and not date_conflict
                     and not dna.get("work_dates")
                     and work_dates
                 ):
