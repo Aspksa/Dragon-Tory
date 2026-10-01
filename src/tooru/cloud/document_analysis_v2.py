@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import defaultdict
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 _DATE_RE = re.compile(
     r"\b(?:"
