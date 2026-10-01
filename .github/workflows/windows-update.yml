@@ -120,6 +120,7 @@ jobs:
 
           @(
             "TOORU_TEST_SENTINEL=preserve-me"
+            "TOORU_UPDATE_BRANCH=${{ github.head_ref || github.ref_name }}"
             "TOORU_CLAUDE_API_KEY=legacy-secret-must-be-removed"
             "TOORU_CLAUDE_MODEL=legacy-claude"
           ) | Set-Content -LiteralPath (Join-Path $target ".env") -Encoding utf8
