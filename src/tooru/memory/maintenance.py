@@ -98,6 +98,17 @@ class MemoryAutomation:
                                 limit=500,
                                 create_summary=False,
                             )
+                            forgetting = await asyncio.to_thread(
+                                self.grey_matter.adaptive_forgetting,
+                                owner_id=owner_id,
+                                scope=scope,
+                                project_id=project_id,
+                                limit=1000,
+                                archive_after_days=self.archive_after_days,
+                            )
+                            report.adaptive_reinforced += forgetting.reinforced
+                            report.adaptive_decayed += forgetting.decayed
+                            report.adaptive_archived += forgetting.archived
                         except Exception as exc:  # noqa: BLE001 - sleep cycle is best-effort
                             logger.warning(
                                 "Grey Matter sleep consolidation skipped for "
