@@ -756,6 +756,76 @@ class DocumentIntelligence:
         suggestions.sort(key=lambda item: item["score"], reverse=True)
         return suggestions[:limit]
 
+    @staticmethod
+    def _kind_checks(
+        kind: str,
+        entities: dict[str, Any],
+        deadlines: list[dict[str, Any]],
+        checks: dict[str, Any],
+    ) -> dict[str, Any]:
+        result = json.loads(json.dumps(checks, ensure_ascii=False))
+        warnings = list(result.get("warnings") or [])
+        missing: list[str] = []
+
+        if kind in {"договор", "счёт-оферта"}:
+            if not entities.get("counterparties"):
+                missing.append("counterparty")
+            if not entities.get("references"):
+                missing.append("document_number")
+        if kind == "счёт-оферта":
+            if not entities.get("amounts"):
+                missing.append("amount")
+            vat_candidates = (
+                result.get("financial", {}).get("vat_candidates", [])
+            )
+            if not vat_candidates:
+                warnings.append(
+                    {
+                        "code": "vat_not_found",
+                        "severity": "info",
+                        "message": (
+                            "В счёте-оферте не найдено явного указания НДС; "
+                            "проверьте документ вручную."
+                        ),
+                    }
+                )
+        if kind == "договор" and not deadlines and not entities.get("dates"):
+            warnings.append(
+                {
+                    "code": "contract_dates_not_found",
+                    "severity": "info",
+                    "message": (
+                        "В договоре не найдены явные даты или срок действия."
+                    ),
+                }
+            )
+        if missing:
+            warnings.append(
+                {
+                    "code": "missing_core_requisites",
+                    "severity": "warning",
+                    "message": (
+                        "Не найдены основные реквизиты: "
+                        + ", ".join(missing)
+                    ),
+                    "fields": missing,
+                }
+            )
+
+        result["warnings"] = warnings
+        result["warning_count"] = len(warnings)
+        result["requisites"] = {
+            "missing": missing,
+            "counterparties": len(entities.get("counterparties") or []),
+            "references": len(entities.get("references") or []),
+            "ibans": len(entities.get("iban") or []),
+            "emails": len(entities.get("emails") or []),
+            "dates": len(entities.get("dates") or []),
+            "deadlines": len(deadlines),
+            "amounts": len(entities.get("amounts") or []),
+        }
+        return result
+
     def analyze(self, document_id: str) -> dict[str, Any]:
         context = current_observation()
         module = context.module or "drive"
@@ -810,6 +880,12 @@ class DocumentIntelligence:
                 entities = self._aggregate_entities(chunks)
                 deadlines = self._aggregate_deadlines(chunks)
                 tags = self._suggested_tags(kind, entities, analysis_text)
+                v2["checks"] = self._kind_checks(
+                    kind,
+                    entities,
+                    deadlines,
+                    v2["checks"],
+                )
                 relations = self._relation_suggestions(
                     document_id,
                     entities,
@@ -1563,6 +1639,66 @@ class DocumentIntelligence:
             "representative_text": v2["representative_text"][:120_000],
         }
 
+    @staticmethod
+    def _evidence_diff(
+        base: list[dict[str, Any]],
+        changed: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        useful = {
+            "vin",
+            "reference",
+            "deadline",
+            "date",
+            "amount",
+            "document_total",
+            "vat",
+        }
+
+        def signature(item: dict[str, Any]) -> tuple[str, str, str, str]:
+            return (
+                str(item.get("type") or ""),
+                str(item.get("value") or ""),
+                str(item.get("currency") or ""),
+                str(item.get("rate") or ""),
+            )
+
+        base_signatures = {
+            signature(item)
+            for item in base
+            if str(item.get("type") or "") in useful
+        }
+        result: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for item in changed:
+            if str(item.get("type") or "") not in useful:
+                continue
+            key = signature(item)
+            if key in base_signatures or key in seen:
+                continue
+            seen.add(key)
+            result.append(
+                {
+                    key_name: item.get(key_name)
+                    for key_name in (
+                        "type",
+                        "value",
+                        "currency",
+                        "rate",
+                        "raw",
+                        "page",
+                        "table",
+                        "cell",
+                        "chunk_no",
+                        "excerpt",
+                        "evidence_hash",
+                    )
+                    if item.get(key_name) is not None
+                }
+            )
+            if len(result) >= 100:
+                break
+        return result
+
     def local_version_diff(
         self,
         document_id: str,
@@ -1611,4 +1747,16 @@ class DocumentIntelligence:
             "text_removed": sorted(a_lines - b_lines)[:30],
             "sha256_a": a["sha256"],
             "sha256_b": b["sha256"],
+            "facts_added": self._evidence_diff(
+                a.get("evidence") or [],
+                b.get("evidence") or [],
+            ),
+            "facts_removed": self._evidence_diff(
+                b.get("evidence") or [],
+                a.get("evidence") or [],
+            ),
+            "structure_a": a.get("structure") or {},
+            "structure_b": b.get("structure") or {},
+            "checks_a": a.get("checks") or {},
+            "checks_b": b.get("checks") or {},
         }
