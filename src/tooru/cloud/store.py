@@ -7,6 +7,7 @@ import shutil
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import RLock
 from typing import Any
 from uuid import uuid4
 
@@ -55,6 +56,7 @@ class CloudStore:
         self.trash_dir = self.root_dir / "trash"
         self.versions_dir = self.root_dir / "versions"
         self.incoming_dir = self.root_dir / ".incoming"
+        self._mutation_lock = RLock()
 
     def initialize(self) -> None:
         for path in (
@@ -228,8 +230,16 @@ class CloudStore:
             )
 
     def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.db_path)
+        db = sqlite3.connect(
+            self.db_path,
+            timeout=30,
+            check_same_thread=False,
+        )
         db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys=ON")
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA synchronous=NORMAL")
+        db.execute("PRAGMA busy_timeout=30000")
         return db
 
     @staticmethod
@@ -450,71 +460,72 @@ class CloudStore:
         sha256: str,
         folder_id: str | None = None,
     ) -> dict[str, Any]:
-        document_id = "TORY-DOC-" + uuid4().hex.upper()
-        suffix = Path(name).suffix[:16]
-        stored_name = document_id + suffix
-        destination = self.files_dir / stored_name
-        now = utc_now()
+        with self._mutation_lock:
+            document_id = "TORY-DOC-" + uuid4().hex.upper()
+            suffix = Path(name).suffix[:16]
+            stored_name = document_id + suffix
+            destination = self.files_dir / stored_name
+            now = utc_now()
 
-        with self._connect() as db:
-            self._validate_folder(db, folder_id)
-
-        os.replace(temp_path, destination)
-        try:
             with self._connect() as db:
-                db.execute(
-                    """
-                    INSERT INTO documents (
-                        id, name, original_name, stored_name, content_type,
-                        size_bytes, sha256, scope, confidentiality, ai_access,
-                        ai_index_status, version, source, created_at, updated_at,
-                        folder_id, favorite, description, tags_json, trashed
+                self._validate_folder(db, folder_id)
+
+            os.replace(temp_path, destination)
+            try:
+                with self._connect() as db:
+                    db.execute(
+                        """
+                        INSERT INTO documents (
+                            id, name, original_name, stored_name, content_type,
+                            size_bytes, sha256, scope, confidentiality, ai_access,
+                            ai_index_status, version, source, created_at, updated_at,
+                            folder_id, favorite, description, tags_json, trashed
+                        )
+                        VALUES (
+                            ?, ?, ?, ?, ?, ?, ?, 'personal', 'personal', 'denied',
+                            'blocked', 1, 'upload', ?, ?, ?, 0, '', '[]', 0
+                        )
+                        """,
+                        (
+                            document_id,
+                            name,
+                            name,
+                            stored_name,
+                            content_type or "application/octet-stream",
+                            size_bytes,
+                            sha256,
+                            now,
+                            now,
+                            folder_id,
+                        ),
                     )
-                    VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, 'personal', 'personal', 'denied',
-                        'blocked', 1, 'upload', ?, ?, ?, 0, '', '[]', 0
+                    db.execute(
+                        """
+                        INSERT INTO document_versions (
+                            document_id, version, storage_ref, content_type,
+                            size_bytes, sha256, created_at, source
+                        )
+                        VALUES (?, 1, ?, ?, ?, ?, ?, 'upload')
+                        """,
+                        (
+                            document_id,
+                            f"files/{stored_name}",
+                            content_type or "application/octet-stream",
+                            size_bytes,
+                            sha256,
+                            now,
+                        ),
                     )
-                    """,
-                    (
-                        document_id,
-                        name,
-                        name,
-                        stored_name,
-                        content_type or "application/octet-stream",
-                        size_bytes,
-                        sha256,
-                        now,
-                        now,
-                        folder_id,
-                    ),
-                )
-                db.execute(
-                    """
-                    INSERT INTO document_versions (
-                        document_id, version, storage_ref, content_type,
-                        size_bytes, sha256, created_at, source
+                    self._log(
+                        db,
+                        "uploaded",
+                        document_id=document_id,
+                        details=name,
                     )
-                    VALUES (?, 1, ?, ?, ?, ?, ?, 'upload')
-                    """,
-                    (
-                        document_id,
-                        f"files/{stored_name}",
-                        content_type or "application/octet-stream",
-                        size_bytes,
-                        sha256,
-                        now,
-                    ),
-                )
-                self._log(
-                    db,
-                    "uploaded",
-                    document_id=document_id,
-                    details=name,
-                )
-        except Exception:
-            destination.unlink(missing_ok=True)
-            raise
-        return self.get(document_id)
+            except Exception:
+                destination.unlink(missing_ok=True)
+                raise
+            return self.get(document_id)
 
     def get(
         self,
@@ -912,7 +923,7 @@ class CloudStore:
         self,
         db: sqlite3.Connection,
         item: dict[str, Any],
-    ) -> None:
+    ) -> Path:
         source = self.files_dir / item["stored_name"]
         target_dir = self.versions_dir / item["id"]
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -929,6 +940,7 @@ class CloudStore:
             """,
             (relative, item["id"], item["version"]),
         )
+        return target
 
     def add_version(
         self,
@@ -940,73 +952,84 @@ class CloudStore:
         size_bytes: int,
         sha256: str,
     ) -> dict[str, Any]:
-        current = self.get(document_id)
-        new_version = int(current["version"]) + 1
-        destination = self.files_dir / current["stored_name"]
-        now = utc_now()
+        with self._mutation_lock:
+            current = self.get(document_id)
+            new_version = int(current["version"]) + 1
+            destination = self.files_dir / current["stored_name"]
+            now = utc_now()
 
-        if current["encrypted"]:
-            if self.vault is None:
-                raise PermissionError("Сейф Тори недоступен.")
+            if current["encrypted"]:
+                if self.vault is None:
+                    raise PermissionError("Сейф Тори недоступен.")
+                try:
+                    self.vault.encrypt_file(
+                        temp_path,
+                        aad=document_id.encode("utf-8"),
+                    )
+                except RuntimeError as exc:
+                    raise PermissionError(str(exc)) from exc
+
+            archived_path: Path | None = None
+            installed = False
             try:
-                self.vault.encrypt_file(
-                    temp_path,
-                    aad=document_id.encode("utf-8"),
-                )
-            except RuntimeError as exc:
-                raise PermissionError(str(exc)) from exc
-
-        with self._connect() as db:
-            self._archive_current(db, current)
-            os.replace(temp_path, destination)
-            db.execute(
-                """
-                UPDATE documents
-                SET name = ?, content_type = ?, size_bytes = ?, sha256 = ?,
-                    version = ?, indexed_version = NULL,
-                    ai_index_status = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    name[:255],
-                    content_type or "application/octet-stream",
-                    size_bytes,
-                    sha256,
-                    new_version,
-                    (
-                        "blocked"
-                        if current["ai_access"] == "denied"
-                        else "needs_indexing"
-                    ),
-                    now,
-                    document_id,
-                ),
-            )
-            db.execute(
-                """
-                INSERT INTO document_versions (
-                    document_id, version, storage_ref, content_type,
-                    size_bytes, sha256, created_at, source
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'new_version')
-                """,
-                (
-                    document_id,
-                    new_version,
-                    f"files/{current['stored_name']}",
-                    content_type or "application/octet-stream",
-                    size_bytes,
-                    sha256,
-                    now,
-                ),
-            )
-            self._log(
-                db,
-                "version_added",
-                document_id=document_id,
-                details=f"v{new_version}",
-            )
-        return self.get(document_id)
+                with self._connect() as db:
+                    archived_path = self._archive_current(db, current)
+                    os.replace(temp_path, destination)
+                    installed = True
+                    db.execute(
+                        """
+                        UPDATE documents
+                        SET name = ?, content_type = ?, size_bytes = ?, sha256 = ?,
+                            version = ?, indexed_version = NULL,
+                            ai_index_status = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            name[:255],
+                            content_type or "application/octet-stream",
+                            size_bytes,
+                            sha256,
+                            new_version,
+                            (
+                                "blocked"
+                                if current["ai_access"] == "denied"
+                                else "needs_indexing"
+                            ),
+                            now,
+                            document_id,
+                        ),
+                    )
+                    db.execute(
+                        """
+                        INSERT INTO document_versions (
+                            document_id, version, storage_ref, content_type,
+                            size_bytes, sha256, created_at, source
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'new_version')
+                        """,
+                        (
+                            document_id,
+                            new_version,
+                            f"files/{current['stored_name']}",
+                            content_type or "application/octet-stream",
+                            size_bytes,
+                            sha256,
+                            now,
+                        ),
+                    )
+                    self._log(
+                        db,
+                        "version_added",
+                        document_id=document_id,
+                        details=f"v{new_version}",
+                    )
+            except Exception:
+                if installed:
+                    destination.unlink(missing_ok=True)
+                if archived_path is not None and archived_path.is_file():
+                    shutil.move(str(archived_path), str(destination))
+                raise
+            return self.get(document_id)
 
     def list_versions(self, document_id: str) -> list[dict[str, Any]]:
         self.get(document_id, include_trashed=True)
@@ -1026,77 +1049,89 @@ class CloudStore:
         document_id: str,
         version: int,
     ) -> dict[str, Any]:
-        current = self.get(document_id)
-        if version == current["version"]:
-            return current
-        with self._connect() as db:
-            selected = db.execute(
-                """
-                SELECT * FROM document_versions
-                WHERE document_id = ? AND version = ?
-                """,
-                (document_id, version),
-            ).fetchone()
-            if selected is None:
-                raise KeyError(f"{document_id}:{version}")
+        with self._mutation_lock:
+            current = self.get(document_id)
+            if version == current["version"]:
+                return current
 
-            source = self.root_dir / selected["storage_ref"]
-            if not source.is_file():
-                raise FileNotFoundError(str(source))
-
-            self._archive_current(db, current)
+            archived_path: Path | None = None
+            installed = False
             destination = self.files_dir / current["stored_name"]
-            shutil.copy2(source, destination)
-            next_version = int(current["version"]) + 1
-            now = utc_now()
-            db.execute(
-                """
-                UPDATE documents
-                SET content_type = ?, size_bytes = ?, sha256 = ?,
-                    version = ?, indexed_version = NULL,
-                    ai_index_status = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    selected["content_type"],
-                    selected["size_bytes"],
-                    selected["sha256"],
-                    next_version,
-                    (
-                        "blocked"
-                        if current["ai_access"] == "denied"
-                        else "needs_indexing"
-                    ),
-                    now,
-                    document_id,
-                ),
-            )
-            db.execute(
-                """
-                INSERT INTO document_versions (
-                    document_id, version, storage_ref, content_type,
-                    size_bytes, sha256, created_at, source
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    document_id,
-                    next_version,
-                    f"files/{current['stored_name']}",
-                    selected["content_type"],
-                    selected["size_bytes"],
-                    selected["sha256"],
-                    now,
-                    f"restored_from_v{version}",
-                ),
-            )
-            self._log(
-                db,
-                "version_restored",
-                document_id=document_id,
-                details=f"v{version} -> v{next_version}",
-            )
-        return self.get(document_id)
+            try:
+                with self._connect() as db:
+                    selected = db.execute(
+                        """
+                        SELECT * FROM document_versions
+                        WHERE document_id = ? AND version = ?
+                        """,
+                        (document_id, version),
+                    ).fetchone()
+                    if selected is None:
+                        raise KeyError(f"{document_id}:{version}")
+
+                    source = self.root_dir / selected["storage_ref"]
+                    if not source.is_file():
+                        raise FileNotFoundError(str(source))
+
+                    archived_path = self._archive_current(db, current)
+                    shutil.copy2(source, destination)
+                    installed = True
+                    next_version = int(current["version"]) + 1
+                    now = utc_now()
+                    db.execute(
+                        """
+                        UPDATE documents
+                        SET content_type = ?, size_bytes = ?, sha256 = ?,
+                            version = ?, indexed_version = NULL,
+                            ai_index_status = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            selected["content_type"],
+                            selected["size_bytes"],
+                            selected["sha256"],
+                            next_version,
+                            (
+                                "blocked"
+                                if current["ai_access"] == "denied"
+                                else "needs_indexing"
+                            ),
+                            now,
+                            document_id,
+                        ),
+                    )
+                    db.execute(
+                        """
+                        INSERT INTO document_versions (
+                            document_id, version, storage_ref, content_type,
+                            size_bytes, sha256, created_at, source
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            document_id,
+                            next_version,
+                            f"files/{current['stored_name']}",
+                            selected["content_type"],
+                            selected["size_bytes"],
+                            selected["sha256"],
+                            now,
+                            f"restored_from_v{version}",
+                        ),
+                    )
+                    self._log(
+                        db,
+                        "version_restored",
+                        document_id=document_id,
+                        details=f"v{version} -> v{next_version}",
+                    )
+            except Exception:
+                if installed:
+                    destination.unlink(missing_ok=True)
+                if archived_path is not None and archived_path.is_file():
+                    shutil.move(str(archived_path), str(destination))
+                raise
+            return self.get(document_id)
 
     def replace_chunks(
         self,
@@ -1265,52 +1300,67 @@ class CloudStore:
         return [dict(row) for row in rows]
 
     def trash(self, document_id: str) -> dict[str, Any]:
-        item = self.get(document_id)
-        source = self.files_dir / item["stored_name"]
-        destination = self.trash_dir / item["stored_name"]
-        if source.exists():
-            shutil.move(str(source), str(destination))
-        now = utc_now()
-        with self._connect() as db:
-            db.execute(
-                """
-                UPDATE documents
-                SET trashed = 1, trashed_at = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (now, now, document_id),
-            )
-            self._log(
-                db,
-                "trashed",
-                document_id=document_id,
-                details=item["name"],
-            )
-        return self.get(document_id, include_trashed=True)
+        with self._mutation_lock:
+            item = self.get(document_id)
+            source = self.files_dir / item["stored_name"]
+            destination = self.trash_dir / item["stored_name"]
+            moved = False
+            if source.exists():
+                shutil.move(str(source), str(destination))
+                moved = True
+            now = utc_now()
+            try:
+                with self._connect() as db:
+                    db.execute(
+                        """
+                        UPDATE documents
+                        SET trashed = 1, trashed_at = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (now, now, document_id),
+                    )
+                    self._log(
+                        db,
+                        "trashed",
+                        document_id=document_id,
+                        details=item["name"],
+                    )
+            except Exception:
+                if moved and destination.exists():
+                    shutil.move(str(destination), str(source))
+                raise
+            return self.get(document_id, include_trashed=True)
 
     def restore(self, document_id: str) -> dict[str, Any]:
-        item = self.get(document_id, include_trashed=True)
-        if not item["trashed"]:
-            return item
-        source = self.trash_dir / item["stored_name"]
-        destination = self.files_dir / item["stored_name"]
-        if not source.is_file():
-            raise FileNotFoundError(document_id)
-        shutil.move(str(source), str(destination))
-        now = utc_now()
-        with self._connect() as db:
-            db.execute(
-                """
-                UPDATE documents
-                SET trashed = 0, trashed_at = NULL, updated_at = ?
-                WHERE id = ?
-                """,
-                (now, document_id),
-            )
-            self._log(
-                db,
-                "restored",
-                document_id=document_id,
-                details=item["name"],
-            )
-        return self.get(document_id)
+        with self._mutation_lock:
+            item = self.get(document_id, include_trashed=True)
+            if not item["trashed"]:
+                return item
+            source = self.trash_dir / item["stored_name"]
+            destination = self.files_dir / item["stored_name"]
+            if not source.is_file():
+                raise FileNotFoundError(document_id)
+            shutil.move(str(source), str(destination))
+            now = utc_now()
+            try:
+                with self._connect() as db:
+                    db.execute(
+                        """
+                        UPDATE documents
+                        SET trashed = 0, trashed_at = NULL, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (now, document_id),
+                    )
+                    self._log(
+                        db,
+                        "restored",
+                        document_id=document_id,
+                        details=item["name"],
+                    )
+            except Exception:
+                if destination.exists():
+                    shutil.move(str(destination), str(source))
+                raise
+            return self.get(document_id)
+

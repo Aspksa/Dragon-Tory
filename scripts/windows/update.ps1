@@ -418,7 +418,10 @@ try {
     }
     Write-UpdateLog "INFO" "Скачивается архив GitHub: $remoteSha"
 
-    $zipUrl = "$repoApi/zipball/$Branch"
+    # Pin the archive to the exact commit already checked above. This avoids
+    # installing different bytes if the branch moves between the metadata
+    # request and the archive download.
+    $zipUrl = "$repoApi/zipball/$remoteSha"
     Invoke-WebRequest -Uri $zipUrl -OutFile $ZipFile -Headers @{
         "Accept" = "application/vnd.github+json"
         "User-Agent" = "Dragon-Tory-Updater"

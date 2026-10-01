@@ -135,6 +135,18 @@ def save_deepseek_settings(
             api_key=payload.api_key,
             base_url=config["base_url"],
             model=config["model"],
+            timeout_seconds=request.app.state.settings.deepseek_timeout_seconds,
+            max_attempts=request.app.state.settings.deepseek_max_attempts,
+            retry_base_seconds=(
+                request.app.state.settings.deepseek_retry_base_seconds
+            ),
+            retry_max_seconds=request.app.state.settings.deepseek_retry_max_seconds,
+            circuit_breaker_failures=(
+                request.app.state.settings.deepseek_circuit_breaker_failures
+            ),
+            circuit_breaker_cooldown_seconds=(
+                request.app.state.settings.deepseek_circuit_breaker_cooldown_seconds
+            ),
         )
     )
     request.app.state.deepseek_config = {

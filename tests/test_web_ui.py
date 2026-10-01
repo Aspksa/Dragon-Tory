@@ -1,3 +1,5 @@
+import re
+
 from fastapi.testclient import TestClient
 
 from tooru.main import app
@@ -22,6 +24,8 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="homeBrainTooltip"' in response.text
     assert 'id="documentModuleStudy"' in response.text
     assert "/assets/cytoscape.min.js" in response.text
+    assert "/assets/styles.css" in response.text
+    assert "/assets/app.js" in response.text
     assert 'id="homeBrainSvg"' in response.text
     assert 'id="homeBrainViewport"' in response.text
     assert 'id="homeNodeDrawer"' in response.text
@@ -74,7 +78,6 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="cloudDropZone"' in response.text
     assert 'id="cloudFileInput"' in response.text
     assert 'id="passportModal"' in response.text
-    assert ".passport-backdrop[hidden]{display:none!important}" in response.text
     assert 'id="passportVerify"' in response.text
     assert "Мой диск Тори · личный документ" in response.text
     assert "Центр документа Тори" in response.text
@@ -272,3 +275,51 @@ def test_cytoscape_is_bundled_locally() -> None:
     assert response.status_code == 200
     assert "cytoscape" in response.text.lower()
     assert "javascript" in response.headers["content-type"]
+
+
+
+def test_dashboard_assets_are_served_separately() -> None:
+    with TestClient(app) as client:
+        css = client.get("/assets/styles.css")
+        javascript = client.get("/assets/app.js")
+
+    assert css.status_code == 200
+    assert ".passport-backdrop[hidden]" in css.text
+    assert "text/css" in css.headers["content-type"]
+
+    assert javascript.status_code == 200
+    assert "function sendChat()" in javascript.text
+    assert "withBusyButton" in javascript.text
+    assert "javascript" in javascript.headers["content-type"]
+
+
+def test_every_static_button_has_a_javascript_handler() -> None:
+    with TestClient(app) as client:
+        html = client.get("/").text
+        javascript = client.get("/assets/app.js").text
+
+    button_ids = set(
+        re.findall(r'<button[^>]+id="([^"]+)"', html)
+    )
+    assert button_ids
+
+    missing = []
+    for button_id in sorted(button_ids):
+        token = '$("' + button_id + '")'
+        if token not in javascript:
+            missing.append(button_id)
+
+    assert missing == []
+
+
+def test_html_has_no_duplicate_ids() -> None:
+    with TestClient(app) as client:
+        html = client.get("/").text
+
+    ids = re.findall(r'\bid="([^"]+)"', html)
+    duplicates = sorted(
+        identifier
+        for identifier in set(ids)
+        if ids.count(identifier) > 1
+    )
+    assert duplicates == []

@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from ipaddress import ip_address
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
@@ -30,6 +32,7 @@ from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import GuardianConfig, MemoryGuardian
 from tooru.memory.guardian_automation import MemoryGuardianAutomation
+from tooru.memory.intake import MemoryIntakeGateway
 from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.maintenance import MemoryAutomation
 from tooru.memory.store import SQLiteMemoryStore
@@ -72,6 +75,14 @@ async def lifespan(app: FastAPI):
                 api_key=settings.deepseek_api_key,
                 base_url=settings.deepseek_base_url,
                 model=settings.deepseek_model,
+                timeout_seconds=settings.deepseek_timeout_seconds,
+                max_attempts=settings.deepseek_max_attempts,
+                retry_base_seconds=settings.deepseek_retry_base_seconds,
+                retry_max_seconds=settings.deepseek_retry_max_seconds,
+                circuit_breaker_failures=settings.deepseek_circuit_breaker_failures,
+                circuit_breaker_cooldown_seconds=(
+                    settings.deepseek_circuit_breaker_cooldown_seconds
+                ),
             )
         )
 
@@ -98,6 +109,8 @@ async def lifespan(app: FastAPI):
             retry_delay_seconds=settings.memory_guardian_retry_delay_seconds,
         ),
     )
+
+    memory_intake = MemoryIntakeGateway(guardian)
 
     guardian_automation = MemoryGuardianAutomation(
         guardian,
@@ -135,9 +148,12 @@ async def lifespan(app: FastAPI):
         "configured": bool(settings.deepseek_api_key),
         "base_url": settings.deepseek_base_url,
         "model": settings.deepseek_model,
+        "timeout_seconds": settings.deepseek_timeout_seconds,
+        "max_attempts": settings.deepseek_max_attempts,
     }
     app.state.memory_intelligence = intelligence
     app.state.memory_guardian = guardian
+    app.state.memory_intake = memory_intake
     app.state.memory_guardian_automation = guardian_automation
     app.state.memory_automation = automation
     app.state.chat_pipeline = ChatPipeline(
@@ -160,6 +176,16 @@ async def lifespan(app: FastAPI):
         await automation.stop()
 
 
+def _is_loopback_host(value: str | None) -> bool:
+    host = (value or "").strip().split("%", 1)[0]
+    if host.casefold() in {"localhost", "testclient"}:
+        return True
+    try:
+        return ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
@@ -167,6 +193,24 @@ def create_app() -> FastAPI:
         version=settings.version,
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def local_api_guard(request: Request, call_next):
+        if settings.allow_remote_api or _is_loopback_host(
+            request.client.host if request.client else None
+        ):
+            return await call_next(request)
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": (
+                    "Dragon Tory API доступен только локально. "
+                    "Удалённый доступ требует отдельного защищённого "
+                    "слоя аутентификации и авторизации."
+                )
+            },
+        )
+
     app.include_router(home_router)
     app.include_router(health_router)
     app.include_router(chat_router)
@@ -186,6 +230,11 @@ app = create_app()
 
 def run() -> None:
     settings = get_settings()
+    if not settings.allow_remote_api and not _is_loopback_host(settings.host):
+        raise RuntimeError(
+            "Небезопасная привязка API заблокирована: используйте "
+            "127.0.0.1/localhost, пока не настроен защищённый удалённый доступ."
+        )
     uvicorn.run(
         "tooru.main:app",
         host=settings.host,

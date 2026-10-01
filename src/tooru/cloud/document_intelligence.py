@@ -192,8 +192,16 @@ class DocumentIntelligence:
         self.db_path = cloud_store.db_path
 
     def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.db_path)
+        db = sqlite3.connect(
+            self.db_path,
+            timeout=30,
+            check_same_thread=False,
+        )
         db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys=ON")
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA synchronous=NORMAL")
+        db.execute("PRAGMA busy_timeout=30000")
         return db
 
     def initialize(self) -> None:

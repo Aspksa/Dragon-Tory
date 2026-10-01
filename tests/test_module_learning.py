@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from tooru.ai.router import AIRouter
 from tooru.cloud.document_intelligence import DocumentIntelligence
 from tooru.cloud.module_learning import ModuleLearningService
 from tooru.cloud.smart import SmartDrive
@@ -10,6 +11,9 @@ from tooru.cloud.store import CloudStore
 from tooru.cloud.vault import ToryVault
 from tooru.memory.embedding import HashEmbeddingProvider
 from tooru.memory.engine import MemoryEngine
+from tooru.memory.guardian import GuardianConfig, MemoryGuardian
+from tooru.memory.intake import MemoryIntakeGateway
+from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.models import MemoryScope, MemorySearch
 from tooru.memory.store import SQLiteMemoryStore
 
@@ -38,8 +42,20 @@ def _stack(tmp_path: Path):
         embedder=HashEmbeddingProvider(128),
     )
     memory.initialize()
+    guardian = MemoryGuardian(
+        MemoryIntelligence(
+            memory,
+            AIRouter(),
+            IntelligenceConfig(
+                primary_provider="deepseek",
+                reviewer_provider="deepseek",
+            ),
+        ),
+        memory_store,
+        GuardianConfig(),
+    )
     learning = ModuleLearningService(
-        memory=memory,
+        memory_intake=MemoryIntakeGateway(guardian),
         smart=smart,
         intelligence=intelligence,
         ai_router=NoAI(),

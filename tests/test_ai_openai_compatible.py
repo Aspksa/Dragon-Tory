@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from tooru.ai.base import AIRequest
-from tooru.ai.openai_compatible import OpenAICompatibleProvider
+from tooru.ai.openai_compatible import AICircuitOpenError, OpenAICompatibleProvider
 
 
 class FakeCompletions:
@@ -57,3 +57,78 @@ async def test_openai_compatible_provider_builds_chat_request() -> None:
         {"role": "system", "content": "Ты внутренний AI памяти."},
         {"role": "user", "content": "Проверь память"},
     ]
+
+
+
+class FlakyCompletions:
+    def __init__(self, failures: int) -> None:
+        self.failures = failures
+        self.calls = 0
+
+    async def create(self, **kwargs):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise RuntimeError("temporary provider failure")
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="recovered")
+                )
+            ]
+        )
+
+
+class FlakyClient:
+    def __init__(self, failures: int) -> None:
+        self.completions = FlakyCompletions(failures)
+        self.chat = SimpleNamespace(completions=self.completions)
+
+
+@pytest.mark.asyncio
+async def test_provider_retries_transient_failure() -> None:
+    client = FlakyClient(failures=1)
+    provider = OpenAICompatibleProvider(
+        name="deepseek",
+        api_key="test-key",
+        base_url="https://example.invalid/v1",
+        model="deepseek-test",
+        client=client,
+        max_attempts=2,
+        retry_base_seconds=0,
+        circuit_breaker_failures=5,
+    )
+
+    result = await provider.generate(
+        AIRequest(messages=[{"role": "user", "content": "test"}])
+    )
+
+    assert result.text == "recovered"
+    assert client.completions.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_provider_circuit_breaker_stops_repeat_failures() -> None:
+    client = FlakyClient(failures=10)
+    provider = OpenAICompatibleProvider(
+        name="deepseek",
+        api_key="test-key",
+        base_url="https://example.invalid/v1",
+        model="deepseek-test",
+        client=client,
+        max_attempts=1,
+        retry_base_seconds=0,
+        circuit_breaker_failures=1,
+        circuit_breaker_cooldown_seconds=60,
+    )
+
+    with pytest.raises(RuntimeError):
+        await provider.generate(
+            AIRequest(messages=[{"role": "user", "content": "first"}])
+        )
+
+    with pytest.raises(AICircuitOpenError):
+        await provider.generate(
+            AIRequest(messages=[{"role": "user", "content": "second"}])
+        )
+
+    assert client.completions.calls == 1

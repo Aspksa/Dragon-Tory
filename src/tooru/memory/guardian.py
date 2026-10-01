@@ -5,6 +5,8 @@ from typing import ClassVar
 
 from tooru.memory.intelligence import MemoryIntelligence
 from tooru.memory.models import (
+    ConversationMessage,
+    MemoryCreate,
     MemoryGuardianDecision,
     MemoryGuardianOutcome,
     MemoryGuardianQueueItem,
@@ -52,6 +54,90 @@ class MemoryGuardian:
         self.intelligence = intelligence
         self.store = store
         self.config = config
+
+    def ingest_structured(
+        self,
+        memory: MemoryCreate,
+        *,
+        reason: str = "Structured system memory intake.",
+        auto_apply: bool = True,
+    ) -> MemoryGuardianDecision:
+        """Apply Guardian policy to an already-structured memory candidate."""
+        request = MemoryGuardianRequest(
+            owner_id=memory.owner_id,
+            scope=memory.scope,
+            project_id=memory.project_id,
+            messages=[
+                ConversationMessage(
+                    role="tool",
+                    content=(
+                        f"Structured intake from {memory.source}: "
+                        f"{memory.content[:2_000]}"
+                    ),
+                )
+            ],
+            auto_apply=auto_apply,
+            use_ai=False,
+            device_id=memory.device_id,
+            session_id=memory.session_id,
+        )
+        decision = MemoryIntelligenceDecision(
+            action=MemoryIntelligenceAction.CREATE,
+            content=memory.content,
+            kind=memory.kind,
+            key=memory.key,
+            importance=memory.importance,
+            confidence=memory.confidence,
+            tags=memory.tags,
+            source=memory.source,
+            source_ref=memory.source_ref,
+            reason=reason,
+        )
+        risk, policy_reason = self._classify(request, decision)
+        outcome = self._outcome(
+            request=request,
+            decision=decision,
+            risk=risk,
+            analyzer="structured-intake",
+            reviewer=None,
+        )
+        memory_id: str | None = None
+        queue_id: str | None = None
+
+        if outcome is MemoryGuardianOutcome.APPLIED:
+            item = self.intelligence.engine.add(memory)
+            memory_id = item.id
+        elif outcome is MemoryGuardianOutcome.PENDING:
+            queued = self.store.queue_guardian_decision(
+                fingerprint=self._fingerprint(request, decision),
+                owner_id=memory.owner_id,
+                scope=memory.scope,
+                project_id=memory.project_id,
+                risk=risk,
+                decision=decision,
+                messages=request.messages,
+                analyzer="structured-intake",
+                reviewer=None,
+                max_attempts=self.config.max_attempts,
+                retry_delay_seconds=self.config.retry_delay_seconds,
+            )
+            queue_id = queued.id
+
+        guarded = MemoryGuardianDecision(
+            decision=decision,
+            risk=risk,
+            outcome=outcome,
+            policy_reason=policy_reason,
+            memory_id=memory_id,
+            queue_id=queue_id,
+        )
+        self._record_event(
+            request=request,
+            guardian_decision=guarded,
+            analyzer="structured-intake",
+            reviewer=None,
+        )
+        return guarded
 
     async def process(self, request: MemoryGuardianRequest) -> MemoryGuardianResult:
         intelligence_request = self._to_intelligence_request(request)

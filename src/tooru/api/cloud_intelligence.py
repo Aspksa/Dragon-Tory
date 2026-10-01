@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from tooru.ai.base import AIRequest
+from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.cloud.document_intelligence import OCRUnavailableError
 from tooru.cloud.intelligence import UnsupportedDocumentError
 from tooru.cloud.module_learning import ModuleLearningService
@@ -275,7 +276,7 @@ async def study_module(
     request: Request,
 ) -> dict[str, Any]:
     service = ModuleLearningService(
-        memory=request.app.state.memory,
+        memory_intake=request.app.state.memory_intake,
         smart=request.app.state.cloud_smart,
         intelligence=request.app.state.document_intelligence,
         ai_router=request.app.state.ai_router,
@@ -349,7 +350,11 @@ async def draft_from_module(
             )
             source_parts.append(
                 f"[Образец {source_no}: {item['name']} · "
-                f"v{item['version']}]\n{text}"
+                f"v{item['version']}]\n"
+                + wrap_untrusted_text(
+                    text,
+                    source=f"template:{item['id']}:v{item['version']}",
+                )
             )
 
         if not references:
@@ -370,7 +375,8 @@ async def draft_from_module(
                     "даты, номера, суммы или факты, если пользователь их не дал. "
                     "Не придумывай обязательные реквизиты: оставляй понятные "
                     "плейсхолдеры в квадратных скобках. Сохраняй деловой стиль. "
-                    "В конце перечисли, какие поля нужно проверить человеку."
+                    "В конце перечисли, какие поля нужно проверить человеку. "
+                    + UNTRUSTED_CONTENT_POLICY
                 ),
                 messages=[
                     {
@@ -532,7 +538,8 @@ async def semantic_version_compare(
                     "Не придумывай отсутствующие факты. Отдельно перечисли "
                     "изменения дат, сумм, обязательств, сроков, рисков и "
                     "добавленных/удалённых существенных условий. "
-                    "Для выводов указывай [Версия A] или [Версия B]."
+                    "Для выводов указывай [Версия A] или [Версия B]. "
+                    + UNTRUSTED_CONTENT_POLICY
                 ),
                 messages=[
                     {
@@ -540,10 +547,24 @@ async def semantic_version_compare(
                         "content": (
                             f"Версия A: v{first['version']} "
                             f"SHA-256 {first['sha256']}\n"
-                            f"{first_text}\n\n"
-                            f"Версия B: v{second['version']} "
+                            + wrap_untrusted_text(
+                                first_text,
+                                source=(
+                                    f"document:{document_id}:"
+                                    f"v{first['version']}"
+                                ),
+                            )
+                            + "\n\n"
+                            + f"Версия B: v{second['version']} "
                             f"SHA-256 {second['sha256']}\n"
-                            f"{second_text}\n\n"
+                            + wrap_untrusted_text(
+                                second_text,
+                                source=(
+                                    f"document:{document_id}:"
+                                    f"v{second['version']}"
+                                ),
+                            )
+                            + "\n\n"
                             "Локально найденные структурные отличия:\n"
                             + str(local_diff)
                             + "\n\nЗадача: "

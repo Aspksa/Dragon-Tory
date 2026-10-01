@@ -208,6 +208,8 @@ class MemoryIntelligenceDecision(BaseModel):
     importance: float = Field(default=0.5, ge=0.0, le=1.0)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     tags: list[str] = Field(default_factory=list, max_length=30)
+    source: str | None = Field(default=None, max_length=100)
+    source_ref: str | None = Field(default=None, max_length=500)
     target_memory_id: str | None = Field(default=None, max_length=200)
     reason: str = Field(default="", max_length=2_000)
 

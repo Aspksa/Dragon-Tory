@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 
+from tooru.cloud.key_protection import load_private_key, store_private_key
 from tooru.cloud.store import CloudStore
 
 _RELATION_TYPES = {
@@ -95,8 +96,16 @@ class SmartDrive:
         self.public_key_path = self.identity_dir / "seal_ed25519.pub"
 
     def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.db_path)
+        db = sqlite3.connect(
+            self.db_path,
+            timeout=30,
+            check_same_thread=False,
+        )
         db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys=ON")
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA synchronous=NORMAL")
+        db.execute("PRAGMA busy_timeout=30000")
         return db
 
     @staticmethod
@@ -2183,7 +2192,7 @@ class SmartDrive:
     def _private_key(self) -> Ed25519PrivateKey:
         if self.private_key_path.is_file():
             return Ed25519PrivateKey.from_private_bytes(
-                self.private_key_path.read_bytes()
+                load_private_key(self.private_key_path)
             )
         private = Ed25519PrivateKey.generate()
         private_bytes = private.private_bytes(
@@ -2195,8 +2204,12 @@ class SmartDrive:
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw,
         )
-        self.private_key_path.write_bytes(private_bytes)
+        store_private_key(self.private_key_path, private_bytes)
         self.public_key_path.write_bytes(public_bytes)
+        try:
+            self.public_key_path.chmod(0o644)
+        except OSError:
+            pass
         return private
 
     def _seal_payload(
