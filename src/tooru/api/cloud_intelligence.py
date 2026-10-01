@@ -89,6 +89,12 @@ def intelligence_status(request: Request) -> dict[str, Any]:
             "local_first": True,
             "external_ai_required": False,
             "stores_full_raw_text": False,
+            "engine": "document-intelligence-v2",
+            "chunk_first": True,
+            "structured_provenance": True,
+            "financial_checks": True,
+            "prompt_injection_scan": True,
+            "whole_document_sampling": True,
         },
         "supported_native": sorted(
             suffix.removeprefix(".").upper()
