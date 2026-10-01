@@ -201,6 +201,10 @@
           <button id="cloudKnowledgeGraph" class="secondary">🕸 Карта знаний</button>
           <button id="cloudTimeMachine" class="secondary">🕒 Машина времени</button>
           <button id="cloudAlerts" class="secondary">🔔 Сигналы</button>
+          <button id="cloudSmartSearch" class="secondary">🔎 Умный поиск</button>
+          <button id="cloudSmartCollections" class="secondary">🗂 Умные подборки</button>
+          <button id="cloudDeadlines" class="secondary">📅 Сроки</button>
+          <button id="cloudAnalyzePending" class="secondary">✨ Разобрать документы</button>
           <button id="cloudContentSearch" class="secondary">⌕ По содержимому</button>
           <button id="cloudNewFolder" class="secondary">＋ Папка</button>
           <button id="cloudUploadButton" class="primary">＋ Загрузить</button>
@@ -446,6 +450,9 @@
         <div class="spacer"></div>
         <div class="row">
           <button id="passportSave" class="primary">Сохранить паспорт</button>
+          <button id="passportAnalyze" class="secondary">✨ Понять документ</button>
+          <button id="passportInsights" class="secondary">🧠 Интеллект</button>
+          <button id="passportVersionMeaning" class="secondary">Δ Смысл версий</button>
           <button id="passportCard" class="secondary">💡 Карточка знаний</button>
           <button id="passportTimeline" class="secondary">🧬 История ДНК</button>
           <button id="passportRelations" class="secondary">🔗 Связи</button>
@@ -768,6 +775,69 @@ async function comparePassportDocument(){if(!activePassportId)return;const other
 async function sealPassportDocument(){if(!activePassportId)return;openSmartModal("🔏 Криптопечать Тори","Ed25519-подпись текущей версии");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/seal",{method:"POST"});$("smartBody").append(smartLine("Печать создана","Версия: "+d.version+"\nОтпечаток ключа: "+d.public_key_fingerprint+"\nSHA паспорта: "+d.payload_sha256,"smart-good"));$("smartBody").append(smartLine("Важно","Это локальная криптографическая печать этой установки Dragon Tory, не государственная квалифицированная электронная подпись."))}catch(e){$("smartStatus").textContent=e.message}}
 async function verifyPassportSeal(){if(!activePassportId)return;openSmartModal("✓ Проверка криптопечати","Подпись и физическая целостность");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/seal/verify",{method:"POST"});$("smartBody").append(smartLine(d.ok?"Печать подтверждена":"Проверка не пройдена","Подпись: "+(d.signature_valid?"верна":"ошибка")+"\nФайл: "+(d.storage_verified===null?"не проверен":(d.storage_verified?"совпадает":"изменён"))+"\n"+d.storage_message,d.ok?"smart-good":"smart-danger"));$("smartBody").append(smartLine("Отпечаток ключа",d.public_key_fingerprint))}catch(e){$("smartStatus").textContent=e.message}}
 async function showWatchers(){if(!activePassportId)return;openSmartModal("👁 Наблюдатели","Реакция на будущие изменения");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/watchers");const actions=document.createElement("div");actions.className="smart-actions";[["version_changed","Версии"],["integrity_failed","Целостность"],["passport_changed","Паспорт"],["seal_failed","Криптопечать"]].forEach(([event,label])=>{const b=document.createElement("button");b.className="secondary";b.textContent="＋ "+label;b.onclick=async()=>{try{await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/watchers",{method:"POST",body:JSON.stringify({event_type:event,config:{}})});showWatchers()}catch(e){$("smartStatus").textContent=e.message}};actions.append(b)});$("smartBody").append(actions);d.items.forEach(w=>$("smartBody").append(smartLine(w.event_type,w.enabled?"Активен":"Выключен")))}catch(e){$("smartStatus").textContent=e.message}}
+function formatEntitySummary(entities){
+  const parts=[];
+  if(entities.vin&&entities.vin.length)parts.push("VIN: "+entities.vin.join(", "));
+  if(entities.references&&entities.references.length)parts.push("Номера: "+entities.references.join(", "));
+  if(entities.dates&&entities.dates.length)parts.push("Даты: "+entities.dates.join(", "));
+  if(entities.amounts&&entities.amounts.length)parts.push("Суммы: "+entities.amounts.slice(0,12).map(x=>x.value+" "+x.currency).join(", "));
+  if(entities.emails&&entities.emails.length)parts.push("E-mail: "+entities.emails.join(", "));
+  if(entities.iban&&entities.iban.length)parts.push("IBAN: "+entities.iban.join(", "));
+  return parts.join("\n")||"Структурированные сущности не найдены.";
+}
+async function analyzePassportIntelligence(){
+  if(!activePassportId)return;openSmartModal("✨ Tory Document Intelligence","Локальный анализ без передачи документа во внешний ИИ");
+  try{
+    $("smartStatus").textContent="Анализирую документ локально…";
+    const d=await api("/v1/cloud/intelligence/files/"+encodeURIComponent(activePassportId)+"/analyze",{method:"POST"});
+    $("smartBody").append(smartLine("Тип документа",d.kind+" · уверенность "+Math.round(d.confidence*100)+"%","smart-good"));
+    $("smartBody").append(smartLine("Краткий фрагмент",d.summary_local||"—"));
+    $("smartBody").append(smartLine("Сущности",formatEntitySummary(d.entities)));
+    $("smartBody").append(smartLine("Сроки",d.deadlines.length?d.deadlines.map(x=>x.date+" · "+x.context).join("\n\n"):"Сроки не обнаружены."));
+    $("smartBody").append(smartLine("Предлагаемые теги",d.suggested_tags.join(", ")||"—"));
+    $("smartBody").append(smartLine("Предлагаемые связи",d.suggested_relations.length?d.suggested_relations.map(x=>x.name+" · score "+x.score).join("\n"):"Пока нет."));
+    $("smartBody").append(smartLine("Способ извлечения",d.extraction_method+(d.ocr_used?" · использован локальный OCR":" · OCR не использован"),"smart-good"));
+    const apply=document.createElement("button");apply.className="primary";apply.textContent="Применить теги и тип к ДНК";apply.onclick=async()=>{try{await api("/v1/cloud/intelligence/files/"+encodeURIComponent(activePassportId)+"/apply-suggestions",{method:"POST",body:JSON.stringify({apply_tags:true,apply_kind_to_dna:true})});$("smartStatus").textContent="Предложения применены после вашего подтверждения.";await openPassport(activePassportId);await loadCloud()}catch(e){$("smartStatus").textContent=e.message}};$("smartBody").append(apply);
+    $("smartStatus").textContent="Анализ завершён. Полный сырой текст в отчёте Intelligence не хранится.";
+  }catch(e){
+    $("smartStatus").textContent=e.message;
+    try{const statusData=await api("/v1/cloud/intelligence/status");$("smartBody").append(smartLine("OCR",statusData.ocr.available?"Доступен локально · "+(statusData.ocr.preferred_language||"язык по умолчанию"):"Не установлен. Сканы не отправляются во внешний ИИ автоматически.",statusData.ocr.available?"smart-good":"smart-danger"))}catch{}
+  }
+}
+async function showPassportIntelligence(){
+  if(!activePassportId)return;openSmartModal("🧠 Интеллект документа","Последний анализ текущей версии");
+  try{const d=await api("/v1/cloud/intelligence/files/"+encodeURIComponent(activePassportId));$("smartBody").append(smartLine("Классификация",d.kind+" · "+Math.round(d.confidence*100)+"%"));$("smartBody").append(smartLine("Сущности",formatEntitySummary(d.entities)));$("smartBody").append(smartLine("Сроки",d.deadlines.length?d.deadlines.map(x=>x.date+" · "+x.context).join("\n\n"):"Нет"));$("smartBody").append(smartLine("Теги",d.suggested_tags.join(", ")||"—"));$("smartBody").append(smartLine("Извлечение",d.extraction_method+" · OCR: "+(d.ocr_used?"да":"нет")+" · "+fmtChatDate(d.analyzed_at)))}catch(e){$("smartStatus").textContent="Текущая версия ещё не проанализирована: "+e.message}
+}
+async function semanticVersionCompare(){
+  if(!activePassportId)return;
+  try{
+    const versions=await api("/v1/cloud/files/"+encodeURIComponent(activePassportId)+"/versions");
+    if(versions.items.length<2){$("passportStatus").textContent="Для сравнения нужны минимум две версии.";return}
+    const defaults=versions.items.slice(0,2).map(x=>x.version);
+    const first=Number(prompt("Первая версия:",String(defaults[1]||defaults[0])));if(!first)return;
+    const second=Number(prompt("Вторая версия:",String(defaults[0])));if(!second)return;
+    openSmartModal("Δ Смысловое сравнение версий","DeepSeek получает только тексты двух выбранных версий при разрешённом ИИ-договоре");
+    const local=await api("/v1/cloud/intelligence/files/"+encodeURIComponent(activePassportId)+"/versions/diff?first_version="+first+"&second_version="+second);
+    $("smartBody").append(smartLine("Локально найдено","Добавлены даты: "+(local.dates_added.join(", ")||"—")+"\nУдалены даты: "+(local.dates_removed.join(", ")||"—")+"\nДобавлены суммы: "+(local.amounts_added.map(x=>x.value+" "+x.currency).join(", ")||"—")+"\nУдалены суммы: "+(local.amounts_removed.map(x=>x.value+" "+x.currency).join(", ")||"—")));
+    const run=document.createElement("button");run.className="primary";run.textContent="Сделать смысловое сравнение через DeepSeek";run.onclick=async()=>{try{$("smartStatus").textContent="Сравниваю версии…";const d=await api("/v1/cloud/intelligence/files/"+encodeURIComponent(activePassportId)+"/versions/semantic-compare",{method:"POST",body:JSON.stringify({first_version:first,second_version:second,question:"Сравни версии по смыслу и перечисли существенные изменения."})});$("smartBody").append(smartLine("Ответ Тоору",d.answer,"smart-good"));$("smartBody").append(smartLine("Доказательство","v"+d.version_a+" · "+d.sha256_a+"\nv"+d.version_b+" · "+d.sha256_b));$("smartStatus").textContent="Сравнение завершено. В память ничего не записано."}catch(e){$("smartStatus").textContent=e.message}};$("smartBody").append(run);
+  }catch(e){$("passportStatus").textContent=e.message}
+}
+async function smartDriveSearch(){
+  const query=prompt("Что найти? Например: «Subaru 2026 больше €500»");if(!query||!query.trim())return;openSmartModal("🔎 Умный поиск Тори",query);
+  try{const d=await api("/v1/cloud/intelligence/search?query="+encodeURIComponent(query.trim()));if(!d.items.length){$("smartBody").append(smartLine("Ничего не найдено","Сначала проанализируйте документы кнопкой «Разобрать документы»."));return}d.items.forEach(item=>{const row=smartLine(item.name,item.kind+" · score "+item.score+"\n"+(item.summary||""));row.style.cursor="pointer";row.onclick=()=>{closeSmartModal();openPassport(item.document_id)};$("smartBody").append(row)})}catch(e){$("smartStatus").textContent=e.message}
+}
+async function showSmartCollections(){
+  openSmartModal("🗂 Умные подборки","Виртуальные папки без физического перемещения файлов");
+  try{const d=await api("/v1/cloud/intelligence/collections");d.items.forEach(collection=>{const row=document.createElement("div");row.className="smart-line";const title=document.createElement("strong");title.textContent=collection.title+" · "+collection.count;const open=document.createElement("button");open.className="secondary";open.textContent="Открыть";open.onclick=async()=>{try{const files=await api("/v1/cloud/intelligence/collections/"+encodeURIComponent(collection.id)+"/files");$("smartBody").innerHTML="";$("smartSubtitle").textContent=collection.title;files.items.forEach(item=>{const r=smartLine(item.name,item.id+" · v"+item.version);r.style.cursor="pointer";r.onclick=()=>{closeSmartModal();openPassport(item.id)};$("smartBody").append(r)})}catch(e){$("smartStatus").textContent=e.message}};row.append(title,open);$("smartBody").append(row)})}catch(e){$("smartStatus").textContent=e.message}
+}
+async function showDocumentDeadlines(){
+  openSmartModal("📅 Сроки документов","Даты найдены локально по контексту документа");
+  try{const d=await api("/v1/cloud/intelligence/deadlines");if(!d.items.length)$("smartBody").append(smartLine("Сроки","Пока не обнаружены."));d.items.forEach(x=>{const row=smartLine(x.date,x.document_name+" · v"+x.version+"\n"+x.context);row.style.cursor="pointer";row.onclick=()=>{closeSmartModal();openPassport(x.document_id)};$("smartBody").append(row)})}catch(e){$("smartStatus").textContent=e.message}
+}
+async function analyzePendingDocuments(){
+  openSmartModal("✨ Разбор документов Тори","Обрабатываются только документы с разрешённым локальным чтением");
+  try{const statusData=await api("/v1/cloud/intelligence/status");$("smartBody").append(smartLine("OCR",statusData.ocr.available?"Tesseract доступен · "+(statusData.ocr.preferred_language||"язык по умолчанию"):"Tesseract не найден. Текстовые документы будут разобраны, сканы будут пропущены.",statusData.ocr.available?"smart-good":""));$("smartStatus").textContent="Разбираю до 20 документов…";const d=await api("/v1/cloud/intelligence/analyze-pending?limit=20",{method:"POST"});$("smartBody").append(smartLine("Готово","Проанализировано: "+d.analyzed.length+"\nПропущено: "+d.skipped.length));if(d.analyzed.length)$("smartBody").append(smartLine("Распознано",d.analyzed.map(x=>x.name+" → "+x.kind+(x.ocr_used?" · OCR":"")).join("\n")));if(d.skipped.length)$("smartBody").append(smartLine("Пропущено",d.skipped.map(x=>x.document_id+" · "+x.reason).join("\n"),"smart-danger"));$("smartStatus").textContent="Пакетный анализ завершён."}catch(e){$("smartStatus").textContent=e.message}
+}
 async function showKnowledgeGraph(){openSmartModal("🕸 Карта знаний","Связи между документами");try{const d=await api("/v1/cloud/smart/graph");$("smartBody").append(smartLine("Масштаб","Документов: "+d.nodes.length+" · связей: "+d.edges.length));d.edges.forEach(e=>{const a=d.nodes.find(n=>n.id===e.source_id),b=d.nodes.find(n=>n.id===e.target_id);$("smartBody").append(smartLine(e.relation_type,(a?a.name:e.source_id)+" → "+(b?b.name:e.target_id)))})}catch(e){$("smartStatus").textContent=e.message}}
 async function showTimeMachine(){openSmartModal("🕒 Машина времени Тори","Снимки структуры и версий диска");try{const d=await api("/v1/cloud/smart/snapshots");const create=document.createElement("button");create.className="primary";create.textContent="＋ Создать снимок сейчас";create.onclick=async()=>{const label=prompt("Название снимка:","Снимок "+new Date().toLocaleString())||"Снимок диска";try{await api("/v1/cloud/smart/snapshots",{method:"POST",body:JSON.stringify({label})});showTimeMachine()}catch(e){$("smartStatus").textContent=e.message}};$("smartBody").append(create);d.items.forEach(s=>{const row=document.createElement("div");row.className="smart-line";const title=document.createElement("strong");title.textContent=s.label;const meta=document.createElement("div");meta.className="muted";meta.textContent=fmtChatDate(s.created_at);const restore=document.createElement("button");restore.className="secondary";restore.textContent="Восстановить";restore.onclick=async()=>{if(!confirm("Восстановить имена, расположение и доступную версию? Текущие правила безопасности будут сохранены."))return;try{const r=await api("/v1/cloud/smart/snapshots/"+encodeURIComponent(s.id)+"/restore",{method:"POST"});$("smartStatus").textContent="Восстановлено: "+r.restored_documents+" · пропущено: "+r.skipped_documents;await loadCloud()}catch(e){$("smartStatus").textContent=e.message}};row.append(title,meta,restore);$("smartBody").append(row)})}catch(e){$("smartStatus").textContent=e.message}}
 async function showCloudAlerts(){openSmartModal("🔔 Сигналы Тори","События от наблюдателей");try{const d=await api("/v1/cloud/smart/alerts");if(!d.items.length)$("smartBody").append(smartLine("Спокойно","Новых сигналов нет.","smart-good"));d.items.forEach(a=>{const row=smartLine(a.title,a.document_name+"\n"+a.message,a.severity==="high"?"smart-danger":"");const resolve=document.createElement("button");resolve.className="secondary";resolve.textContent="Закрыть сигнал";resolve.onclick=async()=>{await api("/v1/cloud/smart/alerts/"+encodeURIComponent(a.id)+"/resolve",{method:"POST"});showCloudAlerts()};row.append(resolve);$("smartBody").append(row)})}catch(e){$("smartStatus").textContent=e.message}}
@@ -824,7 +894,7 @@ async function trashPassport(){
   if(!activePassportId||!confirm("Переместить документ в корзину?"))return;
   try{await api("/v1/cloud/files/"+encodeURIComponent(activePassportId),{method:"DELETE"});closePassport();await loadCloud()}catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
 }
-$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);$("cloudNewFolder").onclick=createCloudFolder;$("cloudContentSearch").onclick=searchCloudContent;$("cloudVault").onclick=openVault;$("cloudKnowledgeGraph").onclick=showKnowledgeGraph;$("cloudTimeMachine").onclick=showTimeMachine;$("cloudAlerts").onclick=showCloudAlerts;
+$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);$("cloudNewFolder").onclick=createCloudFolder;$("cloudContentSearch").onclick=searchCloudContent;$("cloudVault").onclick=openVault;$("cloudKnowledgeGraph").onclick=showKnowledgeGraph;$("cloudTimeMachine").onclick=showTimeMachine;$("cloudAlerts").onclick=showCloudAlerts;$("cloudSmartSearch").onclick=smartDriveSearch;$("cloudSmartCollections").onclick=showSmartCollections;$("cloudDeadlines").onclick=showDocumentDeadlines;$("cloudAnalyzePending").onclick=analyzePendingDocuments;
 $("cloudRoot").onclick=()=>{cloudCurrentFolder=null;cloudFolderStack=[];cloudTrashMode=false;cloudFavoritesOnly=false;loadCloud()};
 $("cloudFavorites").onclick=()=>{cloudFavoritesOnly=!cloudFavoritesOnly;cloudTrashMode=false;loadCloud()};
 $("cloudTrash").onclick=()=>{cloudTrashMode=true;cloudFavoritesOnly=false;loadCloud()};$("cloudSort").onchange=loadCloud;
@@ -832,7 +902,7 @@ $("cloudDropZone").onclick=()=>$("cloudFileInput").click();$("cloudDropZone").on
 ["dragenter","dragover"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.add("dragging")}));
 ["dragleave","drop"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.remove("dragging")}));
 $("cloudDropZone").addEventListener("drop",e=>uploadCloudFiles(e.dataTransfer.files));$("cloudSearch").addEventListener("input",()=>{clearTimeout(cloudSearchTimer);cloudSearchTimer=setTimeout(loadCloud,250)});
-$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportVerify").onclick=verifyPassportIntegrity;$("passportPreview").onclick=previewPassportDocument;$("passportIndexNow").onclick=indexPassportDocument;$("passportAsk").onclick=askPassportDocument;$("passportCard").onclick=showKnowledgeCard;$("passportTimeline").onclick=showDnaTimeline;$("passportRelations").onclick=showRelations;$("passportCleanRoom").onclick=cleanRoomAsk;$("passportCompare").onclick=comparePassportDocument;$("passportSeal").onclick=sealPassportDocument;$("passportSealVerify").onclick=verifyPassportSeal;$("passportWatchers").onclick=showWatchers;$("passportVersions").onclick=showPassportVersions;$("passportActivity").onclick=showPassportActivity;$("passportNewVersion").onclick=()=>$("passportVersionInput").click();$("passportVersionInput").onchange=e=>{const file=e.target.files[0];e.target.value="";uploadNewPassportVersion(file)};$("passportTrash").onclick=trashPassport;
+$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportVerify").onclick=verifyPassportIntegrity;$("passportPreview").onclick=previewPassportDocument;$("passportIndexNow").onclick=indexPassportDocument;$("passportAsk").onclick=askPassportDocument;$("passportAnalyze").onclick=analyzePassportIntelligence;$("passportInsights").onclick=showPassportIntelligence;$("passportVersionMeaning").onclick=semanticVersionCompare;$("passportCard").onclick=showKnowledgeCard;$("passportTimeline").onclick=showDnaTimeline;$("passportRelations").onclick=showRelations;$("passportCleanRoom").onclick=cleanRoomAsk;$("passportCompare").onclick=comparePassportDocument;$("passportSeal").onclick=sealPassportDocument;$("passportSealVerify").onclick=verifyPassportSeal;$("passportWatchers").onclick=showWatchers;$("passportVersions").onclick=showPassportVersions;$("passportActivity").onclick=showPassportActivity;$("passportNewVersion").onclick=()=>$("passportVersionInput").click();$("passportVersionInput").onchange=e=>{const file=e.target.files[0];e.target.value="";uploadNewPassportVersion(file)};$("passportTrash").onclick=trashPassport;
 $("passportConfidentiality").onchange=applyConfidentialityPolicy;$("passportScope").onchange=()=>{$("passportProject").disabled=$("passportScope").value!=="project";if($("passportScope").value!=="project")$("passportProject").value=""};
 $("passportModal").addEventListener("click",e=>{if(e.target===$("passportModal"))closePassport()});$("smartClose").onclick=closeSmartModal;$("smartModal").addEventListener("click",e=>{if(e.target===$("smartModal"))closeSmartModal()});$("vaultClose").onclick=closeVault;$("vaultSetup").onclick=setupVault;$("vaultUnlock").onclick=unlockVault;$("vaultLock").onclick=lockVault;$("vaultModal").addEventListener("click",e=>{if(e.target===$("vaultModal"))closeVault()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("passportModal").hidden)closePassport();if(e.key==="Escape"&&!$("smartModal").hidden)closeSmartModal();if(e.key==="Escape"&&!$("vaultModal").hidden)closeVault()});
 
