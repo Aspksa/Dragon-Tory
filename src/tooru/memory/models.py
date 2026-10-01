@@ -38,6 +38,16 @@ class MemoryLinkType(StrEnum):
     SUPERSEDES = "supersedes"
     SUMMARIZES = "summarizes"
     SUPPORTS = "supports"
+    TEMPORAL_SUCCESSOR = "temporal_successor"
+    TEMPORAL_PREDECESSOR = "temporal_predecessor"
+
+
+class MemoryTruthStatus(StrEnum):
+    CURRENT = "current"
+    HISTORICAL = "historical"
+    FUTURE = "future"
+    UNDATED = "undated"
+    SUPERSEDED = "superseded"
 
 
 class MemoryIntelligenceAction(StrEnum):
@@ -164,6 +174,8 @@ class MemoryRecallHit(BaseModel):
     semantic_score: float
     lexical_score: float
     retrieval_score: float = 0.0
+    graph_score: float = 0.0
+    truth_score: float = 0.5
     importance_score: float
     confidence_score: float
     recency_score: float
@@ -206,6 +218,22 @@ class MemoryEvidence(MemoryEvidenceCreate):
     id: str
     memory_id: str
     created_at: str
+
+
+class MemoryTruthAssessment(BaseModel):
+    memory_id: str
+    trust_score: float = Field(ge=0.0, le=1.0)
+    confidence_score: float = Field(ge=0.0, le=1.0)
+    evidence_score: float = Field(ge=0.0, le=1.0)
+    feedback_score: float = Field(ge=0.0, le=1.0)
+    temporal_score: float = Field(ge=0.0, le=1.0)
+    support_score: float = Field(ge=0.0, le=1.0)
+    conflict_penalty: float = Field(ge=0.0, le=1.0)
+    evidence_count: int = Field(ge=0)
+    support_count: int = Field(ge=0)
+    conflict_count: int = Field(ge=0)
+    temporal_status: MemoryTruthStatus
+    reasons: list[str] = Field(default_factory=list, max_length=20)
 
 
 class MemoryFeedback(BaseModel):
