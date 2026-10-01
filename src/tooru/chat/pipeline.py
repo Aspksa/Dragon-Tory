@@ -194,7 +194,10 @@ class ChatPipeline:
             message,
             response_mode=response_mode,
             recent_history=recent_history,
-            memory_hits=context.project_hits,
+            memory_hits=[
+                *context.personal_hits,
+                *context.project_hits,
+            ],
         )
         plan: ReasoningPlan | None = None
         tree: ReasoningTree | None = None
