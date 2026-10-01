@@ -18,7 +18,7 @@ and isolated when providers change.
 7. Web UI — desktop/browser interface.
 8. Mobile clients — planned clients using the same backend contracts.
 
-## Memory Engine v5.2 / Cognitive Core III
+## Memory Engine v5.2 / Cognitive Core IV
 
 Capabilities:
 - hybrid semantic and lexical recall;
@@ -44,6 +44,10 @@ Additional cognitive layers:
 - Truth Engine — explainable confidence/evidence/temporal/conflict assessment.
 - Graph Retrieval — one-hop expansion over typed memory relationships.
 - Temporal Conflict Resolver — distinguishes contradiction from succession in time.
+- Reasoning Planner — creates a bounded execution plan for complex chat tasks.
+- Result Verifier — checks the answer against the task, plan and available context.
+- Experience Learning — proposes reusable rules only from repeated verified outcomes.
+- Guardian Gate — learned rules remain high-impact candidates until reviewed.
 
 See docs/MEMORY_ENGINE.md.
 
