@@ -331,17 +331,22 @@ function Test-Venv {
 }
 
 function Test-RuntimeDependencies {
+    $previousPreference = $ErrorActionPreference
     try {
+        $ErrorActionPreference = "Continue"
         $probe = "import importlib.util as u; mods=('fastapi','uvicorn','pydantic_settings'); raise SystemExit(0 if all(u.find_spec(m) for m in mods) else 1)"
-        & $VenvPython -c $probe *> $null
-        if ($LASTEXITCODE -ne 0) {
+        & $VenvPython -c $probe 1>$null 2>$null
+        $probeExit = $LASTEXITCODE
+        if ($probeExit -ne 0) {
             return $false
         }
 
-        & $VenvPython -m pip check *> $null
+        & $VenvPython -m pip check 1>$null 2>$null
         return ($LASTEXITCODE -eq 0)
     } catch {
         return $false
+    } finally {
+        $ErrorActionPreference = $previousPreference
     }
 }
 
@@ -435,6 +440,7 @@ try {
     }
 
     Write-LauncherLog "OK" "Virtual environment: $VenvPython"
+    Write-LauncherLog "INFO" "Computing pyproject integrity hash."
 
     $currentHash = Get-Sha256Hex -Path $PyProject
     $oldHash = ""
@@ -442,6 +448,7 @@ try {
         $oldHash = (Get-Content -LiteralPath $HashFile -Raw).Trim()
     }
 
+    Write-LauncherLog "INFO" "Checking runtime dependency state."
     $dependenciesReady = Test-RuntimeDependencies
     if ((-not $dependenciesReady) -or ($currentHash -ne $oldHash)) {
         Install-RuntimeDependencies
@@ -488,6 +495,14 @@ try {
     exit 0
 } catch {
     Write-LauncherLog "ERROR" $_.Exception.Message
+    if ($_.ScriptStackTrace) {
+        Write-LauncherLog "ERROR" ("PowerShell stack: " + $_.ScriptStackTrace)
+    }
+    try {
+        Add-Content -LiteralPath $LauncherLog -Value ($_ | Out-String) -Encoding UTF8
+    } catch {
+        # Do not mask the original startup failure.
+    }
     Write-Host ""
     Write-Host "Dragon Tory could not start." -ForegroundColor Red
     Write-Host "Details: $($_.Exception.Message)" -ForegroundColor Red
