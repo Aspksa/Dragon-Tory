@@ -17,7 +17,9 @@ def test_version_normalization(tmp_path: Path) -> None:
     service = make_service(tmp_path)
 
     assert service._display_version(__version__) == APP_VERSION
-    assert service._version_tuple(APP_VERSION) == (0, 0, 3)
+    assert service._version_tuple(APP_VERSION) == tuple(
+        int(part) for part in __version__.split(".")
+    )
     assert service._version_tuple("0.1.12") == (0, 1, 12)
 
 
