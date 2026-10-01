@@ -75,3 +75,25 @@ jobs:
           if ($content -notmatch 'pyproject\.toml') {
             throw "Bootstrap does not derive dependencies from pyproject.toml."
           }
+
+      - name: Validate update script syntax and protected data
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "scripts\windows\update.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Host $_.Message }
+            throw "update.ps1 contains PowerShell syntax errors."
+          }
+
+          $content = Get-Content -LiteralPath "scripts\windows\update.ps1" -Raw
+          foreach ($protected in @(".env", ".venv", "data", "runtime", "logs", "backups")) {
+            if ($content -notmatch [regex]::Escape('"' + $protected + '"')) {
+              throw "Updater does not protect: $protected"
+            }
+          }
