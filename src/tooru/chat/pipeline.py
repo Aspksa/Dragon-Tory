@@ -12,6 +12,7 @@ from tooru.memory.models import (
     MemoryGuardianRequest,
     MemoryScope,
 )
+from tooru.observability.context import observation_context
 
 PROJECT_ID = "dragon-tory"
 AI_PROVIDER = "deepseek"
@@ -148,19 +149,38 @@ class ChatPipeline:
             )
         )
 
-        response = await self.router.generate(
-            AI_PROVIDER,
-            AIRequest(
-                messages=messages,
-                system_prompt=system_prompt,
-                max_tokens=2_000,
-            ),
-        )
+        with observation_context(
+            module="chat",
+            source_type="chat",
+            source_id="user-message",
+            new_trace=True,
+        ):
+            if self.router.observability is not None:
+                self.router.observability.event(
+                    category="source",
+                    stage="source",
+                    operation="chat_message",
+                    status="success",
+                    module="chat",
+                    source_type="chat",
+                    source_id="user-message",
+                    message="Сообщение пользователя передано Тоору.",
+                )
+            response = await self.router.generate(
+                AI_PROVIDER,
+                AIRequest(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                    max_tokens=2_000,
+                ),
+                module="chat",
+                operation="chat_response",
+            )
 
-        memory_status = await self._remember(
-            user_message=message,
-            remember=remember,
-        )
+            memory_status = await self._remember(
+                user_message=message,
+                remember=remember,
+            )
 
         return ChatPipelineResult(
             answer=response.text,
