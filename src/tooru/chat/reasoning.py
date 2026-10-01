@@ -16,6 +16,7 @@ from tooru.memory.models import (
     MemoryCreate,
     MemoryKind,
     MemoryLinkType,
+    MemoryRecallHit,
     MemoryScope,
     MemorySearch,
 )
@@ -139,13 +140,17 @@ class CognitiveReasoning:
         *,
         response_mode: str,
         recent_history: list[str] | None = None,
+        memory_hits: list[MemoryRecallHit] | None = None,
     ) -> ReasoningRoute:
         complexity = self._complexity_score(
             message,
             response_mode=response_mode,
             recent_history=recent_history or [],
         )
-        uncertainty, contradictions = self._memory_signals(message)
+        uncertainty, contradictions = self._memory_signals(
+            message,
+            memory_hits=memory_hits,
+        )
         reasons: list[str] = []
 
         if complexity >= self.config.tree_complexity_threshold:
@@ -257,20 +262,28 @@ class CognitiveReasoning:
                 score += 0.20
         return max(0.0, min(1.0, score))
 
-    def _memory_signals(self, message: str) -> tuple[float, int]:
-        try:
-            hits = self.memory.recall(
+    def _memory_signals(
+        self,
+        message: str,
+        *,
+        memory_hits: list[MemoryRecallHit] | None = None,
+    ) -> tuple[float, int]:
+        if memory_hits is not None:
+            hits = memory_hits
+        else:
+            try:
+                hits = self.memory.recall(
                 MemorySearch(
                     owner_id="local-user",
                     scope=MemoryScope.PROJECT,
                     project_id=PROJECT_ID,
                     query=message,
                     limit=8,
-                ),
-                track_usage=False,
-            )
-        except Exception:  # noqa: BLE001 - routing must never break chat
-            return 0.0, 0
+                    ),
+                    track_usage=False,
+                )
+            except Exception:  # noqa: BLE001 - routing must never break chat
+                return 0.0, 0
 
         if not hits:
             return 0.0, 0
