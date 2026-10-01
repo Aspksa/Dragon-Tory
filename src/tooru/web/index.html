@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Дракончик Тоору</title>
+  <style>
+    :root{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#182230;background:#f5f7fb}
+    *{box-sizing:border-box} body{margin:0;min-height:100vh}
+    .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+    aside{background:#fff;border-right:1px solid #e6eaf0;padding:22px 16px;position:sticky;top:0;height:100vh}
+    .brand{padding:8px 10px 22px}.brand h1{font-size:20px;margin:0 0 5px}.muted{color:#667085;font-size:13px}
+    nav{display:grid;gap:7px}.nav{border:0;background:transparent;text-align:left;padding:12px 14px;border-radius:12px;font-size:15px;cursor:pointer;color:#344054}
+    .nav:hover,.nav.active{background:#f0f4ff;color:#1947b8;font-weight:700}
+    main{padding:28px;max-width:1380px;width:100%}.view{display:none}.view.active{display:block}
+    h2{margin:0 0 6px;font-size:28px}.lead{margin:0 0 22px;color:#667085}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+    .card{background:#fff;border:1px solid #e4e7ec;border-radius:16px;padding:18px;box-shadow:0 8px 28px rgba(16,24,40,.04)}
+    .label{font-size:12px;color:#667085;margin-bottom:8px}.value{font-size:21px;font-weight:750}.ok{color:#067647}.warn{color:#b54708}.bad{color:#b42318}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.spacer{height:16px}
+    input,textarea,select{width:100%;border:1px solid #d0d5dd;border-radius:11px;padding:11px 12px;font:inherit;background:#fff}
+    textarea{min-height:88px;resize:vertical}.field{margin-bottom:15px}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}
+    button.primary,button.secondary{border:0;border-radius:11px;padding:11px 15px;font-weight:700;cursor:pointer}
+    button.primary{background:#1947b8;color:white}button.secondary{background:#eef2f8;color:#344054}
+    .chatbox{height:52vh;overflow:auto;background:#fff;border:1px solid #e4e7ec;border-radius:16px;padding:16px;margin-bottom:14px}
+    .msg{max-width:82%;padding:11px 13px;border-radius:14px;margin:8px 0;white-space:pre-wrap;line-height:1.45}
+    .msg.user{margin-left:auto;background:#1947b8;color:#fff}.msg.assistant{background:#f2f4f7}.msg.system{background:#fff4e5;color:#7a2e0e;font-size:13px}
+    .diag-table{width:100%;border-collapse:collapse}.diag-table td{padding:9px 4px;border-bottom:1px solid #eef0f3}.diag-table td:last-child{text-align:right;font-weight:700}
+    .statusbar{font-size:13px;margin-top:10px;color:#667085}.secret-note{font-size:12px;color:#667085;margin-top:6px}
+    a{color:#1947b8;text-decoration:none;font-weight:650}
+    @media(max-width:800px){.app{grid-template-columns:1fr}aside{height:auto;position:static;border-right:0;border-bottom:1px solid #e6eaf0}nav{grid-template-columns:repeat(4,1fr)}.nav{text-align:center;padding:9px 4px;font-size:12px}main{padding:18px}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><h1>🐉 Дракончик Тоору</h1><div class="muted">Dragon Tory · 00.00.02</div></div>
+    <nav>
+      <button class="nav active" data-view="home">Главная</button>
+      <button class="nav" data-view="chat">Чат</button>
+      <button class="nav" data-view="diagnostics">Центр диагностики</button>
+      <button class="nav" data-view="settings">Настройки</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="muted" style="padding:10px"><a href="/docs" target="_blank">API / Swagger ↗</a></div>
+  </aside>
+
+  <main>
+    <section id="home" class="view active">
+      <h2>Главная</h2><p class="lead">Локальный центр проекта, AI и памяти.</p>
+      <div class="grid">
+        <div class="card"><div class="label">Backend</div><div id="homeBackend" class="value">Проверка…</div></div>
+        <div class="card"><div class="label">DeepSeek</div><div id="homeAI" class="value">Проверка…</div></div>
+        <div class="card"><div class="label">Memory Guardian</div><div id="homeGuardian" class="value">Проверка…</div></div>
+        <div class="card"><div class="label">Записей памяти</div><div id="homeMemories" class="value">—</div></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="card"><b>Система запущена с текущего носителя.</b><p class="muted">Диагностика обновляется автоматически. API-ключи хранятся только локально в .env и не показываются обратно в интерфейсе.</p></div>
+    </section>
+
+    <section id="chat" class="view">
+      <h2>Чат</h2><p class="lead">Проверка реальной работы DeepSeek API + контекста памяти + Guardian.</p>
+      <div id="chatBox" class="chatbox"><div class="msg system">Введите вопрос. Если API-ключ ещё не настроен, откройте «Настройки».</div></div>
+      <div class="grid" style="grid-template-columns:1fr 220px">
+        <div><textarea id="chatInput" placeholder="Напишите сообщение Тоору…"></textarea></div>
+        <div>
+          <div class="field"><label>Проект</label><input id="chatProject" value="dragon-tory"></div>
+          <label class="muted"><input id="chatRemember" type="checkbox" checked style="width:auto"> запоминать через Guardian</label>
+        </div>
+      </div>
+      <div class="row"><button id="sendChat" class="primary">Отправить</button><button id="clearChat" class="secondary">Очистить экран</button><span id="chatStatus" class="statusbar"></span></div>
+    </section>
+
+    <section id="diagnostics" class="view">
+      <h2>Центр диагностики</h2><p class="lead">Живые статусы системы. Обновление каждые 3 секунды.</p>
+      <div class="grid">
+        <div class="card"><div class="label">Backend</div><div id="dBackend" class="value">—</div></div>
+        <div class="card"><div class="label">DeepSeek API</div><div id="dAI" class="value">—</div></div>
+        <div class="card"><div class="label">Guardian</div><div id="dGuardian" class="value">—</div></div>
+        <div class="card"><div class="label">Memory Automation</div><div id="dMemoryAuto" class="value">—</div></div>
+        <div class="card"><div class="label">Guardian Automation</div><div id="dGuardianAuto" class="value">—</div></div>
+        <div class="card"><div class="label">RAM компьютера</div><div id="dRam" class="value">—</div></div>
+        <div class="card"><div class="label">RAM Dragon Tory</div><div id="dProcessRam" class="value">—</div></div>
+        <div class="card"><div class="label">Свободно на диске</div><div id="dDisk" class="value">—</div></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="grid">
+        <div class="card">
+          <b>Память Тоору</b>
+          <table class="diag-table">
+            <tr><td>Всего записей</td><td id="mTotal">—</td></tr>
+            <tr><td>Активных</td><td id="mActive">—</td></tr>
+            <tr><td>Архивных</td><td id="mArchived">—</td></tr>
+            <tr><td>Заменённых</td><td id="mSuperseded">—</td></tr>
+            <tr><td>Личная память</td><td id="mPersonal">—</td></tr>
+            <tr><td>Проектная память</td><td id="mProject">—</td></tr>
+            <tr><td>Размер БД</td><td id="mDb">—</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <b>Guardian Queue</b>
+          <table class="diag-table">
+            <tr><td>Ожидают</td><td id="qPending">—</td></tr>
+            <tr><td>Применено</td><td id="qApplied">—</td></tr>
+            <tr><td>Отклонено</td><td id="qRejected">—</td></tr>
+            <tr><td>Dead-letter</td><td id="qDead">—</td></tr>
+            <tr><td>Ошибок автоматики</td><td id="autoErrors">—</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="row"><button id="refreshDiag" class="secondary">Обновить сейчас</button><button id="runMaintenance" class="secondary">Запустить обслуживание памяти</button><span id="diagStatus" class="statusbar"></span></div>
+    </section>
+
+    <section id="settings" class="view">
+      <h2>Настройки</h2><p class="lead">Подключение Cloud.ru Foundation Models напрямую из веб-интерфейса.</p>
+      <div class="card" style="max-width:760px">
+        <div class="field"><label>Cloud.ru Key Secret</label><input id="apiKey" type="password" autocomplete="off" placeholder="Вставьте Key Secret"><div class="secret-note">Сохранённый ключ никогда не возвращается из API и не показывается в браузере.</div></div>
+        <div class="field"><label>Base URL</label><input id="baseUrl" value="https://foundation-models.api.cloud.ru/v1"></div>
+        <div class="field"><label>Модель</label><input id="modelName" value="deepseek-ai/DeepSeek-V4-Flash"></div>
+        <div class="row"><button id="saveSettings" class="primary">Сохранить ключ</button><button id="testSettings" class="secondary">Проверить API</button></div>
+        <div id="settingsStatus" class="statusbar">Загрузка состояния…</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const history=[];
+const $=id=>document.getElementById(id);
+const fmtBytes=n=>{if(n==null)return"—";const u=["Б","КБ","МБ","ГБ","ТБ"];let i=0,v=Number(n);while(v>=1024&&i<u.length-1){v/=1024;i++}return (i<2?v.toFixed(0):v.toFixed(1))+" "+u[i]};
+function state(el,text,kind=""){el.textContent=text;el.className="value "+kind}
+async function api(url,opts={}){const r=await fetch(url,{cache:"no-store",headers:{"Content-Type":"application/json",...(opts.headers||{})},...opts});let d;try{d=await r.json()}catch{d={detail:await r.text()}}if(!r.ok)throw new Error(typeof d.detail==="string"?d.detail:JSON.stringify(d.detail||d));return d}
+document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");if(b.dataset.view==="diagnostics")refreshDiag();if(b.dataset.view==="settings")loadSettings()});
+function addMsg(role,text){const d=document.createElement("div");d.className="msg "+role;d.textContent=text;$("chatBox").appendChild(d);$("chatBox").scrollTop=$("chatBox").scrollHeight}
+async function sendChat(){const text=$("chatInput").value.trim();if(!text)return;$("chatInput").value="";addMsg("user",text);$("sendChat").disabled=true;$("chatStatus").textContent="Тоору думает…";try{const d=await api("/v1/chat",{method:"POST",body:JSON.stringify({message:text,project_id:$("chatProject").value.trim()||null,remember:$("chatRemember").checked,history:history.slice(-20)})});addMsg("assistant",d.answer);history.push({role:"user",content:text},{role:"assistant",content:d.answer});$("chatStatus").textContent=d.provider+" · "+d.model+" · контекст: "+d.context_memories+" · память: "+d.memory_status}catch(e){addMsg("system","Ошибка: "+e.message);$("chatStatus").textContent="Ошибка API"}finally{$("sendChat").disabled=false}}
+$("sendChat").onclick=sendChat;$("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}});$("clearChat").onclick=()=>{$("chatBox").innerHTML="";history.length=0};
+async function refreshDiag(){try{const d=await api("/v1/diagnostics/status");state($("homeBackend"),"Работает","ok");state($("homeAI"),d.ai.deepseek_configured?"Подключён":"Не настроен",d.ai.deepseek_configured?"ok":"warn");state($("homeGuardian"),d.guardian.queued_pending?"Ожидают: "+d.guardian.queued_pending:"Работает",d.guardian.queued_pending?"warn":"ok");$("homeMemories").textContent=d.memory_engine.total;
+state($("dBackend"),"Работает","ok");state($("dAI"),d.ai.deepseek_configured?"Подключён":"Нет ключа",d.ai.deepseek_configured?"ok":"warn");state($("dGuardian"),"Работает","ok");state($("dMemoryAuto"),d.memory_automation.started?(d.memory_automation.running?"Выполняется":"Активна"):"Выключена",d.memory_automation.started?"ok":"warn");state($("dGuardianAuto"),d.guardian_automation.started?(d.guardian_automation.running?"Выполняется":"Активна"):"Выключена",d.guardian_automation.started?"ok":"warn");
+$("dRam").textContent=fmtBytes(d.system_memory.used_bytes)+" / "+fmtBytes(d.system_memory.total_bytes)+" ("+d.system_memory.percent+"%)";$("dProcessRam").textContent=fmtBytes(d.process.rss_bytes);$("dDisk").textContent=fmtBytes(d.disk.free_bytes);
+$("mTotal").textContent=d.memory_engine.total;$("mActive").textContent=d.memory_engine.active;$("mArchived").textContent=d.memory_engine.archived;$("mSuperseded").textContent=d.memory_engine.superseded;$("mPersonal").textContent=d.memory_engine.personal;$("mProject").textContent=d.memory_engine.project;$("mDb").textContent=fmtBytes(d.memory_engine.database_bytes);
+$("qPending").textContent=d.guardian.queued_pending;$("qApplied").textContent=d.guardian.queued_applied;$("qRejected").textContent=d.guardian.queued_rejected;$("qDead").textContent=d.guardian.queued_dead;$("autoErrors").textContent=(d.memory_automation.failure_count||0)+(d.guardian_automation.failure_count||0);$("diagStatus").textContent="Обновлено: "+new Date().toLocaleTimeString()}catch(e){state($("homeBackend"),"Ошибка","bad");state($("dBackend"),"Ошибка","bad");$("diagStatus").textContent=e.message}}
+$("refreshDiag").onclick=refreshDiag;$("runMaintenance").onclick=async()=>{try{$("diagStatus").textContent="Обслуживание…";await api("/v1/memory/maintenance/run",{method:"POST"});await refreshDiag()}catch(e){$("diagStatus").textContent=e.message}};
+async function loadSettings(){try{const d=await api("/v1/settings/ai/deepseek");$("baseUrl").value=d.base_url;$("modelName").value=d.model;$("apiKey").value="";$("apiKey").placeholder=d.configured?"Ключ сохранён ••••••••":"Вставьте Key Secret";$("settingsStatus").textContent=d.configured?"DeepSeek настроен"+(d.registered?" и активен.":"."):"API-ключ пока не сохранён."}catch(e){$("settingsStatus").textContent=e.message}}
+$("saveSettings").onclick=async()=>{const key=$("apiKey").value.trim();if(!key){$("settingsStatus").textContent="Вставьте Key Secret.";return}try{$("settingsStatus").textContent="Сохранение…";const d=await api("/v1/settings/ai/deepseek",{method:"POST",body:JSON.stringify({api_key:key,base_url:$("baseUrl").value.trim(),model:$("modelName").value.trim()})});$("apiKey").value="";$("apiKey").placeholder="Ключ сохранён ••••••••";$("settingsStatus").textContent=d.registered?"Сохранено. DeepSeek активен без перезапуска.":"Сохранено.";await refreshDiag()}catch(e){$("settingsStatus").textContent="Ошибка: "+e.message}};
+$("testSettings").onclick=async()=>{try{$("settingsStatus").textContent="Проверка API…";const d=await api("/v1/settings/ai/deepseek/test",{method:"POST"});$("settingsStatus").textContent="API работает: "+d.provider+" / "+d.model+" → "+d.response}catch(e){$("settingsStatus").textContent="Ошибка API: "+e.message}};
+refreshDiag();setInterval(refreshDiag,3000);
+</script>
+</body></html>

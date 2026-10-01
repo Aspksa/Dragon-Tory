@@ -1,13 +1,17 @@
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 import uvicorn
 from fastapi import FastAPI
 
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
+from tooru.api.chat import router as chat_router
+from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
 from tooru.api.memory import router as memory_router
+from tooru.api.settings import router as settings_router
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
@@ -80,8 +84,15 @@ async def lifespan(app: FastAPI):
         consolidate_cooldown_hours=settings.memory_consolidate_cooldown_hours,
     )
 
+    app.state.settings = settings
+    app.state.started_at = datetime.now(UTC)
     app.state.memory = memory
     app.state.ai_router = ai_router
+    app.state.deepseek_config = {
+        "configured": bool(settings.deepseek_api_key),
+        "base_url": settings.deepseek_base_url,
+        "model": settings.deepseek_model,
+    }
     app.state.memory_intelligence = intelligence
     app.state.memory_guardian = guardian
     app.state.memory_guardian_automation = guardian_automation
@@ -108,6 +119,9 @@ def create_app() -> FastAPI:
     )
     app.include_router(home_router)
     app.include_router(health_router)
+    app.include_router(chat_router)
+    app.include_router(diagnostics_router)
+    app.include_router(settings_router)
     app.include_router(memory_router)
     return app
 
