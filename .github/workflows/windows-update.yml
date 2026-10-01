@@ -111,7 +111,23 @@ jobs:
               throw "Update API did not report a running updater."
             }
           } catch {
-            throw "Update API failed to launch updater: $($_.Exception.Message)"
+            Write-Host "Update API exception: $($_.Exception.Message)"
+            $statePath = Join-Path $env:UPDATE_TEST_ROOT "data\update\state.json"
+            if (Test-Path -LiteralPath $statePath) {
+              Write-Host "--- state.json ---"
+              Get-Content -LiteralPath $statePath -Raw
+            }
+            $launchLog = Join-Path $env:UPDATE_TEST_ROOT "logs\update-launcher.log"
+            if (Test-Path -LiteralPath $launchLog) {
+              Write-Host "--- update-launcher.log ---"
+              Get-Content -LiteralPath $launchLog -Raw
+            }
+            $updateLog = Join-Path $env:UPDATE_TEST_ROOT "logs\update.log"
+            if (Test-Path -LiteralPath $updateLog) {
+              Write-Host "--- update.log ---"
+              Get-Content -LiteralPath $updateLog -Raw
+            }
+            throw "Update API failed to launch updater."
           }
 
           $ready = $false
