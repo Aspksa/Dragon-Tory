@@ -349,6 +349,19 @@ async def restudy_chat_document(
             detail="Документ не найден.",
         ) from exc
 
+    if (
+        document.get("source") != "chat-upload"
+        or document.get("confidentiality") != "personal"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Повторное личное изучение доступно только для документов, "
+                "которые были явно загружены через чат Тоору. Для остальных "
+                "документов используйте их ИИ-договор в Центре документа."
+            ),
+        )
+
     try:
         studied = await request.app.state.chat_document_assistant.study(
             document_id,
