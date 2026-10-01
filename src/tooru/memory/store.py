@@ -1690,6 +1690,41 @@ class SQLiteMemoryStore:
                 count += 1
         return count
 
+    def archive_memory(
+        self,
+        memory_id: str,
+        *,
+        owner_id: str,
+        reason: str,
+    ) -> MemoryItem:
+        now = self._now()
+        with self._connect() as conn:
+            item = self._get_in_connection(
+                conn,
+                memory_id,
+                owner_id,
+            )
+            if item.pinned:
+                raise MemoryConflictError("pinned memory cannot be archived")
+            conn.execute(
+                """
+                UPDATE memory_items
+                SET status = 'archived',
+                    archived_at = ?,
+                    updated_at = ?,
+                    revision = revision + 1
+                WHERE id = ? AND owner_id = ?
+                """,
+                (now, now, memory_id, owner_id),
+            )
+            archived = self._get_in_connection(
+                conn,
+                memory_id,
+                owner_id,
+            )
+            self._record_history(conn, archived, reason)
+        return archived
+
     def maintenance_scopes(self) -> list[tuple[str, MemoryScope, str | None, int, str | None]]:
         with self._connect() as conn:
             rows = conn.execute(
