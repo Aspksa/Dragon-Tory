@@ -621,7 +621,10 @@ class MemoryEngine:
                     continue
                 seen.add(memory.id)
                 section_lines.append(
-                    f"- [{memory.kind.value}; score={hit.score:.3f}; truth={hit.truth_score:.3f}] {memory.content}"
+                    f"- [{memory.kind.value}; score={hit.score:.3f}; "
+                    f"truth={hit.truth_score:.3f}; "
+                    f"uncertainty={hit.uncertainty_score:.3f}] "
+                    f"{memory.content}"
                 )
                 total += 1
             if section_lines:
