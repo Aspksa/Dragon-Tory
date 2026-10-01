@@ -808,11 +808,19 @@ function restoreDraft(){let value="";if(activeChatId)try{value=localStorage.getI
 function clearDraft(){if(activeChatId)try{localStorage.removeItem(draftKey())}catch{}}
 function resizeComposer(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(180,Math.max(48,el.scrollHeight))+"px"}
 let chatGenerating=false;
+let chatUploading=false;
 function setGenerating(active){
   chatGenerating=active;const btn=$("composerAction");
   btn.classList.toggle("stop",active);btn.classList.toggle("empty",!active&&!$("chatInput").value.trim());
   btn.textContent=active?"■":"↑";btn.title=active?"Остановить генерацию":"Отправить";
   $("chatInput").disabled=active;$("chatMode").disabled=active;$("chatRemember").disabled=active;
+  $("chatAttach").disabled=active||chatUploading;$("chatFileInput").disabled=active||chatUploading;
+}
+function setChatUploading(active){
+  chatUploading=active;
+  $("chatAttach").disabled=active||chatGenerating;
+  $("chatFileInput").disabled=active||chatGenerating;
+  $("chatComposer").classList.toggle("uploading",active);
 }
 function updateComposerAction(){if(chatGenerating)return;$("composerAction").classList.toggle("empty",!$("chatInput").value.trim())}
 async function loadChatList(query=""){
@@ -847,8 +855,46 @@ async function ensureChatReady(){
   if(chatLoaded){await loadChatList($("chatSearch").value.trim());return}
   chatLoaded=true;const d=await api("/v1/chats?limit=100");if(d.items.length)await loadChat(d.items[0].id);else await createNewChat();
 }
+function addChatUploadRow(file){
+  const row=document.createElement("div");row.className="chat-upload-item";
+  const name=document.createElement("b");name.textContent=file.name;
+  const status=document.createElement("span");status.textContent="готовлю…";
+  row.append(name,status);$("chatUploadQueue").append(row);$("chatUploadQueue").hidden=false;
+  return{row,status};
+}
+async function uploadChatDocuments(fileList){
+  const files=Array.from(fileList||[]);if(!files.length||chatUploading||chatGenerating)return;
+  if(!activeChatId)await createNewChat();if(!activeChatId)return;
+  $("chatUploadQueue").innerHTML="";setChatUploading(true);
+  try{
+    for(const file of files){
+      const ui=addChatUploadRow(file);ui.status.textContent="загрузка · "+fmtBytes(file.size);
+      $("chatStatus").textContent="Тоору сохраняет и изучает «"+file.name+"»…";
+      try{
+        const d=await api(
+          "/v1/chat/documents?chat_id="+encodeURIComponent(activeChatId)+"&name="+encodeURIComponent(file.name),
+          {method:"POST",headers:{"Content-Type":file.type||"application/octet-stream"},body:file}
+        );
+        activeChatId=d.chat_id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;
+        ui.row.classList.add(d.error?"bad":"good");
+        ui.status.textContent=d.error?"сохранён · требуется внимание":("изучен · "+(d.memory_status||"память"));
+        $("chatStatus").textContent=d.error?("Документ сохранён: "+d.error):("Изучено: "+file.name+" · "+d.indexed_chunks+" фрагментов");
+        await loadChat(activeChatId);
+      }catch(e){
+        ui.row.classList.add("bad");ui.status.textContent="ошибка";
+        $("chatStatus").textContent="Ошибка документа «"+file.name+"»: "+e.message;
+      }
+    }
+    await loadChatList($("chatSearch").value.trim());
+  }finally{
+    setChatUploading(false);$("chatFileInput").value="";
+    setTimeout(()=>{if(!chatUploading){$("chatUploadQueue").hidden=true;$("chatUploadQueue").innerHTML=""}},4500);
+    $("chatInput").focus();
+  }
+}
 async function sendChat(){
   if(chatGenerating)return stopChat();
+  if(chatUploading){$("chatStatus").textContent="Сначала закончу изучение загруженных документов.";return}
   const text=$("chatInput").value.trim();if(!text)return;
   if(!activeChatId)await createNewChat();if(!activeChatId)return;
   clearDraft();$("chatInput").value="";resizeComposer();updateComposerAction();
@@ -889,6 +935,10 @@ async function deleteActiveChat(){
   try{try{localStorage.removeItem(draftKey())}catch{}await api("/v1/chats/"+encodeURIComponent(activeChatId),{method:"DELETE"});activeChatId=null;const d=await api("/v1/chats?limit=100");if(d.items.length)await loadChat(d.items[0].id);else await createNewChat()}catch(e){$("chatStatus").textContent="Ошибка удаления: "+e.message}
 }
 $("newChat").onclick=createNewChat;$("composerAction").onclick=()=>chatGenerating?stopChat():sendChat();$("renameChat").onclick=renameActiveChat;$("deleteChat").onclick=deleteActiveChat;
+$("chatAttach").onclick=()=>$("chatFileInput").click();$("chatFileInput").onchange=e=>uploadChatDocuments(e.target.files);
+$("chatComposer").addEventListener("dragover",e=>{e.preventDefault();if(!chatGenerating&&!chatUploading)$("chatComposer").classList.add("dragover")});
+$("chatComposer").addEventListener("dragleave",e=>{if(!$("chatComposer").contains(e.relatedTarget))$("chatComposer").classList.remove("dragover")});
+$("chatComposer").addEventListener("drop",e=>{e.preventDefault();$("chatComposer").classList.remove("dragover");if(e.dataTransfer&&e.dataTransfer.files.length)uploadChatDocuments(e.dataTransfer.files)});
 $("chatInput").addEventListener("input",()=>{saveDraft();resizeComposer();updateComposerAction()});
 $("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}});
 $("chatSearch").addEventListener("input",()=>{clearTimeout(chatSearchTimer);chatSearchTimer=setTimeout(()=>loadChatList($("chatSearch").value.trim()),250)});
