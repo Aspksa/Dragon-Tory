@@ -106,6 +106,31 @@ jobs:
           if ($state.phase -ne "success") {
             throw "Updater state is not success: $($state.phase)"
           }
+          if ([int]$state.progress_percent -ne 100) {
+            throw "Updater progress did not reach 100 percent."
+          }
+          if (@($state.downloaded_files).Count -lt 1) {
+            throw "Updater did not record downloaded files."
+          }
+
+          $historyPath = Join-Path $env:UPDATE_TEST_ROOT "data\update\history.json"
+          if (-not (Test-Path -LiteralPath $historyPath)) {
+            throw "Updater did not create update history."
+          }
+          $history = @(
+            Get-Content -LiteralPath $historyPath -Raw -Encoding utf8 |
+              ConvertFrom-Json
+          )
+          if ($history.Count -lt 1) {
+            throw "Update history is empty."
+          }
+          $last = $history[-1]
+          if ($last.result -ne "success") {
+            throw "Last update history entry is not successful."
+          }
+          if (@($last.downloaded_files).Count -lt 1) {
+            throw "History does not contain downloaded file manifest."
+          }
 
           $dataSentinel = Get-Content -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT "data\preserve.txt") -Raw
           if ($dataSentinel.Trim() -ne "keep-memory-data") {
