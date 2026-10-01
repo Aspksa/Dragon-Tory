@@ -17,6 +17,10 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="cloudTrash"' in response.text
     assert 'id="passportVersions"' in response.text
     assert 'id="passportActivity"' in response.text
+    assert 'id="passportPreview"' in response.text
+    assert 'id="passportIndexNow"' in response.text
+    assert 'id="passportAsk"' in response.text
+    assert 'id="cloudContentSearch"' in response.text
     assert 'id="cloudDropZone"' in response.text
     assert 'id="cloudFileInput"' in response.text
     assert 'id="passportModal"' in response.text

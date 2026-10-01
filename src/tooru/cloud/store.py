@@ -144,6 +144,19 @@ class CloudStore:
                 """
             )
             db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS document_chunks (
+                    document_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    chunk_no INTEGER NOT NULL,
+                    label TEXT NOT NULL,
+                    page_no INTEGER,
+                    text TEXT NOT NULL,
+                    PRIMARY KEY(document_id, version, chunk_no)
+                )
+                """
+            )
+            db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_documents_name ON documents(name)"
             )
             db.execute(
@@ -162,6 +175,12 @@ class CloudStore:
                 """
                 CREATE INDEX IF NOT EXISTS idx_activity_document
                 ON document_activity(document_id, id DESC)
+                """
+            )
+            db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_chunks_document
+                ON document_chunks(document_id, version)
                 """
             )
             db.execute(
@@ -886,6 +905,152 @@ class CloudStore:
                 details=f"v{version} -> v{next_version}",
             )
         return self.get(document_id)
+
+    def replace_chunks(
+        self,
+        document_id: str,
+        chunks: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        item = self.get(document_id)
+        if item["ai_access"] not in {"read", "answer", "memory", "full"}:
+            raise PermissionError(
+                "Паспорт документа не разрешает читать его содержимое."
+            )
+        with self._connect() as db:
+            db.execute(
+                "DELETE FROM document_chunks WHERE document_id = ?",
+                (document_id,),
+            )
+            for number, chunk in enumerate(chunks, start=1):
+                db.execute(
+                    """
+                    INSERT INTO document_chunks (
+                        document_id, version, chunk_no, label, page_no, text
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        document_id,
+                        item["version"],
+                        number,
+                        str(chunk["label"])[:300],
+                        chunk.get("page"),
+                        str(chunk["text"]),
+                    ),
+                )
+            db.execute(
+                """
+                UPDATE documents
+                SET indexed_version = ?, ai_index_status = 'ready',
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (item["version"], utc_now(), document_id),
+            )
+            self._log(
+                db,
+                "indexed",
+                document_id=document_id,
+                details=f"{len(chunks)} chunks; v{item['version']}",
+            )
+        return self.get(document_id)
+
+    def document_chunks(
+        self,
+        document_id: str,
+        *,
+        query: str = "",
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        item = self.get(document_id)
+        if (
+            item["ai_index_status"] != "ready"
+            or item["indexed_version"] != item["version"]
+        ):
+            return []
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT chunk_no, label, page_no, text
+                FROM document_chunks
+                WHERE document_id = ? AND version = ?
+                ORDER BY chunk_no
+                """,
+                (document_id, item["version"]),
+            ).fetchall()
+        chunks = [dict(row) for row in rows]
+        if not query.strip():
+            return chunks[:limit]
+        terms = {
+            term.lower()
+            for term in query.replace("\n", " ").split(" ")
+            if len(term.strip()) >= 2
+        }
+        for chunk in chunks:
+            haystack = chunk["text"].lower()
+            chunk["_score"] = sum(
+                haystack.count(term)
+                for term in terms
+            )
+        chunks.sort(
+            key=lambda chunk: (
+                chunk.get("_score", 0),
+                -chunk["chunk_no"],
+            ),
+            reverse=True,
+        )
+        for chunk in chunks:
+            chunk.pop("_score", None)
+        return chunks[:limit]
+
+    def search_chunks(
+        self,
+        query: str,
+        *,
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        cleaned = query.strip()
+        if not cleaned:
+            return []
+        terms = {
+            term.lower()
+            for term in cleaned.replace("\n", " ").split(" ")
+            if len(term.strip()) >= 2
+        }
+        if not terms:
+            return []
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT
+                    c.document_id, c.version, c.chunk_no, c.label,
+                    c.page_no, c.text, d.name, d.scope, d.project_id,
+                    d.confidentiality, d.ai_access
+                FROM document_chunks c
+                JOIN documents d ON d.id = c.document_id
+                WHERE d.trashed = 0
+                  AND d.ai_index_status = 'ready'
+                  AND d.indexed_version = d.version
+                  AND d.ai_access IN ('read', 'answer', 'memory', 'full')
+                """
+            ).fetchall()
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            haystack = (
+                item["name"] + "\n" + item["text"]
+            ).lower()
+            score = sum(haystack.count(term) for term in terms)
+            if score < 1:
+                continue
+            item["score"] = score
+            item["snippet"] = item.pop("text")[:700]
+            results.append(item)
+        results.sort(
+            key=lambda item: (item["score"], item["document_id"]),
+            reverse=True,
+        )
+        return results[:limit]
 
     def activity(
         self,

@@ -196,6 +196,7 @@
             <option value="size">По размеру</option>
             <option value="created">По дате создания</option>
           </select>
+          <button id="cloudContentSearch" class="secondary">⌕ По содержимому</button>
           <button id="cloudNewFolder" class="secondary">＋ Папка</button>
           <button id="cloudUploadButton" class="primary">＋ Загрузить</button>
           <input id="cloudFileInput" type="file" multiple hidden>
@@ -412,6 +413,9 @@
         <div class="spacer"></div>
         <div class="row">
           <button id="passportSave" class="primary">Сохранить паспорт</button>
+          <button id="passportPreview" class="secondary">Просмотр</button>
+          <button id="passportIndexNow" class="secondary">Изучить документ</button>
+          <button id="passportAsk" class="secondary">Спросить Тоору</button>
           <button id="passportVersions" class="secondary">Версии</button>
           <button id="passportActivity" class="secondary">Журнал</button>
           <button id="passportNewVersion" class="secondary">Новая версия</button>
@@ -619,6 +623,47 @@ async function savePassport(){
     $("passportName").textContent=d.name;$("passportIndex").textContent=indexNames[d.ai_index_status]||d.ai_index_status;$("passportStatus").textContent="Паспорт сохранён.";await loadCloud();
   }catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
 }
+async function previewPassportDocument(){
+  if(!activePassportId)return;
+  try{
+    $("passportStatus").textContent="Читаю документ локально…";
+    const d=await api("/v1/cloud/files/"+encodeURIComponent(activePassportId)+"/preview");
+    const box=$("passportDetails");box.hidden=false;box.innerHTML="<h4>Просмотр документа</h4>";
+    d.chunks.forEach(chunk=>{const block=document.createElement("div");block.className="cloud-note";const title=document.createElement("b");title.textContent=chunk.label;const pre=document.createElement("div");pre.style.whiteSpace="pre-wrap";pre.style.marginTop="7px";pre.textContent=chunk.text;block.append(title,pre);box.append(block)});
+    $("passportStatus").textContent=d.truncated?"Показана часть документа.":"Документ прочитан локально.";
+  }catch(e){$("passportStatus").textContent="Просмотр недоступен: "+e.message}
+}
+async function indexPassportDocument(){
+  if(!activePassportId)return;
+  try{
+    $("passportStatus").textContent="Локально извлекаю текст и создаю индекс…";
+    const d=await api("/v1/cloud/files/"+encodeURIComponent(activePassportId)+"/index",{method:"POST"});
+    $("passportIndex").textContent="Готов";$("passportStatus").textContent="Индекс готов: "+d.chunk_count+" фрагм.";await loadCloud();
+  }catch(e){$("passportStatus").textContent="Индексация: "+e.message}
+}
+async function askPassportDocument(){
+  if(!activePassportId)return;
+  const question=prompt("Что спросить у Тоору по этому документу?");if(!question||!question.trim())return;
+  try{
+    $("passportStatus").textContent="Тоору изучает разрешённые фрагменты…";
+    const d=await api("/v1/cloud/files/"+encodeURIComponent(activePassportId)+"/ask",{method:"POST",body:JSON.stringify({question:question.trim()})});
+    const box=$("passportDetails");box.hidden=false;box.innerHTML="<h4>Ответ Тоору</h4>";
+    const q=document.createElement("div");q.className="cloud-note";q.textContent="Вопрос: "+question;
+    const answer=document.createElement("div");answer.className="cloud-note";answer.style.whiteSpace="pre-wrap";answer.textContent=d.answer;
+    const sources=document.createElement("div");sources.className="cloud-note";sources.innerHTML="<b>Источники:</b><br>"+d.sources.map((s,i)=>(i+1)+". "+escapeHtml(s.label)+(s.page?" · стр. "+s.page:"")).join("<br>");
+    box.append(q,answer,sources);$("passportStatus").textContent="Ответ сформирован по v"+d.version+" документа.";
+  }catch(e){$("passportStatus").textContent="Тоору не может ответить: "+e.message}
+}
+async function searchCloudContent(){
+  const query=prompt("Что найти внутри изученных документов?");if(!query||!query.trim())return;
+  try{
+    const d=await api("/v1/cloud/search?query="+encodeURIComponent(query.trim())+"&limit=30");
+    const box=$("cloudList");box.innerHTML="";
+    if(!d.items.length){box.innerHTML='<div class="cloud-empty">Совпадений в индексированных документах не найдено.</div>';return}
+    d.items.forEach(item=>{const row=document.createElement("div");row.className="card";row.style.cursor="pointer";const title=document.createElement("b");title.textContent=item.name+" · "+item.label;const snippet=document.createElement("div");snippet.className="muted";snippet.style.whiteSpace="pre-wrap";snippet.style.marginTop="7px";snippet.textContent=item.snippet;row.append(title,snippet);row.onclick=()=>openPassport(item.document_id);box.append(row)});
+    $("cloudStatus").textContent="Поиск по содержимому: "+d.items.length+" совпадений.";
+  }catch(e){$("cloudStatus").textContent="Ошибка поиска по содержимому: "+e.message}
+}
 async function showPassportVersions(){
   if(!activePassportId)return;
   try{
@@ -639,7 +684,7 @@ async function trashPassport(){
   if(!activePassportId||!confirm("Переместить документ в корзину?"))return;
   try{await api("/v1/cloud/files/"+encodeURIComponent(activePassportId),{method:"DELETE"});closePassport();await loadCloud()}catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
 }
-$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);$("cloudNewFolder").onclick=createCloudFolder;
+$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);$("cloudNewFolder").onclick=createCloudFolder;$("cloudContentSearch").onclick=searchCloudContent;
 $("cloudRoot").onclick=()=>{cloudCurrentFolder=null;cloudFolderStack=[];cloudTrashMode=false;cloudFavoritesOnly=false;loadCloud()};
 $("cloudFavorites").onclick=()=>{cloudFavoritesOnly=!cloudFavoritesOnly;cloudTrashMode=false;loadCloud()};
 $("cloudTrash").onclick=()=>{cloudTrashMode=true;cloudFavoritesOnly=false;loadCloud()};$("cloudSort").onchange=loadCloud;
@@ -647,7 +692,7 @@ $("cloudDropZone").onclick=()=>$("cloudFileInput").click();$("cloudDropZone").on
 ["dragenter","dragover"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.add("dragging")}));
 ["dragleave","drop"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.remove("dragging")}));
 $("cloudDropZone").addEventListener("drop",e=>uploadCloudFiles(e.dataTransfer.files));$("cloudSearch").addEventListener("input",()=>{clearTimeout(cloudSearchTimer);cloudSearchTimer=setTimeout(loadCloud,250)});
-$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportVerify").onclick=verifyPassportIntegrity;$("passportVersions").onclick=showPassportVersions;$("passportActivity").onclick=showPassportActivity;$("passportNewVersion").onclick=()=>$("passportVersionInput").click();$("passportVersionInput").onchange=e=>{const file=e.target.files[0];e.target.value="";uploadNewPassportVersion(file)};$("passportTrash").onclick=trashPassport;
+$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportVerify").onclick=verifyPassportIntegrity;$("passportPreview").onclick=previewPassportDocument;$("passportIndexNow").onclick=indexPassportDocument;$("passportAsk").onclick=askPassportDocument;$("passportVersions").onclick=showPassportVersions;$("passportActivity").onclick=showPassportActivity;$("passportNewVersion").onclick=()=>$("passportVersionInput").click();$("passportVersionInput").onchange=e=>{const file=e.target.files[0];e.target.value="";uploadNewPassportVersion(file)};$("passportTrash").onclick=trashPassport;
 $("passportConfidentiality").onchange=applyConfidentialityPolicy;$("passportScope").onchange=()=>{$("passportProject").disabled=$("passportScope").value!=="project";if($("passportScope").value!=="project")$("passportProject").value=""};
 $("passportModal").addEventListener("click",e=>{if(e.target===$("passportModal"))closePassport()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("passportModal").hidden)closePassport()});
 

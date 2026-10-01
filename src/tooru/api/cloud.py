@@ -10,6 +10,13 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from tooru.ai.base import AIRequest
+from tooru.cloud.intelligence import (
+    UnsupportedDocumentError,
+    extract_document,
+    preview_document,
+)
+
 router = APIRouter(prefix="/v1/cloud", tags=["cloud"])
 
 AILevel = Literal["denied", "search", "read", "answer", "memory", "full"]
@@ -36,6 +43,10 @@ class FolderCreate(BaseModel):
 
 class FolderRename(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+
+
+class AskDocumentRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=4_000)
 
 
 class DocumentUpdate(BaseModel):
@@ -226,6 +237,209 @@ def rename_folder(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+
+@router.get("/search")
+def search_document_content(
+    request: Request,
+    query: str = Query(min_length=2, max_length=500),
+    limit: int = Query(default=30, ge=1, le=100),
+) -> dict:
+    return {
+        "items": request.app.state.cloud_store.search_chunks(
+            query,
+            limit=limit,
+        )
+    }
+
+
+@router.get("/files/{document_id}/preview")
+def preview_file(document_id: str, request: Request) -> dict:
+    store = request.app.state.cloud_store
+    try:
+        item = store.get(document_id)
+        path = store.content_path(document_id)
+        preview = preview_document(
+            path,
+            name=item["name"],
+            content_type=item["content_type"],
+        )
+        return {
+            "document_id": document_id,
+            "name": item["name"],
+            "version": item["version"],
+            **preview,
+        }
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Документ не найден.",
+        ) from exc
+    except UnsupportedDocumentError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/files/{document_id}/index")
+def index_file(document_id: str, request: Request) -> dict:
+    store = request.app.state.cloud_store
+    try:
+        item = store.get(document_id)
+        if item["ai_access"] not in {"read", "answer", "memory", "full"}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Сначала разрешите Тоору читать содержимое "
+                    "в цифровом паспорте."
+                ),
+            )
+        path = store.content_path(document_id)
+        extracted = extract_document(
+            path,
+            name=item["name"],
+            content_type=item["content_type"],
+        )
+        chunks = [
+            {
+                "label": chunk.label,
+                "page": chunk.page,
+                "text": chunk.text,
+            }
+            for chunk in extracted
+            if chunk.text.strip()
+        ]
+        if not chunks:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Из документа не удалось извлечь текст. "
+                    "Для сканов позже потребуется OCR."
+                ),
+            )
+        updated = store.replace_chunks(document_id, chunks)
+        return {
+            "ok": True,
+            "document_id": document_id,
+            "version": updated["version"],
+            "chunk_count": len(chunks),
+            "index_status": updated["ai_index_status"],
+        }
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Документ не найден.",
+        ) from exc
+    except UnsupportedDocumentError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/files/{document_id}/ask")
+async def ask_document(
+    document_id: str,
+    payload: AskDocumentRequest,
+    request: Request,
+) -> dict:
+    store = request.app.state.cloud_store
+    try:
+        item = store.get(document_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Документ не найден.",
+        ) from exc
+
+    if item["ai_access"] not in {"answer", "memory", "full"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Паспорт не разрешает использовать документ "
+                "для ответов Тоору."
+            ),
+        )
+    if (
+        item["ai_index_status"] != "ready"
+        or item["indexed_version"] != item["version"]
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Сначала нажмите «Изучить документ», чтобы "
+                "проиндексировать текущую версию локально."
+            ),
+        )
+    if not request.app.state.ai_router.has_provider("deepseek"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="DeepSeek не настроен.",
+        )
+
+    chunks = store.document_chunks(
+        document_id,
+        query=payload.question,
+        limit=8,
+    )
+    if not chunks:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="В индексе документа нет текста для ответа.",
+        )
+
+    sources: list[dict] = []
+    context_parts: list[str] = []
+    for chunk in chunks:
+        source = {
+            "label": chunk["label"],
+            "page": chunk["page_no"],
+            "chunk_no": chunk["chunk_no"],
+        }
+        sources.append(source)
+        context_parts.append(
+            f"[Источник {chunk['chunk_no']}: {chunk['label']}]\n"
+            f"{chunk['text']}"
+        )
+
+    response = await request.app.state.ai_router.generate(
+        "deepseek",
+        AIRequest(
+            system_prompt=(
+                "Ты Дракончик Тоору. Отвечай только по переданным "
+                "фрагментам документа. Не придумывай отсутствующие факты. "
+                "Если данных недостаточно, прямо скажи об этом. "
+                "Ссылайся на источники в виде [Источник N]."
+            ),
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Документ: {item['name']}\n"
+                        f"Версия: {item['version']}\n\n"
+                        + "\n\n".join(context_parts)
+                        + "\n\nВопрос: "
+                        + payload.question
+                    ),
+                }
+            ],
+            max_tokens=1_800,
+        ),
+    )
+    return {
+        "answer": response.text,
+        "document_id": document_id,
+        "version": item["version"],
+        "provider": response.provider,
+        "model": response.model,
+        "sources": sources,
+    }
 
 
 @router.get("/files/{document_id}/passport")

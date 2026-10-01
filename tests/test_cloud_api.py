@@ -171,3 +171,55 @@ def test_cloud_sanitizes_uploaded_filename() -> None:
         document_id = response.json()["id"]
         assert response.json()["name"] == "secret.txt"
         client.delete(f"/v1/cloud/files/{document_id}")
+
+
+def test_text_preview_index_and_content_search() -> None:
+    with TestClient(app) as client:
+        document = _upload(
+            client,
+            "knowledge.txt",
+            "Subaru Forester service interval is 12000 km.".encode(),
+        )
+        document_id = document["id"]
+
+        preview = client.get(
+            f"/v1/cloud/files/{document_id}/preview"
+        )
+        assert preview.status_code == 200
+        assert "Subaru Forester" in preview.json()["chunks"][0]["text"]
+
+        denied = client.post(
+            f"/v1/cloud/files/{document_id}/index"
+        )
+        assert denied.status_code == 403
+
+        allowed = client.patch(
+            f"/v1/cloud/files/{document_id}/passport",
+            json={
+                "ai_access": "read",
+                "confidentiality": "personal",
+            },
+        )
+        assert allowed.status_code == 200
+
+        indexed = client.post(
+            f"/v1/cloud/files/{document_id}/index"
+        )
+        assert indexed.status_code == 200
+        assert indexed.json()["index_status"] == "ready"
+
+        search = client.get(
+            "/v1/cloud/search?query=Forester%20service"
+        )
+        assert search.status_code == 200
+        assert any(
+            item["document_id"] == document_id
+            for item in search.json()["items"]
+        )
+
+        ask_denied = client.post(
+            f"/v1/cloud/files/{document_id}/ask",
+            json={"question": "Какой интервал?"},
+        )
+        assert ask_denied.status_code == 403
+        client.delete(f"/v1/cloud/files/{document_id}")
