@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from tooru.main import app
+from tooru.version import APP_VERSION
 
 
 def test_web_ui_contains_main_sections() -> None:
@@ -11,6 +12,9 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Центр диагностики" in response.text
     assert "Настройки" in response.text
     assert "Чат" in response.text
+    assert "Клод" in response.text
+    assert "Маршрутизатор ИИ" in response.text
+    assert 'id="chatProvider"' in response.text
     assert "Обновление" in response.text
     assert 'id="installUpdate"' in response.text
 
@@ -47,5 +51,5 @@ def test_update_status_endpoint_is_available() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["local_version"] == "00.00.03"
+    assert payload["local_version"] == APP_VERSION
     assert payload["repository"] == "Aspksa/Dragon-Tory"
