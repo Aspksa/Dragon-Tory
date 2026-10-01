@@ -953,6 +953,12 @@ class ServiceMemoOrganizer:
             memory_status = "template"
         elif duplicate_of:
             memory_status = "duplicate"
+        elif not self.smart.permission(document_id, "memory"):
+            memory_status = "permission-denied"
+            review.append(
+                "ИИ-договор не разрешает запись в память проекта; "
+                "карточка и сортировка выполнены без долговременной памяти."
+            )
         else:
             content = self._memory_content(
                 item=item,
