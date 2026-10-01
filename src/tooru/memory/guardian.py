@@ -45,6 +45,7 @@ class MemoryGuardian:
         MemoryKind.DECISION,
         MemoryKind.GOAL,
         MemoryKind.INSTRUCTION,
+        MemoryKind.SKILL,
     }
 
     def __init__(
