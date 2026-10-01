@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     update_repository: str = "Aspksa/Dragon-Tory"
     update_branch: str = "main"
+    update_github_token: str | None = None
 
     cloud_max_upload_bytes: int = 536_870_912
 
