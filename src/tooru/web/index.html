@@ -152,10 +152,13 @@
           <div id="chatBox" class="chatbox">
             <div class="empty-chat"><div class="dragon">🐉</div><strong>Чем помочь?</strong><span>Напишите сообщение Дракончику Тоору.</span></div>
           </div>
-          <div class="composer">
-            <textarea id="chatInput" rows="1" placeholder="Сообщение Дракончику Тоору…"></textarea>
+          <div id="chatComposer" class="composer">
+            <div id="chatUploadQueue" class="chat-upload-queue" hidden></div>
+            <textarea id="chatInput" rows="1" placeholder="Сообщение Дракончику Тоору или перетащите сюда документ…"></textarea>
             <div class="composer-footer">
               <div class="composer-tools">
+                <button id="chatAttach" class="composer-tool-btn" title="Загрузить документ Тоору">📎</button>
+                <input id="chatFileInput" type="file" multiple hidden>
                 <select id="chatMode" class="mode-select" title="Формат ответа">
                   <option value="brief">Кратко</option>
                   <option value="normal" selected>Обычно</option>
