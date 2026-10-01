@@ -389,3 +389,158 @@ def test_employee_and_garage_directories_link_driver(
     listed = smart.list_vehicles(query="Иванов")
     assert len(listed) == 1
     assert listed[0]["vin"] == "JF1SJABC1GH123456"
+
+
+
+def test_monthly_timesheet_combines_calendar_manual_absence_and_weekend_work(
+    tmp_path: Path,
+) -> None:
+    store, smart = _stack(tmp_path)
+    memo = _upload(store, "weekend.txt", b"weekend work")
+    smart.update_dna(
+        memo["id"],
+        {
+            "kind": "служебная записка",
+            "document_subtype": "Работа в выходной день",
+            "employee_name": "Иванов И.И.",
+            "department": "ИТ",
+            "work_date": "2026-05-16",
+            "work_hours": 6,
+            "work_reason": "Плановые работы",
+        },
+    )
+    vacation = smart.create_timesheet_manual_entry(
+        {
+            "employee_name": "Иванов И.И.",
+            "date_from": "2026-05-01",
+            "date_to": "2026-05-05",
+            "code": "ОТ",
+            "note": "Отпуск введён вручную",
+        }
+    )
+    sick = smart.create_timesheet_manual_entry(
+        {
+            "employee_name": "Петров П.П.",
+            "date_from": "2026-05-14",
+            "date_to": "2026-05-16",
+            "code": "Б",
+        }
+    )
+
+    data = smart.monthly_timesheet(year=2026, month=5)
+    assert data["calendar"]["summary"]["workdays"] == 19
+    assert data["calendar"]["summary"]["norm_hours"] == 151.0
+    assert data["row_count"] == 2
+
+    ivanov = next(
+        row for row in data["rows"]
+        if row["employee_name"] == "Иванов И.И."
+    )
+    # 1 May is an official holiday and is not counted as annual leave.
+    assert ivanov["cells"][0]["code"] == "В"
+    assert ivanov["cells"][1]["code"] == "ОТ"
+    assert ivanov["cells"][15]["code"] == "РВ"
+    assert ivanov["cells"][15]["hours"] == 6
+    assert ivanov["weekend_work_hours"] == 6
+
+    petrov = next(
+        row for row in data["rows"]
+        if row["employee_name"] == "Петров П.П."
+    )
+    assert petrov["cells"][13]["code"] == "Б"
+    assert petrov["cells"][15]["code"] == "Б"
+    assert petrov["sick_days"] == 3
+
+    smart.delete_timesheet_manual_entry(vacation["id"])
+    smart.delete_timesheet_manual_entry(sick["id"])
+
+
+def test_monthly_timesheet_flags_manual_absence_weekend_work_conflict(
+    tmp_path: Path,
+) -> None:
+    store, smart = _stack(tmp_path)
+    memo = _upload(store, "weekend.txt", b"weekend work")
+    smart.update_dna(
+        memo["id"],
+        {
+            "kind": "служебная записка",
+            "document_subtype": "Работа в выходной день",
+            "employee_name": "Иванов И.И.",
+            "work_date": "2026-10-03",
+            "work_hours": 8,
+        },
+    )
+    smart.create_timesheet_manual_entry(
+        {
+            "employee_name": "Иванов И.И.",
+            "date_from": "2026-10-03",
+            "date_to": "2026-10-03",
+            "code": "Б",
+        }
+    )
+
+    data = smart.monthly_timesheet(year=2026, month=10)
+
+    assert len(data["conflicts"]) == 1
+    row = data["rows"][0]
+    assert row["cells"][2]["code"] == "Б"
+
+
+def test_garage_stores_fuel_tires_and_insurance_alerts(
+    tmp_path: Path,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    _, smart = _stack(tmp_path)
+    today = datetime.now(UTC).date()
+    end = today + timedelta(days=10)
+    vehicle = smart.create_vehicle(
+        {
+            "garage_number": "12",
+            "plate_number": "А123АА77",
+            "vin": "JF1SJABC1GH123456",
+            "make_model": "Subaru Forester",
+            "fuel_type": "АИ-95",
+            "fuel_rate_summer": 10.5,
+            "fuel_rate_winter": 12.2,
+            "tire_size_summer": "225/60 R17",
+            "tire_size_winter": "225/60 R17",
+            "insurance_type": "ОСАГО",
+            "insurance_policy": "ХХХ 1234567890",
+            "insurance_company": "Страховая компания",
+            "insurance_start": today.isoformat(),
+            "insurance_end": end.isoformat(),
+        }
+    )
+
+    assert vehicle["fuel_rate_summer"] == 10.5
+    assert vehicle["fuel_rate_winter"] == 12.2
+    assert vehicle["tire_size_summer"] == "225/60 R17"
+    assert vehicle["insurance_days_left"] == 10
+    assert vehicle["insurance_alert"] is True
+    assert vehicle["insurance_expired"] is False
+
+    alerts = smart.garage_alerts(days=15)
+    assert len(alerts) == 1
+    assert alerts[0]["id"] == vehicle["id"]
+
+
+def test_garage_marks_expired_insurance(
+    tmp_path: Path,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    _, smart = _stack(tmp_path)
+    yesterday = datetime.now(UTC).date() - timedelta(days=1)
+    vehicle = smart.create_vehicle(
+        {
+            "garage_number": "99",
+            "make_model": "Test Car",
+            "insurance_end": yesterday.isoformat(),
+        }
+    )
+
+    assert vehicle["insurance_expired"] is True
+    assert vehicle["insurance_alert"] is False
+    alerts = smart.garage_alerts(days=15)
+    assert alerts[0]["insurance_expired"] is True
