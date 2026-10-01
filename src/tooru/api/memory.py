@@ -4,7 +4,10 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from tooru.memory.models import (
+    CalibrationReport,
+    ContradictionCluster,
     EntityAlias,
+    EntityMergeProposal,
     EntityResolution,
     GoalProgress,
     GraphPathNode,
@@ -35,6 +38,7 @@ from tooru.memory.models import (
     MemoryItem,
     MemoryLink,
     MemoryLinkType,
+    MemoryForgettingReport,
     MemoryMaintenanceReport,
     MemoryRecallHit,
     MemoryRevision,
@@ -73,6 +77,10 @@ class CausalChainRequest(BaseModel):
     scope: MemoryScope = MemoryScope.PROJECT
     project_id: str | None = Field(default="dragon-tory", max_length=200)
     source_ref: str | None = Field(default=None, max_length=500)
+    cause_at: str | None = None
+    problem_at: str | None = None
+    action_at: str | None = None
+    result_at: str | None = None
 
 
 class TaskStateRequest(BaseModel):
@@ -89,6 +97,29 @@ class CorrectionRequest(BaseModel):
 class SourceFeedbackRequest(BaseModel):
     confirmed: bool
     owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+
+
+class TruthFeedbackRequest(BaseModel):
+    confirmed: bool
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+
+
+class CausalFeedbackRequest(BaseModel):
+    confirmed: bool
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+
+
+class EntityMergeFinalizeRequest(BaseModel):
+    queue_id: str = Field(min_length=1, max_length=200)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+
+
+class AdaptiveForgettingRequest(BaseModel):
+    owner_id: str = Field(default="local-user", min_length=1, max_length=200)
+    scope: MemoryScope = MemoryScope.PROJECT
+    project_id: str | None = Field(default="dragon-tory", max_length=200)
+    limit: int = Field(default=1000, ge=1, le=10_000)
+    archive_after_days: int = Field(default=180, ge=30, le=3650)
 
 
 class GreyConsolidateRequest(BaseModel):
@@ -290,7 +321,7 @@ def sync_memory(payload: MemorySyncRequest, request: Request) -> MemorySyncRespo
 def grey_matter_status(request: Request) -> dict:
     embedder = request.app.state.memory.embedder
     return {
-        "version": "01.00.00",
+        "version": "02.00.00",
         "embedding_provider": embedder.name,
         "embedding_model": embedder.model,
         "embedding_dimensions": embedder.dimensions,
@@ -308,6 +339,12 @@ def grey_matter_status(request: Request) -> dict:
             "correction-learning",
             "counterfactual-verification",
             "skill-memory",
+            "adaptive-retrieval",
+            "truth-calibration",
+            "contradiction-clusters",
+            "temporal-causality",
+            "guardian-entity-merge",
+            "adaptive-forgetting",
         ],
     }
 
@@ -373,6 +410,10 @@ def record_causal_chain(
         scope=payload.scope,
         project_id=payload.project_id,
         source_ref=payload.source_ref,
+        cause_at=payload.cause_at,
+        problem_at=payload.problem_at,
+        action_at=payload.action_at,
+        result_at=payload.result_at,
     )
 
 
@@ -505,6 +546,154 @@ def grey_source_feedback(
         }
     except MemoryNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.post("/grey-matter/truth/{memory_id}/feedback")
+def grey_truth_feedback(
+    memory_id: str,
+    payload: TruthFeedbackRequest,
+    request: Request,
+) -> dict:
+    try:
+        return request.app.state.grey_matter.record_truth_feedback(
+            memory_id,
+            confirmed=payload.confirmed,
+            owner_id=payload.owner_id,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+
+@router.get(
+    "/grey-matter/calibration",
+    response_model=CalibrationReport,
+)
+def grey_calibration(
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+    scope: Annotated[MemoryScope, Query()] = MemoryScope.PROJECT,
+    project_id: Annotated[str | None, Query()] = "dragon-tory",
+    buckets: Annotated[int, Query(ge=2, le=20)] = 10,
+) -> CalibrationReport:
+    return request.app.state.grey_matter.calibration_report(
+        owner_id=owner_id,
+        scope=scope,
+        project_id=project_id,
+        buckets=buckets,
+    )
+
+
+@router.get(
+    "/grey-matter/contradictions",
+    response_model=list[ContradictionCluster],
+)
+def grey_contradictions(
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+    scope: Annotated[MemoryScope, Query()] = MemoryScope.PROJECT,
+    project_id: Annotated[str | None, Query()] = "dragon-tory",
+    limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
+) -> list[ContradictionCluster]:
+    return request.app.state.grey_matter.contradiction_clusters(
+        owner_id=owner_id,
+        scope=scope,
+        project_id=project_id,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/grey-matter/entities/{canonical_id}/merge/{duplicate_id}",
+    response_model=EntityMergeProposal,
+)
+def grey_propose_entity_merge(
+    canonical_id: str,
+    duplicate_id: str,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+) -> EntityMergeProposal:
+    try:
+        return request.app.state.grey_matter.propose_entity_merge(
+            canonical_id,
+            duplicate_id,
+            owner_id=owner_id,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/grey-matter/entities/{canonical_id}/merge/{duplicate_id}/finalize",
+    response_model=EntityMergeProposal,
+)
+def grey_finalize_entity_merge(
+    canonical_id: str,
+    duplicate_id: str,
+    payload: EntityMergeFinalizeRequest,
+    request: Request,
+) -> EntityMergeProposal:
+    try:
+        return request.app.state.grey_matter.finalize_entity_merge(
+            canonical_id,
+            duplicate_id,
+            payload.queue_id,
+            owner_id=payload.owner_id,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/grey-matter/causal/{cause_id}/effect/{effect_id}/feedback"
+)
+def grey_causal_feedback(
+    cause_id: str,
+    effect_id: str,
+    payload: CausalFeedbackRequest,
+    request: Request,
+) -> dict:
+    try:
+        link = request.app.state.grey_matter.reinforce_causal_link(
+            cause_id,
+            effect_id,
+            confirmed=payload.confirmed,
+            owner_id=payload.owner_id,
+        )
+        return link.model_dump(mode="json")
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/grey-matter/forgetting",
+    response_model=MemoryForgettingReport,
+)
+def grey_adaptive_forgetting(
+    payload: AdaptiveForgettingRequest,
+    request: Request,
+) -> MemoryForgettingReport:
+    return request.app.state.grey_matter.adaptive_forgetting(
+        owner_id=payload.owner_id,
+        scope=payload.scope,
+        project_id=payload.project_id,
+        limit=payload.limit,
+        archive_after_days=payload.archive_after_days,
+    )
 
 
 @router.post(
