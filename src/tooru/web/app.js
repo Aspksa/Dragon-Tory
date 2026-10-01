@@ -775,7 +775,7 @@ function wireCodeCopy(root){
   });
 }
 function emptyChat(){
-  $("chatBox").innerHTML='<div class="empty-chat"><div class="dragon">🐉</div><strong>Чем помочь?</strong><span>Напишите сообщение Дракончику Тоору.</span></div>';
+  $("chatBox").innerHTML='<div class="empty-chat"><div class="dragon">🐉</div><strong>Чем помочь?</strong><span>Напишите сообщение или прикрепите документы — Тоору сохранит, изучит и запомнит их.</span></div>';
 }
 function addMsg(role,text,{retry=false}={}){
   const wrap=document.createElement("div");wrap.className="msg-wrap "+role;
@@ -840,7 +840,7 @@ async function loadChat(chatId){
   if(chatGenerating)return;saveDraft();
   try{
     const d=await api("/v1/chats/"+encodeURIComponent(chatId));
-    activeChatId=d.id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;$("chatMeta").textContent=(d.message_count||0)+" сообщений · "+fmtChatDate(d.updated_at)+" · DeepSeek";
+    activeChatId=d.id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;$("chatMeta").textContent=(d.message_count||0)+" сообщений · "+fmtChatDate(d.updated_at)+" · личный помощник · DeepSeek";
     renderChatMessages(d.messages||[]);restoreDraft();await loadChatList($("chatSearch").value.trim());$("chatInput").focus();
   }catch(e){$("chatStatus").textContent="Не удалось открыть чат: "+e.message}
 }
@@ -848,7 +848,7 @@ async function createNewChat(){
   if(chatGenerating)return;saveDraft();
   try{
     const d=await api("/v1/chats",{method:"POST",body:JSON.stringify({})});
-    activeChatId=d.id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;$("chatMeta").textContent="Новый чат · DeepSeek";emptyChat();restoreDraft();await loadChatList();$("chatInput").focus();
+    activeChatId=d.id;activeChatTitle=d.title;$("chatTitle").textContent=d.title;$("chatMeta").textContent="Новый чат · личный помощник · документы · DeepSeek";emptyChat();restoreDraft();await loadChatList();$("chatInput").focus();
   }catch(e){$("chatStatus").textContent="Ошибка создания чата: "+e.message}
 }
 async function ensureChatReady(){
@@ -1011,7 +1011,7 @@ function homeNodeVersion(id){
 function homeGraphNodes(){
   const virtual=[
     {id:"deepseek",title:"DeepSeek",icon:"AI",description:"Облачная модель рассуждения через Cloud.ru Foundation Models.",depends_on:["memory"]},
-    {id:"chat",title:"Чат",icon:"CH",description:"Локальная история диалогов и контекст взаимодействия с Тоору.",depends_on:["memory","deepseek"]},
+    {id:"chat",title:"Личный помощник",icon:"CH",description:"Чат Тоору, загрузка документов, их изучение, поиск по содержимому и долговременная память.",depends_on:["memory","deepseek","drive"]},
     {id:"guardian",title:"Guardian",icon:"GD",description:"Контроль, фильтрация и обслуживание долговременной памяти.",depends_on:["memory"]},
     {id:"runtime",title:"Runtime",icon:"RT",description:"Живое состояние локального процесса, CPU, RAM, температуры и диска.",depends_on:[]},
   ];
