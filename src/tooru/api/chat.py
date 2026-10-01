@@ -336,6 +336,47 @@ async def upload_chat_document(
         temp.unlink(missing_ok=True)
 
 
+@router.post("/documents/{document_id}/restudy")
+async def restudy_chat_document(
+    document_id: str,
+    request: Request,
+) -> dict:
+    try:
+        document = request.app.state.cloud_store.get(document_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Документ не найден.",
+        ) from exc
+
+    try:
+        studied = await request.app.state.chat_document_assistant.study(
+            document_id,
+            chat_id="manual-restudy",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Не удалось повторно изучить документ: {exc}",
+        ) from exc
+
+    return {
+        "document_id": document_id,
+        "name": document["name"],
+        "kind": studied.get("kind"),
+        "extraction_method": studied.get("extraction_method"),
+        "ocr_used": bool(studied.get("ocr_used")),
+        "indexed_chunks": int(studied.get("indexed_chunks") or 0),
+        "ai_studied": bool(studied.get("ai_studied")),
+        "provider": studied.get("provider"),
+        "model": studied.get("model"),
+        "memory_status": studied.get("memory_status"),
+        "memory_id": studied.get("memory_id"),
+        "summary": str(studied.get("summary") or ""),
+        "ai_error": studied.get("ai_error"),
+    }
+
+
 @router.post("", response_model=ChatResponse)
 async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
     if not request.app.state.ai_router.has_provider("deepseek"):
