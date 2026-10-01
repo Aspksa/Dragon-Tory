@@ -95,6 +95,10 @@ class MemoryGuardian:
             tags=memory.tags,
             source=memory.source,
             source_ref=memory.source_ref,
+            observed_at=memory.observed_at,
+            event_at=memory.event_at,
+            valid_from=memory.valid_from,
+            valid_to=memory.valid_to,
             reason=reason,
         )
         risk, policy_reason = self._classify(request, decision)
@@ -641,6 +645,10 @@ class MemoryGuardian:
             "kind": decision.kind.value,
             "key": decision.key,
             "content": " ".join(decision.content.lower().split()),
+            "observed_at": decision.observed_at,
+            "event_at": decision.event_at,
+            "valid_from": decision.valid_from,
+            "valid_to": decision.valid_to,
             "target_memory_id": decision.target_memory_id,
         }
         raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)

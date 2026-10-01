@@ -5,6 +5,7 @@ import pytest
 from tooru.chat.pipeline import route_user_memory
 from tooru.memory.models import (
     MemoryCreate,
+    MemoryEvidenceCreate,
     MemoryKind,
     MemoryScope,
     MemorySearch,
@@ -232,3 +233,58 @@ def test_chat_memory_routing_keeps_project_preference_in_project() -> None:
 
     assert routed[MemoryScope.PERSONAL] == []
     assert len(routed[MemoryScope.PROJECT]) == 1
+
+def test_temporal_memory_and_evidence_persist(tmp_path: Path) -> None:
+    path = tmp_path / "temporal.sqlite3"
+    store = SQLiteMemoryStore(path)
+    store.initialize()
+    item = store.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.FACT,
+            content="Петров назначен водителем автомобиля.",
+            source="service-memo",
+            source_ref="document:memo-1",
+            observed_at="2026-10-01T10:00:00+00:00",
+            event_at="2026-10-01T09:00:00+00:00",
+            valid_from="2026-10-01T00:00:00+00:00",
+            valid_to="2026-12-31T23:59:59+00:00",
+        )
+    )
+    evidence = store.add_evidence(
+        item.id,
+        MemoryEvidenceCreate(
+            source_type="document",
+            source_ref="document:memo-1",
+            document_id="memo-1",
+            page=2,
+            excerpt="Назначить Петрова водителем.",
+            extraction_method="service-memo-parser",
+            confidence=0.98,
+        ),
+    )
+
+    reopened = SQLiteMemoryStore(path)
+    reopened.initialize()
+    loaded = reopened.get(item.id)
+    proof = reopened.evidence_for(item.id)
+
+    assert loaded.event_at == "2026-10-01T09:00:00+00:00"
+    assert loaded.valid_from == "2026-10-01T00:00:00+00:00"
+    assert loaded.valid_to == "2026-12-31T23:59:59+00:00"
+    assert proof[0].id == evidence.id
+    assert proof[0].document_id == "memo-1"
+    assert proof[0].page == 2
+    assert reopened.health_report(deep=True)["orphan_evidence"] == 0
+
+
+def test_temporal_memory_rejects_reversed_interval() -> None:
+    with pytest.raises(ValueError):
+        MemoryCreate(
+            scope=MemoryScope.PERSONAL,
+            content="Некорректный период.",
+            valid_from="2026-12-31T00:00:00+00:00",
+            valid_to="2026-01-01T00:00:00+00:00",
+        )
+

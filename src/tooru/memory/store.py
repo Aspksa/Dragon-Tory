@@ -10,6 +10,8 @@ from tooru.memory.models import (
     ConversationMessage,
     MemoryCreate,
     MemoryDelete,
+    MemoryEvidence,
+    MemoryEvidenceCreate,
     MemoryFeedback,
     MemoryGuardianAuditEvent,
     MemoryGuardianDecision,
@@ -47,6 +49,7 @@ class SQLiteMemoryStore:
         "memory_vectors",
         "memory_links",
         "memory_history",
+        "memory_evidence",
         "memory_maintenance_runs",
         "memory_guardian_events",
         "memory_guardian_queue",
@@ -55,7 +58,8 @@ class SQLiteMemoryStore:
     SELECT_COLUMNS = """
         id, owner_id, scope, project_id, kind, memory_key, content,
         source, source_ref, confidence, importance, tags_json, pinned,
-        expires_at, status, access_count, helpful_count, unhelpful_count,
+        expires_at, observed_at, event_at, valid_from, valid_to,
+        status, access_count, helpful_count, unhelpful_count,
         last_accessed_at, reinforced_at, archived_at,
         device_id, session_id, client_mutation_id, revision,
         created_at, updated_at, deleted_at
@@ -86,6 +90,10 @@ class SQLiteMemoryStore:
                     tags_json TEXT NOT NULL DEFAULT '[]',
                     pinned INTEGER NOT NULL DEFAULT 0,
                     expires_at TEXT,
+                    observed_at TEXT,
+                    event_at TEXT,
+                    valid_from TEXT,
+                    valid_to TEXT,
                     status TEXT NOT NULL DEFAULT 'active',
                     access_count INTEGER NOT NULL DEFAULT 0,
                     helpful_count INTEGER NOT NULL DEFAULT 0,
@@ -149,6 +157,29 @@ class SQLiteMemoryStore:
                     UNIQUE(memory_id, revision),
                     FOREIGN KEY(memory_id) REFERENCES memory_items(id) ON DELETE CASCADE
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_evidence (
+                    id TEXT PRIMARY KEY,
+                    memory_id TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_ref TEXT,
+                    document_id TEXT,
+                    page INTEGER,
+                    excerpt TEXT,
+                    extraction_method TEXT,
+                    confidence REAL NOT NULL DEFAULT 1.0,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(memory_id) REFERENCES memory_items(id) ON DELETE CASCADE
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_memory_evidence_memory
+                ON memory_evidence(memory_id, created_at DESC)
                 """
             )
             conn.execute(
@@ -332,6 +363,8 @@ class SQLiteMemoryStore:
                 return existing
 
         now = self._now()
+        payload = memory.model_dump()
+        payload["observed_at"] = payload.get("observed_at") or now
         item = MemoryItem(
             id=str(uuid4()),
             status=MemoryStatus.ACTIVE,
@@ -345,7 +378,7 @@ class SQLiteMemoryStore:
             created_at=now,
             updated_at=now,
             deleted_at=None,
-            **memory.model_dump(),
+            **payload,
         )
         with self._connect() as conn:
             conn.execute(
@@ -353,13 +386,14 @@ class SQLiteMemoryStore:
                 INSERT INTO memory_items (
                     id, owner_id, scope, project_id, kind, memory_key, content,
                     source, source_ref, confidence, importance, tags_json, pinned,
-                    expires_at, status, access_count, helpful_count, unhelpful_count,
+                    expires_at, observed_at, event_at, valid_from, valid_to,
+                    status, access_count, helpful_count, unhelpful_count,
                     last_accessed_at, reinforced_at, archived_at,
                     device_id, session_id, client_mutation_id, revision,
                     created_at, updated_at, deleted_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 self._item_values(item),
@@ -411,6 +445,10 @@ class SQLiteMemoryStore:
             "tags": changes.get("tags", current.tags),
             "pinned": changes.get("pinned", current.pinned),
             "expires_at": changes.get("expires_at", current.expires_at),
+            "observed_at": changes.get("observed_at", current.observed_at),
+            "event_at": changes.get("event_at", current.event_at),
+            "valid_from": changes.get("valid_from", current.valid_from),
+            "valid_to": changes.get("valid_to", current.valid_to),
             "device_id": changes.get("device_id", current.device_id),
             "session_id": changes.get("session_id", current.session_id),
         }
@@ -424,6 +462,7 @@ class SQLiteMemoryStore:
                 SET kind = ?, memory_key = ?, content = ?, source = ?,
                     source_ref = ?, confidence = ?, importance = ?,
                     tags_json = ?, pinned = ?, expires_at = ?,
+                    observed_at = ?, event_at = ?, valid_from = ?, valid_to = ?,
                     device_id = ?, session_id = ?,
                     revision = ?, updated_at = ?
                 WHERE id = ? AND owner_id = ? AND revision = ?
@@ -434,6 +473,8 @@ class SQLiteMemoryStore:
                     values["source"], values["source_ref"], values["confidence"],
                     values["importance"], self._dump_tags(values["tags"]),
                     int(values["pinned"]), values["expires_at"],
+                    values["observed_at"], values["event_at"],
+                    values["valid_from"], values["valid_to"],
                     values["device_id"], values["session_id"], next_revision,
                     now, memory_id, owner_id, current.revision,
                 ),
@@ -892,6 +933,72 @@ class SQLiteMemoryStore:
                 params,
             ).fetchall()
         return [self._row_to_link(row) for row in rows]
+
+    def add_evidence(
+        self,
+        memory_id: str,
+        evidence: MemoryEvidenceCreate,
+        *,
+        owner_id: str = "local-user",
+    ) -> MemoryEvidence:
+        self.get(memory_id, owner_id)
+        item = MemoryEvidence(
+            id=str(uuid4()),
+            memory_id=memory_id,
+            created_at=self._now(),
+            **evidence.model_dump(),
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO memory_evidence (
+                    id, memory_id, source_type, source_ref, document_id,
+                    page, excerpt, extraction_method, confidence, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item.id, item.memory_id, item.source_type, item.source_ref,
+                    item.document_id, item.page, item.excerpt,
+                    item.extraction_method, item.confidence, item.created_at,
+                ),
+            )
+        return item
+
+    def evidence_for(
+        self,
+        memory_id: str,
+        *,
+        owner_id: str = "local-user",
+        limit: int = 100,
+    ) -> list[MemoryEvidence]:
+        self.get(memory_id, owner_id)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, memory_id, source_type, source_ref, document_id,
+                       page, excerpt, extraction_method, confidence, created_at
+                FROM memory_evidence
+                WHERE memory_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (memory_id, max(1, min(limit, 500))),
+            ).fetchall()
+        return [
+            MemoryEvidence(
+                id=row["id"],
+                memory_id=row["memory_id"],
+                source_type=row["source_type"],
+                source_ref=row["source_ref"],
+                document_id=row["document_id"],
+                page=row["page"],
+                excerpt=row["excerpt"],
+                extraction_method=row["extraction_method"],
+                confidence=row["confidence"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
 
     def history_for(self, memory_id: str, owner_id: str) -> list[MemoryRevision]:
         self.get(memory_id, owner_id, include_deleted=True)
@@ -1460,6 +1567,10 @@ class SQLiteMemoryStore:
             "tags_json": "TEXT NOT NULL DEFAULT '[]'",
             "pinned": "INTEGER NOT NULL DEFAULT 0",
             "expires_at": "TEXT",
+            "observed_at": "TEXT",
+            "event_at": "TEXT",
+            "valid_from": "TEXT",
+            "valid_to": "TEXT",
             "status": "TEXT NOT NULL DEFAULT 'active'",
             "access_count": "INTEGER NOT NULL DEFAULT 0",
             "helpful_count": "INTEGER NOT NULL DEFAULT 0",
@@ -1491,6 +1602,7 @@ class SQLiteMemoryStore:
             "orphan_vectors": 0,
             "orphan_links": 0,
             "orphan_history": 0,
+            "orphan_evidence": 0,
             "active_memories": 0,
             "personal_memories": 0,
             "project_memories": 0,
@@ -1603,6 +1715,19 @@ class SQLiteMemoryStore:
                         or 0
                     )
 
+                if {"memory_items", "memory_evidence"} <= tables:
+                    report["orphan_evidence"] = int(
+                        conn.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM memory_evidence e
+                            LEFT JOIN memory_items m ON m.id = e.memory_id
+                            WHERE m.id IS NULL
+                            """
+                        ).fetchone()[0]
+                        or 0
+                    )
+
                 if "memory_fts" in tables:
                     report["fts_available"] = True
                     report["fts_entries"] = int(
@@ -1649,6 +1774,7 @@ class SQLiteMemoryStore:
                 or report["orphan_vectors"] > 0
                 or report["orphan_links"] > 0
                 or report["orphan_history"] > 0
+                or report["orphan_evidence"] > 0
                 or report["foreign_key_errors"] > 0
                 or (
                     deep
@@ -1680,7 +1806,8 @@ class SQLiteMemoryStore:
             item.kind.value, item.key, item.content, item.source, item.source_ref,
             item.confidence, item.importance,
             SQLiteMemoryStore._dump_tags(item.tags), int(item.pinned),
-            item.expires_at, item.status.value, item.access_count,
+            item.expires_at, item.observed_at, item.event_at,
+            item.valid_from, item.valid_to, item.status.value, item.access_count,
             item.helpful_count, item.unhelpful_count, item.last_accessed_at,
             item.reinforced_at, item.archived_at, item.device_id, item.session_id,
             item.client_mutation_id, item.revision, item.created_at,
@@ -1713,6 +1840,10 @@ class SQLiteMemoryStore:
             tags=json.loads(row["tags_json"] or "[]"),
             pinned=bool(row["pinned"]),
             expires_at=row["expires_at"],
+            observed_at=row["observed_at"],
+            event_at=row["event_at"],
+            valid_from=row["valid_from"],
+            valid_to=row["valid_to"],
             status=MemoryStatus(row["status"]),
             access_count=row["access_count"],
             helpful_count=row["helpful_count"],

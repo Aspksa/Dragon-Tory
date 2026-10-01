@@ -26,6 +26,9 @@ class ChatStore:
                 CREATE TABLE IF NOT EXISTS chats (
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
+                    summary TEXT NOT NULL DEFAULT '',
+                    summary_message_count INTEGER NOT NULL DEFAULT 0,
+                    summary_updated_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -45,6 +48,24 @@ class ChatStore:
                 CREATE INDEX IF NOT EXISTS idx_chat_messages_chat
                     ON chat_messages(chat_id, created_at);
                 """
+            )
+            self._ensure_column(
+                conn,
+                "chats",
+                "summary",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                conn,
+                "chats",
+                "summary_message_count",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                conn,
+                "chats",
+                "summary_updated_at",
+                "TEXT",
             )
 
     def create(self, title: str = "Новый чат") -> dict[str, Any]:
@@ -68,6 +89,9 @@ class ChatStore:
                 SELECT
                     c.id,
                     c.title,
+                    c.summary,
+                    c.summary_message_count,
+                    c.summary_updated_at,
                     c.created_at,
                     c.updated_at,
                     COUNT(m.id) AS message_count
@@ -283,6 +307,15 @@ class ChatStore:
             )
             conn.execute(
                 """
+                UPDATE chats
+                SET summary = '', summary_message_count = 0,
+                    summary_updated_at = NULL
+                WHERE id = ?
+                """,
+                (chat_id,),
+            )
+            conn.execute(
+                """
                 INSERT INTO chat_messages(id, chat_id, role, content, created_at)
                 VALUES (?, ?, 'assistant', ?, ?)
                 """,
@@ -299,6 +332,50 @@ class ChatStore:
             "content": assistant_content,
             "created_at": now,
         }
+
+    def working_memory(
+        self,
+        chat_id: str,
+        *,
+        recent_limit: int = 20,
+    ) -> dict[str, Any]:
+        chat = self.get(chat_id)
+        return {
+            "summary": str(chat.get("summary") or ""),
+            "summary_message_count": int(chat.get("summary_message_count") or 0),
+            "summary_updated_at": chat.get("summary_updated_at"),
+            "recent_messages": self.messages(chat_id, limit=recent_limit),
+        }
+
+    def update_summary(
+        self,
+        chat_id: str,
+        *,
+        summary: str,
+        covered_messages: int,
+    ) -> dict[str, Any]:
+        self.get(chat_id)
+        now = self._now()
+        clean = re.sub(r"\s+", " ", summary).strip()
+        if len(clean) > 12_000:
+            clean = clean[:12_000].rstrip()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE chats
+                SET summary = ?, summary_message_count = ?,
+                    summary_updated_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    clean,
+                    max(0, int(covered_messages)),
+                    now,
+                    now,
+                    chat_id,
+                ),
+            )
+        return self.get(chat_id)
 
     def counts(self) -> dict[str, int]:
         with self._connect() as conn:
@@ -322,6 +399,22 @@ class ChatStore:
         if len(clean) <= 64:
             return clean
         return clean[:61].rstrip(" ,.;:-") + "…"
+
+    @staticmethod
+    def _ensure_column(
+        conn: sqlite3.Connection,
+        table: str,
+        column: str,
+        definition: str,
+    ) -> None:
+        existing = {
+            row["name"]
+            for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column not in existing:
+            conn.execute(
+                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+            )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(

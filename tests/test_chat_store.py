@@ -88,3 +88,47 @@ def test_chat_history_survives_store_reopen(tmp_path: Path) -> None:
 
     assert second.get(chat_id)["title"] == "Сохраняемый чат"
     assert second.messages(chat_id)[0]["content"] == "Сообщение"
+
+def test_working_memory_summary_persists_and_retry_invalidates(tmp_path: Path) -> None:
+    path = tmp_path / "working.sqlite3"
+    store = ChatStore(path)
+    store.initialize()
+    chat_id = store.create("Длинный чат")["id"]
+    for index in range(6):
+        role = "user" if index % 2 == 0 else "assistant"
+        store.add_message(
+            chat_id,
+            role=role,
+            content=f"Сообщение {index}",
+        )
+
+    store.update_summary(
+        chat_id,
+        summary="Обсуждаем архитектуру памяти и следующий этап.",
+        covered_messages=4,
+    )
+    working = store.working_memory(chat_id, recent_limit=2)
+    assert working["summary"] == (
+        "Обсуждаем архитектуру памяти и следующий этап."
+    )
+    assert working["summary_message_count"] == 4
+    assert [item["content"] for item in working["recent_messages"]] == [
+        "Сообщение 4",
+        "Сообщение 5",
+    ]
+
+    reopened = ChatStore(path)
+    reopened.initialize()
+    assert reopened.get(chat_id)["summary_message_count"] == 4
+
+    reopened.add_message(chat_id, role="user", content="Последний вопрос")
+    reopened.add_message(chat_id, role="assistant", content="Старый ответ")
+    _, _, sequence = reopened.retry_context(chat_id)
+    reopened.replace_after(
+        chat_id,
+        sequence=sequence,
+        assistant_content="Новый ответ",
+    )
+    refreshed = reopened.get(chat_id)
+    assert refreshed["summary"] == ""
+    assert refreshed["summary_message_count"] == 0

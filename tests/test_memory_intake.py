@@ -55,6 +55,10 @@ def test_structured_medium_risk_memory_passes_through_guardian(
     assert result.memory.source == "tooru-garage-study"
     assert result.memory.source_ref == "vehicle-7"
     assert engine.get(result.memory.id).content.startswith("Автомобиль")
+    evidence = engine.evidence(result.memory.id)
+    assert len(evidence) == 1
+    assert evidence[0].source_type == "tooru-garage-study"
+    assert evidence[0].source_ref == "vehicle-7"
     assert guardian.status().applied == 1
 
 

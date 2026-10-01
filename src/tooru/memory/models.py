@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
@@ -70,9 +71,27 @@ class MemoryCreate(ScopedMemoryModel):
     tags: list[str] = Field(default_factory=list, max_length=30)
     pinned: bool = False
     expires_at: str | None = None
+    observed_at: str | None = None
+    event_at: str | None = None
+    valid_from: str | None = None
+    valid_to: str | None = None
     device_id: str | None = Field(default=None, max_length=200)
     session_id: str | None = Field(default=None, max_length=200)
     client_mutation_id: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def validate_temporal_interval(self):
+        if self.valid_from and self.valid_to:
+            try:
+                start = datetime.fromisoformat(self.valid_from)
+                end = datetime.fromisoformat(self.valid_to)
+            except ValueError as exc:
+                raise ValueError(
+                    "valid_from and valid_to must be ISO-8601 timestamps"
+                ) from exc
+            if end < start:
+                raise ValueError("valid_to cannot be earlier than valid_from")
+        return self
 
 
 class MemoryItem(MemoryCreate):
@@ -101,9 +120,27 @@ class MemoryUpdate(BaseModel):
     tags: list[str] | None = Field(default=None, max_length=30)
     pinned: bool | None = None
     expires_at: str | None = None
+    observed_at: str | None = None
+    event_at: str | None = None
+    valid_from: str | None = None
+    valid_to: str | None = None
     device_id: str | None = Field(default=None, max_length=200)
     session_id: str | None = Field(default=None, max_length=200)
     expected_revision: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def validate_temporal_interval(self):
+        if self.valid_from and self.valid_to:
+            try:
+                start = datetime.fromisoformat(self.valid_from)
+                end = datetime.fromisoformat(self.valid_to)
+            except ValueError as exc:
+                raise ValueError(
+                    "valid_from and valid_to must be ISO-8601 timestamps"
+                ) from exc
+            if end < start:
+                raise ValueError("valid_to cannot be earlier than valid_from")
+        return self
 
 
 class MemoryDelete(BaseModel):
@@ -153,6 +190,22 @@ class MemoryContextPack(BaseModel):
     project_hits: list[MemoryRecallHit]
     rendered_context: str
     total_memories: int
+
+
+class MemoryEvidenceCreate(BaseModel):
+    source_type: str = Field(default="unknown", min_length=1, max_length=100)
+    source_ref: str | None = Field(default=None, max_length=500)
+    document_id: str | None = Field(default=None, max_length=200)
+    page: int | None = Field(default=None, ge=1)
+    excerpt: str | None = Field(default=None, max_length=4_000)
+    extraction_method: str | None = Field(default=None, max_length=100)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class MemoryEvidence(MemoryEvidenceCreate):
+    id: str
+    memory_id: str
+    created_at: str
 
 
 class MemoryFeedback(BaseModel):
@@ -211,8 +264,26 @@ class MemoryIntelligenceDecision(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=30)
     source: str | None = Field(default=None, max_length=100)
     source_ref: str | None = Field(default=None, max_length=500)
+    observed_at: str | None = None
+    event_at: str | None = None
+    valid_from: str | None = None
+    valid_to: str | None = None
     target_memory_id: str | None = Field(default=None, max_length=200)
     reason: str = Field(default="", max_length=2_000)
+
+    @model_validator(mode="after")
+    def validate_temporal_interval(self):
+        if self.valid_from and self.valid_to:
+            try:
+                start = datetime.fromisoformat(self.valid_from)
+                end = datetime.fromisoformat(self.valid_to)
+            except ValueError as exc:
+                raise ValueError(
+                    "valid_from and valid_to must be ISO-8601 timestamps"
+                ) from exc
+            if end < start:
+                raise ValueError("valid_to cannot be earlier than valid_from")
+        return self
 
 
 class MemoryIntelligenceResult(BaseModel):

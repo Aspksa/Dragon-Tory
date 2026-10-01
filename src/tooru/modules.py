@@ -6,10 +6,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "dashboard",
         "title": "Главная / Системный мозг",
-        "version": "01.06.00",
+        "version": "01.07.00",
         "area": "system",
         "description": "Real-time дашборд состояния, архитектуры, памяти, нагрузки и активных процессов.",
-        "last_update": "Диагностика памяти расширена для Memory v5 и нового FTS5 retrieval-канала.",
+        "last_update": "Cognitive Core II: рабочая память длинного чата, эпизоды результата, временные факты и provenance.",
         "depends_on": ["memory", "drive", "updater"],
     },
     {
@@ -96,10 +96,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "memory",
         "title": "Память Тоору",
-        "version": "02.00.00",
+        "version": "02.01.00",
         "area": "system",
         "description": "Раздельная личная и проектная долговременная память, Guardian, поиск и обслуживание.",
-        "last_update": "Memory v5 объединяет SQLite FTS5 lexical retrieval с semantic reranking и не теряет старые релевантные записи из-за окна приоритетов.",
+        "last_update": "Добавлены episodic outcome memory, temporal truth поля и доказательства происхождения каждой структурированной записи.",
         "depends_on": [],
     },
     {

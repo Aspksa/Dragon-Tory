@@ -10,6 +10,8 @@ from tooru.memory.models import (
     MemoryContextRequest,
     MemoryCreate,
     MemoryDelete,
+    MemoryEvidence,
+    MemoryEvidenceCreate,
     MemoryExtractRequest,
     MemoryExtractResponse,
     MemoryFeedback,
@@ -94,6 +96,32 @@ class MemoryEngine:
 
     def history(self, memory_id: str, owner_id: str) -> list[MemoryRevision]:
         return self.store.history_for(memory_id, owner_id)
+
+    def add_evidence(
+        self,
+        memory_id: str,
+        evidence: MemoryEvidenceCreate,
+        *,
+        owner_id: str = "local-user",
+    ) -> MemoryEvidence:
+        return self.store.add_evidence(
+            memory_id,
+            evidence,
+            owner_id=owner_id,
+        )
+
+    def evidence(
+        self,
+        memory_id: str,
+        *,
+        owner_id: str = "local-user",
+        limit: int = 100,
+    ) -> list[MemoryEvidence]:
+        return self.store.evidence_for(
+            memory_id,
+            owner_id=owner_id,
+            limit=limit,
+        )
 
     def search(self, request: MemorySearch) -> list[MemoryItem]:
         return [hit.memory for hit in self.recall(request)]

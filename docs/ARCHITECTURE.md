@@ -18,7 +18,7 @@ and isolated when providers change.
 7. Web UI — desktop/browser interface.
 8. Mobile clients — planned clients using the same backend contracts.
 
-## Memory Engine v5
+## Memory Engine v5.1 / Cognitive Core II
 
 Capabilities:
 - hybrid semantic and lexical recall;
@@ -34,6 +34,13 @@ Capabilities:
 - full revision snapshots;
 - recall reinforcement from usage and feedback;
 - scheduled local maintenance.
+
+Additional cognitive layers:
+
+- Working Memory — recent chat window plus persistent rolling summary.
+- Episodic Memory — successful task/result episodes.
+- Temporal Truth — observed/event/validity timestamps.
+- Provenance — evidence records linked to durable memory.
 
 See docs/MEMORY_ENGINE.md.
 

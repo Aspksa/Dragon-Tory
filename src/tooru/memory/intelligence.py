@@ -172,6 +172,10 @@ class MemoryIntelligence:
                     importance=candidate.importance,
                     confidence=candidate.confidence,
                     tags=candidate.tags,
+                    observed_at=candidate.observed_at,
+                    event_at=candidate.event_at,
+                    valid_from=candidate.valid_from,
+                    valid_to=candidate.valid_to,
                     target_memory_id=target.id if target is not None else None,
                     reason=(
                         "Existing keyed memory should be updated."
@@ -317,6 +321,10 @@ class MemoryIntelligence:
                     confidence=decision.confidence,
                     importance=decision.importance,
                     tags=sorted(set(decision.tags + ["intelligence"])),
+                    observed_at=decision.observed_at,
+                    event_at=decision.event_at,
+                    valid_from=decision.valid_from,
+                    valid_to=decision.valid_to,
                     device_id=request.device_id,
                     session_id=request.session_id,
                 )
@@ -342,6 +350,10 @@ class MemoryIntelligence:
                     confidence=decision.confidence,
                     importance=decision.importance,
                     tags=sorted(set(current.tags + decision.tags + ["intelligence"])),
+                    observed_at=decision.observed_at or current.observed_at,
+                    event_at=decision.event_at or current.event_at,
+                    valid_from=decision.valid_from or current.valid_from,
+                    valid_to=decision.valid_to or current.valid_to,
                     device_id=request.device_id,
                     session_id=request.session_id,
                     expected_revision=current.revision,
@@ -460,6 +472,10 @@ class MemoryIntelligence:
             "content": item.content,
             "importance": item.importance,
             "confidence": item.confidence,
+            "observed_at": item.observed_at,
+            "event_at": item.event_at,
+            "valid_from": item.valid_from,
+            "valid_to": item.valid_to,
             "status": item.status.value,
         }
 
@@ -501,6 +517,13 @@ the new information genuinely changes. Do not invent IDs. Create stable short
 keys for durable facts/preferences/decisions when possible, e.g.
 "project.primary_model" or "ui.theme".
 
+Temporal guidance:
+- observed_at: when the system learned/observed the fact;
+- event_at: when the described event happened;
+- valid_from / valid_to: the interval during which a fact is true.
+Use null when the conversation or document does not provide a trustworthy date.
+Never invent dates.
+
 Importance guidance:
 0.90-1.00 permanent rules, critical decisions, identity-defining project facts
 0.70-0.89 important goals, preferences, architecture, active commitments
@@ -517,6 +540,10 @@ Return JSON only:
     "importance":0.0,
     "confidence":0.0,
     "tags":["short-tag"],
+    "observed_at":"ISO-8601-or-null",
+    "event_at":"ISO-8601-or-null",
+    "valid_from":"ISO-8601-or-null",
+    "valid_to":"ISO-8601-or-null",
     "target_memory_id":"existing-id-or-null",
     "reason":"brief reason"
   }
