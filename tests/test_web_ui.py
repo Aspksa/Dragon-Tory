@@ -12,7 +12,11 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Центр диагностики" in response.text
     assert "Настройки" in response.text
     assert "Чат" in response.text
-    assert "Облачные документы Тори" in response.text
+    assert "Мой диск Тори" in response.text
+    assert 'id="cloudNewFolder"' in response.text
+    assert 'id="cloudTrash"' in response.text
+    assert 'id="passportVersions"' in response.text
+    assert 'id="passportActivity"' in response.text
     assert 'id="cloudDropZone"' in response.text
     assert 'id="cloudFileInput"' in response.text
     assert 'id="passportModal"' in response.text
