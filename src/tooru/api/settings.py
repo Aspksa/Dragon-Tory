@@ -150,7 +150,7 @@ async def test_deepseek(request: Request) -> DeepSeekTestResult:
                 max_tokens=32,
             ),
         )
-    except Exception as exc:  # noqa: BLE001 - external API boundary
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"DeepSeek API error: {type(exc).__name__}: {exc}",
