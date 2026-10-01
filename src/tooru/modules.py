@@ -123,10 +123,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "updater",
         "title": "Обновление",
-        "version": "01.05.00",
+        "version": "01.06.00",
         "area": "system",
         "description": "GitHub self-update, резервная копия, проверка, перезапуск и история.",
-        "last_update": "История обновлений теперь показывает release notes по каждому изменённому модулю, включая Гараж и Табель.",
+        "last_update": "Windows startup больше не блокируется установкой Tesseract/LibreOffice; системные движки проверяются после готовности backend.",
         "depends_on": [],
     },
 )
