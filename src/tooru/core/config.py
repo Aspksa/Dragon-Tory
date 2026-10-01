@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     memory_embedding_api_key: str | None = None
     memory_embedding_model: str | None = None
     memory_embedding_dimensions: int = 384
+    memory_embedding_cache_dir: Path | None = None
     memory_related_threshold: float = 0.82
 
     memory_automation_enabled: bool = True
