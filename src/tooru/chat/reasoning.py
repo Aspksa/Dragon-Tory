@@ -344,3 +344,69 @@ class CognitiveReasoning:
             return "learning:rule-blocked=1"
         except Exception as exc:
             return "learning:error=" + type(exc).__name__
+
+
+    async def _propose_rule(
+        self,
+        *,
+        task: str,
+        answer: str,
+        examples: list[dict],
+    ) -> ExperienceRuleCandidate:
+        system_prompt = (
+            "Ты Experience Learning Dragon Tory. По нескольким проверенным "
+            "успешным эпизодам реши, есть ли повторяемое рабочее правило. "
+            "Не превращай единичные детали, имена, суммы и случайные факты в "
+            "универсальное правило. Правило должно описывать полезный процесс. "
+            "Верни только JSON с полями should_create, key, content, "
+            "confidence, reason."
+        )
+        response = await self.router.generate(
+            AI_PROVIDER,
+            AIRequest(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "current_task": task,
+                                "current_answer": answer[-4_000:],
+                                "verified_examples": examples,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                ],
+                system_prompt=system_prompt,
+                max_tokens=900,
+            ),
+            module="memory",
+            operation="experience_learning",
+        )
+        return ExperienceRuleCandidate.model_validate(
+            self._json_payload(response.text)
+        )
+
+    @staticmethod
+    def _json_payload(text: str) -> dict:
+        cleaned = text.strip()
+        fence = chr(96) * 3
+        if cleaned.startswith(fence):
+            lines = cleaned.splitlines()[1:]
+            if lines and lines[-1].strip().startswith(fence):
+                lines = lines[:-1]
+            cleaned = "\n".join(lines).strip()
+        payload = json.loads(cleaned)
+        if not isinstance(payload, dict):
+            raise ValueError("reasoning response must be a JSON object")
+        return payload
+
+    @staticmethod
+    def _rule_key(value: str | None) -> str:
+        raw = (value or "experience.learned_rule").strip().lower()
+        raw = re.sub(r"[^a-z0-9._-]+", "_", raw).strip("._-")
+        if not raw:
+            raw = "learned_rule"
+        if not raw.startswith("experience."):
+            raw = "experience." + raw
+        return raw[:200]
