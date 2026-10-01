@@ -2,21 +2,29 @@ from __future__ import annotations
 
 import re
 from collections import deque
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.intake import MemoryIntakeGateway
 from tooru.memory.models import (
+    CalibrationBucket,
+    CalibrationReport,
+    ContradictionCluster,
+    ContradictionMember,
+    EntityMergeProposal,
     EntityResolution,
     GoalProgress,
     GraphPathNode,
     GreyMatterReport,
     MemoryConsolidateRequest,
     MemoryCreate,
+    MemoryForgettingReport,
     MemoryKind,
     MemoryLinkType,
     MemoryScope,
     MemorySearch,
+    MemoryStatus,
     MemoryUncertaintyAssessment,
     MemoryUncertaintyLevel,
     MemoryUpdate,
@@ -626,6 +634,457 @@ class GreyMatterService:
             "queue_id": corrected.decision.queue_id,
             "lesson_id": lesson_id,
         }
+
+    def record_truth_feedback(
+        self,
+        memory_id: str,
+        *,
+        confirmed: bool,
+        owner_id: str = "local-user",
+    ) -> dict[str, Any]:
+        assessment = self.memory.truth(
+            memory_id,
+            owner_id=owner_id,
+        )
+        event = self.store.add_truth_feedback(
+            memory_id,
+            owner_id=owner_id,
+            confirmed=confirmed,
+            predicted_trust=assessment.trust_score,
+        )
+        sources = self.record_source_feedback(
+            memory_id,
+            confirmed=confirmed,
+            owner_id=owner_id,
+        )
+        return {
+            "event": event.model_dump(mode="json"),
+            "source_updates": sources,
+        }
+
+    def calibration_report(
+        self,
+        *,
+        owner_id: str = "local-user",
+        scope: MemoryScope = MemoryScope.PROJECT,
+        project_id: str | None = "dragon-tory",
+        buckets: int = 10,
+        limit: int = 10_000,
+    ) -> CalibrationReport:
+        events = self.store.truth_feedback_events(
+            owner_id=owner_id,
+            scope=scope,
+            project_id=project_id,
+            limit=limit,
+        )
+        if not events:
+            return CalibrationReport(
+                sample_count=0,
+                brier_score=0.0,
+                expected_calibration_error=0.0,
+                buckets=[],
+            )
+
+        bucket_count = max(2, min(buckets, 20))
+        groups: list[list[Any]] = [[] for _ in range(bucket_count)]
+        squared_error = 0.0
+        for event in events:
+            observed = 1.0 if event.confirmed else 0.0
+            squared_error += (event.predicted_trust - observed) ** 2
+            index = min(
+                bucket_count - 1,
+                int(event.predicted_trust * bucket_count),
+            )
+            groups[index].append(event)
+
+        output: list[CalibrationBucket] = []
+        ece = 0.0
+        total = len(events)
+        for index, group in enumerate(groups):
+            if not group:
+                continue
+            predicted = sum(
+                item.predicted_trust for item in group
+            ) / len(group)
+            observed = sum(
+                1.0 if item.confirmed else 0.0
+                for item in group
+            ) / len(group)
+            gap = abs(predicted - observed)
+            ece += gap * len(group) / total
+            output.append(
+                CalibrationBucket(
+                    lower=index / bucket_count,
+                    upper=(index + 1) / bucket_count,
+                    count=len(group),
+                    predicted_mean=round(predicted, 6),
+                    observed_rate=round(observed, 6),
+                    gap=round(gap, 6),
+                )
+            )
+        return CalibrationReport(
+            sample_count=total,
+            brier_score=round(squared_error / total, 6),
+            expected_calibration_error=round(ece, 6),
+            buckets=output,
+        )
+
+    def contradiction_clusters(
+        self,
+        *,
+        owner_id: str = "local-user",
+        scope: MemoryScope = MemoryScope.PROJECT,
+        project_id: str | None = "dragon-tory",
+        limit: int = 1000,
+    ) -> list[ContradictionCluster]:
+        items = self.store.scope_items(
+            owner_id=owner_id,
+            scope=scope,
+            project_id=project_id,
+            limit=limit,
+        )
+        by_id = {item.id: item for item in items}
+        adjacency: dict[str, set[str]] = {
+            item.id: set() for item in items
+        }
+        for item in items:
+            for link in self.memory.links_for(
+                item.id,
+                MemoryLinkType.CONTRADICTS,
+            ):
+                other_id = (
+                    link.target_id
+                    if link.source_id == item.id
+                    else link.source_id
+                )
+                if other_id in by_id:
+                    adjacency[item.id].add(other_id)
+                    adjacency[other_id].add(item.id)
+
+        clusters: list[ContradictionCluster] = []
+        seen: set[str] = set()
+        for memory_id, neighbors in adjacency.items():
+            if memory_id in seen or not neighbors:
+                continue
+            stack = [memory_id]
+            component: list[str] = []
+            seen.add(memory_id)
+            while stack:
+                current = stack.pop()
+                component.append(current)
+                for neighbor in adjacency[current]:
+                    if neighbor not in seen:
+                        seen.add(neighbor)
+                        stack.append(neighbor)
+
+            members = []
+            for item_id in component:
+                item = by_id[item_id]
+                truth = self.memory.truth(
+                    item_id,
+                    owner_id=owner_id,
+                )
+                members.append(
+                    ContradictionMember(
+                        memory_id=item.id,
+                        content=item.content[:2_000],
+                        trust_score=truth.trust_score,
+                        valid_from=item.valid_from,
+                        valid_to=item.valid_to,
+                    )
+                )
+            members.sort(
+                key=lambda member: member.trust_score,
+                reverse=True,
+            )
+            gap = (
+                members[0].trust_score - members[1].trust_score
+                if len(members) > 1
+                else 0.0
+            )
+            clusters.append(
+                ContradictionCluster(
+                    cluster_id=min(component),
+                    members=members,
+                    recommended_memory_id=members[0].memory_id,
+                    trust_gap=round(max(0.0, gap), 6),
+                    unresolved=(len(members) > 1 and gap < 0.20),
+                )
+            )
+        return clusters
+
+    def propose_entity_merge(
+        self,
+        canonical_memory_id: str,
+        duplicate_memory_id: str,
+        *,
+        owner_id: str = "local-user",
+    ) -> EntityMergeProposal:
+        canonical = self.memory.get(canonical_memory_id, owner_id)
+        duplicate = self.memory.get(duplicate_memory_id, owner_id)
+        if (
+            canonical.kind is not MemoryKind.ENTITY
+            or duplicate.kind is not MemoryKind.ENTITY
+        ):
+            raise ValueError("entity merge requires ENTITY memories")
+        self._same_scope(canonical, duplicate)
+        if canonical.id == duplicate.id:
+            raise ValueError("cannot merge entity with itself")
+
+        left = self.normalize_entity(
+            canonical.key or canonical.content[:300]
+        )
+        right = self.normalize_entity(
+            duplicate.key or duplicate.content[:300]
+        )
+        exact = bool(left and left == right)
+        confidence = 0.99 if exact else 0.75
+        source_ref = (
+            f"entity-merge:{canonical.id}:{duplicate.id}"
+        )
+        candidate = self.intake.ingest(
+            MemoryCreate(
+                owner_id=canonical.owner_id,
+                scope=canonical.scope,
+                project_id=canonical.project_id,
+                kind=MemoryKind.RELATIONSHIP,
+                key=f"entity.merge.{canonical.id}.{duplicate.id}",
+                content=(
+                    "Кандидат объединения сущностей. "
+                    f"Каноническая: {canonical.content[:1000]}. "
+                    f"Дубликат: {duplicate.content[:1000]}."
+                ),
+                source="entity-merge-proposal",
+                source_ref=source_ref,
+                confidence=confidence,
+                importance=0.92,
+                tags=["entity-merge", "guardian-required"],
+            ),
+            reason=(
+                "Entity merge changes graph identity and requires "
+                "Guardian approval."
+            ),
+        )
+        return EntityMergeProposal(
+            canonical_memory_id=canonical.id,
+            duplicate_memory_id=duplicate.id,
+            confidence=confidence,
+            queue_id=candidate.decision.queue_id,
+            applied=False,
+            reason=candidate.decision.policy_reason,
+        )
+
+    def finalize_entity_merge(
+        self,
+        canonical_memory_id: str,
+        duplicate_memory_id: str,
+        queue_id: str,
+        *,
+        owner_id: str = "local-user",
+    ) -> EntityMergeProposal:
+        queued = self.store.get_guardian_queue_item(queue_id)
+        canonical = self.memory.get(canonical_memory_id, owner_id)
+        duplicate = self.memory.get(duplicate_memory_id, owner_id)
+        self._same_scope(canonical, duplicate)
+        expected_ref = (
+            f"entity-merge:{canonical.id}:{duplicate.id}"
+        )
+        if queued.status.value != "applied":
+            raise ValueError("entity merge Guardian item is not approved")
+        if queued.decision.source_ref != expected_ref:
+            raise ValueError("Guardian item does not match entity merge")
+        self.store.add_link(
+            canonical.id,
+            duplicate.id,
+            MemoryLinkType.SAME_ENTITY,
+            1.0,
+        )
+        self.learn_entity_alias(
+            canonical.id,
+            duplicate.content[:300],
+            owner_id=owner_id,
+            confidence=0.99,
+        )
+        return EntityMergeProposal(
+            canonical_memory_id=canonical.id,
+            duplicate_memory_id=duplicate.id,
+            confidence=0.99,
+            queue_id=queue_id,
+            applied=True,
+            reason="Guardian-approved SAME_ENTITY merge applied.",
+        )
+
+    def link_cause(
+        self,
+        cause_id: str,
+        effect_id: str,
+        *,
+        owner_id: str = "local-user",
+        weight: float = 0.85,
+    ):
+        cause = self.memory.get(cause_id, owner_id)
+        effect = self.memory.get(effect_id, owner_id)
+        self._same_scope(cause, effect)
+        cause_at = self._moment(cause.event_at)
+        effect_at = self._moment(effect.event_at)
+        if (
+            cause_at is not None
+            and effect_at is not None
+            and cause_at > effect_at
+        ):
+            raise ValueError(
+                "cause event cannot occur after effect event"
+            )
+        return self.store.add_link(
+            cause.id,
+            effect.id,
+            MemoryLinkType.CAUSES,
+            weight,
+        )
+
+    def reinforce_causal_link(
+        self,
+        cause_id: str,
+        effect_id: str,
+        *,
+        confirmed: bool,
+        owner_id: str = "local-user",
+    ):
+        self._same_scope(
+            self.memory.get(cause_id, owner_id),
+            self.memory.get(effect_id, owner_id),
+        )
+        current = next(
+            (
+                link for link in self.memory.links_for(
+                    cause_id,
+                    MemoryLinkType.CAUSES,
+                )
+                if link.source_id == cause_id
+                and link.target_id == effect_id
+            ),
+            None,
+        )
+        if current is None:
+            raise ValueError("causal link does not exist")
+        delta = 0.08 if confirmed else -0.15
+        weight = max(0.05, min(1.0, current.weight + delta))
+        return self.store.add_link(
+            cause_id,
+            effect_id,
+            MemoryLinkType.CAUSES,
+            weight,
+        )
+
+    def adaptive_forgetting(
+        self,
+        *,
+        owner_id: str = "local-user",
+        scope: MemoryScope = MemoryScope.PROJECT,
+        project_id: str | None = "dragon-tory",
+        limit: int = 1000,
+        archive_after_days: int = 180,
+    ) -> MemoryForgettingReport:
+        items = self.store.scope_items(
+            owner_id=owner_id,
+            scope=scope,
+            project_id=project_id,
+            include_archived=False,
+            limit=limit,
+        )
+        reinforced = 0
+        decayed = 0
+        archived = 0
+        protected = 0
+        now = datetime.now(UTC)
+        protected_kinds = {
+            MemoryKind.FACT,
+            MemoryKind.PREFERENCE,
+            MemoryKind.DECISION,
+            MemoryKind.GOAL,
+            MemoryKind.ENTITY,
+            MemoryKind.INSTRUCTION,
+            MemoryKind.SKILL,
+        }
+        for item in items:
+            if item.pinned or item.kind in protected_kinds:
+                protected += 1
+                continue
+            truth = self.memory.truth(
+                item.id,
+                owner_id=owner_id,
+            )
+            age_days = self._age_days(item.updated_at, now)
+            useful = (
+                item.helpful_count > item.unhelpful_count
+                or item.access_count >= 4
+                or truth.trust_score >= 0.78
+            )
+            if useful and item.importance < 0.90:
+                self.memory.update(
+                    item.id,
+                    owner_id,
+                    MemoryUpdate(
+                        importance=min(0.90, item.importance + 0.03),
+                        expected_revision=item.revision,
+                    ),
+                )
+                reinforced += 1
+                continue
+
+            if age_days >= archive_after_days and item.importance <= 0.20:
+                self.store.archive_memory(
+                    item.id,
+                    owner_id=owner_id,
+                    reason="adaptive-forgetting",
+                )
+                archived += 1
+                continue
+
+            if (
+                age_days >= archive_after_days / 2
+                and item.access_count <= 1
+                and truth.trust_score < 0.60
+                and item.importance > 0.10
+            ):
+                self.memory.update(
+                    item.id,
+                    owner_id,
+                    MemoryUpdate(
+                        importance=max(0.10, item.importance - 0.04),
+                        expected_revision=item.revision,
+                    ),
+                )
+                decayed += 1
+        return MemoryForgettingReport(
+            scanned=len(items),
+            reinforced=reinforced,
+            decayed=decayed,
+            archived=archived,
+            protected=protected,
+        )
+
+    @staticmethod
+    def _age_days(value: str, now: datetime) -> float:
+        moment = GreyMatterService._moment(value)
+        if moment is None:
+            return 0.0
+        return max(
+            0.0,
+            (now - moment).total_seconds() / 86400.0,
+        )
+
+    @staticmethod
+    def _moment(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            moment = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        return moment.astimezone(UTC)
 
     def record_source_feedback(
         self,
