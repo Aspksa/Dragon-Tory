@@ -230,7 +230,7 @@ class ChatStore:
     def retry_context(
         self,
         chat_id: str,
-    ) -> tuple[str, list[dict[str, Any]]]:
+    ) -> tuple[str, list[dict[str, Any]], int]:
         self.get(chat_id)
         with self._connect() as conn:
             user = conn.execute(
@@ -255,19 +255,48 @@ class ChatStore:
                 """,
                 (chat_id, user["sequence"]),
             ).fetchall()
+        return (
+            str(user["content"]),
+            [dict(row) for row in rows],
+            int(user["sequence"]),
+        )
+
+    def replace_after(
+        self,
+        chat_id: str,
+        *,
+        sequence: int,
+        assistant_content: str,
+    ) -> dict[str, Any]:
+        self.get(chat_id)
+        message_id = str(uuid.uuid4())
+        now = self._now()
+        with self._connect() as conn:
             conn.execute(
                 """
                 DELETE FROM chat_messages
                 WHERE chat_id = ? AND rowid > ?
                 """,
-                (chat_id, user["sequence"]),
+                (chat_id, sequence),
+            )
+            conn.execute(
+                """
+                INSERT INTO chat_messages(id, chat_id, role, content, created_at)
+                VALUES (?, ?, 'assistant', ?, ?)
+                """,
+                (message_id, chat_id, assistant_content, now),
             )
             conn.execute(
                 "UPDATE chats SET updated_at = ? WHERE id = ?",
-                (self._now(), chat_id),
+                (now, chat_id),
             )
-
-        return str(user["content"]), [dict(row) for row in rows]
+        return {
+            "id": message_id,
+            "chat_id": chat_id,
+            "role": "assistant",
+            "content": assistant_content,
+            "created_at": now,
+        }
 
     def counts(self) -> dict[str, int]:
         with self._connect() as conn:
