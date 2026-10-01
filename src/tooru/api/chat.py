@@ -1,7 +1,10 @@
 import asyncio
+import hashlib
 import uuid
+from pathlib import Path
+from urllib.parse import unquote
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from tooru.chat.store import ChatNotFoundError
@@ -34,6 +37,24 @@ class RetryRequest(BaseModel):
     )
 
 
+class ChatDocumentResponse(BaseModel):
+    chat_id: str
+    title: str
+    document_id: str
+    name: str
+    kind: str | None = None
+    extraction_method: str | None = None
+    ocr_used: bool = False
+    indexed_chunks: int = 0
+    ai_studied: bool = False
+    provider: str | None = None
+    model: str | None = None
+    memory_status: str | None = None
+    memory_id: str | None = None
+    summary: str = ""
+    error: str | None = None
+
+
 class ChatResponse(BaseModel):
     chat_id: str
     title: str
@@ -44,6 +65,55 @@ class ChatResponse(BaseModel):
     memory_status: str
     created_document_id: str | None = None
     created_document_path: str | None = None
+
+
+def _safe_chat_filename(value: str) -> str:
+    decoded = unquote(value).replace("\\", "/")
+    name = Path(decoded).name.strip().strip(".")
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Не указано имя файла.",
+        )
+    return name[:255]
+
+
+async def _receive_chat_file(
+    request: Request,
+    *,
+    max_bytes: int,
+) -> tuple[Path, int, str]:
+    temp = (
+        request.app.state.cloud_store.incoming_dir
+        / f"{uuid.uuid4().hex}.chat-upload"
+    )
+    size_bytes = 0
+    digest = hashlib.sha256()
+    try:
+        with temp.open("wb") as target:
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
+                size_bytes += len(chunk)
+                if size_bytes > max_bytes:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=(
+                            "Файл слишком большой. Максимальный размер: "
+                            f"{max_bytes // (1024 * 1024)} МБ."
+                        ),
+                    )
+                digest.update(chunk)
+                target.write(chunk)
+        if size_bytes < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Получен пустой файл.",
+            )
+        return temp, size_bytes, digest.hexdigest()
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
 
 
 def _friendly_ai_error(exc: Exception) -> str:
@@ -136,6 +206,134 @@ async def _run_generation(
         context_memories=result.context_memories,
         memory_status=result.memory_status,
     )
+
+
+@router.post(
+    "/documents",
+    response_model=ChatDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_chat_document(
+    request: Request,
+    name: str = Query(min_length=1, max_length=512),
+    chat_id: str | None = Query(default=None, max_length=128),
+) -> ChatDocumentResponse:
+    store = request.app.state.chat_store
+    try:
+        chat_item = store.get(chat_id) if chat_id else store.create()
+    except ChatNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Чат не найден.",
+        ) from exc
+
+    resolved_chat_id = str(chat_item["id"])
+    safe_name = _safe_chat_filename(name)
+    temp, size_bytes, sha256 = await _receive_chat_file(
+        request,
+        max_bytes=request.app.state.settings.cloud_max_upload_bytes,
+    )
+
+    document = None
+    try:
+        document = request.app.state.cloud_store.register_upload(
+            temp,
+            name=safe_name,
+            content_type=request.headers.get(
+                "content-type",
+                "application/octet-stream",
+            ).split(";", 1)[0],
+            size_bytes=size_bytes,
+            sha256=sha256,
+            source="chat-upload",
+        )
+        document_id = str(document["id"])
+        request.app.state.cloud_smart.ensure_document(document_id)
+        request.app.state.cloud_smart.record_provenance(
+            document_id,
+            "uploaded_via_chat",
+            actor="user",
+            source_ref=resolved_chat_id,
+            details={
+                "name": safe_name,
+                "chat_id": resolved_chat_id,
+                "version": document["version"],
+            },
+        )
+        store.add_message(
+            resolved_chat_id,
+            role="user",
+            content=f"📎 Документ: {safe_name}",
+        )
+        store.auto_title(resolved_chat_id, safe_name)
+
+        try:
+            studied = await request.app.state.chat_document_assistant.study(
+                document_id,
+                chat_id=resolved_chat_id,
+            )
+            answer = (
+                f"✅ Изучил документ «{safe_name}».\n\n"
+                f"Тип: {studied.get('kind') or 'документ'}.\n"
+                f"Извлечение: {studied.get('extraction_method') or '—'}"
+                f"{' · OCR' if studied.get('ocr_used') else ''}.\n"
+                f"Индекс: {studied.get('indexed_chunks') or 0} фрагментов.\n"
+                f"AI: {'изучил' if studied.get('ai_studied') else 'локальный анализ'}.\n"
+                f"Память: {studied.get('memory_status') or '—'}.\n"
+                f"Tory Document ID: {document_id}.\n\n"
+                + str(studied.get("summary") or "")
+            )
+            if studied.get("ai_error"):
+                answer += (
+                    "\n\n⚠️ Внешний AI временно недоступен, "
+                    "но локальный индекс и анализ сохранены."
+                )
+            store.add_message(
+                resolved_chat_id,
+                role="assistant",
+                content=answer,
+            )
+            current = store.get(resolved_chat_id)
+            return ChatDocumentResponse(
+                chat_id=resolved_chat_id,
+                title=current["title"],
+                document_id=document_id,
+                name=safe_name,
+                kind=studied.get("kind"),
+                extraction_method=studied.get("extraction_method"),
+                ocr_used=bool(studied.get("ocr_used")),
+                indexed_chunks=int(studied.get("indexed_chunks") or 0),
+                ai_studied=bool(studied.get("ai_studied")),
+                provider=studied.get("provider"),
+                model=studied.get("model"),
+                memory_status=studied.get("memory_status"),
+                memory_id=studied.get("memory_id"),
+                summary=str(studied.get("summary") or ""),
+                error=studied.get("ai_error"),
+            )
+        except Exception as exc:  # noqa: BLE001 - keep uploaded file accessible
+            error_text = f"{type(exc).__name__}: {str(exc)[:700]}"
+            answer = (
+                f"📎 Документ «{safe_name}» сохранён в «Мой диск», "
+                "но полностью изучить его пока не удалось.\n"
+                f"Tory Document ID: {document_id}.\n"
+                f"Причина: {error_text}"
+            )
+            store.add_message(
+                resolved_chat_id,
+                role="assistant",
+                content=answer,
+            )
+            current = store.get(resolved_chat_id)
+            return ChatDocumentResponse(
+                chat_id=resolved_chat_id,
+                title=current["title"],
+                document_id=document_id,
+                name=safe_name,
+                error=error_text,
+            )
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 @router.post("", response_model=ChatResponse)
