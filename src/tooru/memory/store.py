@@ -8,11 +8,11 @@ from uuid import uuid4
 
 from tooru.memory.models import (
     ConversationMessage,
+    EntityAlias,
     MemoryCreate,
     MemoryDelete,
     MemoryEvidence,
     MemoryEvidenceCreate,
-    EntityAlias,
     MemoryFeedback,
     MemoryGuardianAuditEvent,
     MemoryGuardianDecision,
