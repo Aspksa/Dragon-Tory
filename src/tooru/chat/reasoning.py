@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -11,10 +12,48 @@ from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.ai.router import AIRouter
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import MemoryGuardian
-from tooru.memory.models import MemoryCreate, MemoryKind, MemoryScope, MemorySearch
+from tooru.memory.models import (
+    MemoryCreate,
+    MemoryKind,
+    MemoryLinkType,
+    MemoryScope,
+    MemorySearch,
+)
 
 AI_PROVIDER = "deepseek"
 PROJECT_ID = "dragon-tory"
+
+
+class ReasoningMode(StrEnum):
+    CHAIN = "chain"
+    TREE = "tree"
+    HYBRID = "hybrid"
+
+
+class ReasoningRoute(BaseModel):
+    mode: ReasoningMode
+    complexity: float = Field(ge=0.0, le=1.0)
+    memory_uncertainty: float = Field(ge=0.0, le=1.0)
+    contradiction_count: int = Field(ge=0)
+    branch_count: int = Field(default=0, ge=0, le=5)
+    max_depth: int = Field(default=1, ge=1, le=4)
+    reasons: list[str] = Field(default_factory=list, max_length=12)
+
+
+class ReasoningBranch(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    approach: str = Field(min_length=1, max_length=2_000)
+    evidence_for: list[str] = Field(default_factory=list, max_length=8)
+    evidence_against: list[str] = Field(default_factory=list, max_length=8)
+    risks: list[str] = Field(default_factory=list, max_length=8)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class ReasoningTree(BaseModel):
+    branches: list[ReasoningBranch] = Field(min_length=2, max_length=5)
+    recommended_branch: str = Field(min_length=1, max_length=200)
+    uncertainty: float = Field(default=0.5, ge=0.0, le=1.0)
+    used_fallback: bool = False
 
 
 class ReasoningPlan(BaseModel):
@@ -55,6 +94,13 @@ class ReasoningConfig:
     min_verified_episodes: int = 3
     similar_episode_score: float = 0.42
     existing_rule_score: float = 0.55
+    hybrid_complexity_threshold: float = 0.42
+    tree_complexity_threshold: float = 0.74
+    hybrid_uncertainty_threshold: float = 0.30
+    tree_uncertainty_threshold: float = 0.55
+    verifier_escalation_uncertainty: float = 0.35
+    verifier_escalation_score: float = 0.82
+    tree_branch_limit: int = 5
 
 
 class CognitiveReasoning:
