@@ -27,12 +27,18 @@
     .msg.user{margin-left:auto;background:#1947b8;color:#fff}.msg.assistant{background:#f2f4f7}.msg.system{background:#fff4e5;color:#7a2e0e;font-size:13px}
     .diag-table{width:100%;border-collapse:collapse}.diag-table td{padding:9px 4px;border-bottom:1px solid #eef0f3}.diag-table td:last-child{text-align:right;font-weight:700}
     .statusbar{font-size:13px;margin-top:10px;color:#667085}.secret-note{font-size:12px;color:#667085;margin-top:6px}
-    .sidebar-bottom{margin-top:auto;padding-top:16px}.sidebar-link{padding:8px 10px 12px}
-    .update-card{border:1px solid #dfe5ef;border-radius:14px;padding:13px;background:#fafbfc}
-    .update-title{font-size:13px;font-weight:800;margin-bottom:7px}.update-state{font-size:13px;font-weight:700;margin-bottom:5px}
-    .update-meta{font-size:11px;color:#667085;line-height:1.45;word-break:break-word}
-    .update-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
-    .update-actions button{padding:8px 7px;font-size:11px;border-radius:9px}.update-progress{font-size:11px;color:#667085;margin-top:8px;line-height:1.4}
+    .sidebar-bottom{margin-top:auto;padding-top:16px}
+    .bottom-update{width:100%;border:1px solid #dfe5ef;background:#fafbfc;color:#344054;border-radius:12px;padding:12px 14px;text-align:left;font-weight:800;cursor:pointer}
+    .bottom-update:hover,.bottom-update.active{background:#f0f4ff;color:#1947b8;border-color:#c7d7ff}
+    .update-progress-shell{height:12px;background:#eef2f6;border-radius:999px;overflow:hidden;margin-top:9px}
+    .update-progress-bar{height:100%;width:0;background:#1947b8;transition:width .25s ease}
+    .update-meta{font-size:12px;color:#667085;line-height:1.5;word-break:break-word}
+    .update-history{display:grid;gap:12px}
+    .history-item{border:1px solid #e4e7ec;border-radius:13px;padding:14px;background:#fff}
+    .history-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+    .history-title{font-weight:800}.history-date{font-size:12px;color:#667085;white-space:nowrap}
+    .file-list{max-height:260px;overflow:auto;background:#f8fafc;border:1px solid #e4e7ec;border-radius:10px;padding:10px;margin-top:8px;font-family:Consolas,monospace;font-size:12px;line-height:1.55}
+    .file-list div{border-bottom:1px dashed #e4e7ec;padding:2px 0}.file-list div:last-child{border-bottom:0}
     button:disabled{opacity:.5;cursor:not-allowed}
     a{color:#1947b8;text-decoration:none;font-weight:650}
     @media(max-width:800px){.app{grid-template-columns:1fr}aside{height:auto;position:static;border-right:0;border-bottom:1px solid #e6eaf0}.sidebar-bottom{margin-top:14px}nav{grid-template-columns:repeat(4,1fr)}.nav{text-align:center;padding:9px 4px;font-size:12px}main{padding:18px}}
@@ -49,19 +55,7 @@
       <button class="nav" data-view="settings">Настройки</button>
     </nav>
     <div class="sidebar-bottom">
-      <div class="sidebar-link muted"><a href="/docs" target="_blank">API / Swagger ↗</a></div>
-      <div class="update-card">
-        <div class="update-title">Обновление</div>
-        <div id="updateState" class="update-state">Проверка…</div>
-        <div class="update-meta">Локально: <span id="updateLocal">—</span></div>
-        <div class="update-meta">GitHub: <span id="updateRemote">—</span></div>
-        <div id="updateSha" class="update-meta"></div>
-        <div class="update-actions">
-          <button id="checkUpdate" class="secondary">Проверить</button>
-          <button id="installUpdate" class="primary" disabled>Обновить</button>
-        </div>
-        <div id="updateProgress" class="update-progress">Автопроверка включена.</div>
-      </div>
+      <button id="openUpdate" class="bottom-update">↻ Обновление</button>
     </div>
   </aside>
 
@@ -134,7 +128,58 @@
         </div>
       </div>
       <div class="spacer"></div>
-      <div class="row"><button id="refreshDiag" class="secondary">Обновить сейчас</button><button id="runMaintenance" class="secondary">Запустить обслуживание памяти</button><span id="diagStatus" class="statusbar"></span></div>
+      <div class="row"><button id="refreshDiag" class="secondary">Обновить сейчас</button><button id="runMaintenance" class="secondary">Запустить обслуживание памяти</button><a href="/docs" target="_blank">API / Swagger ↗</a><span id="diagStatus" class="statusbar"></span></div>
+    </section>
+
+    <section id="updates" class="view">
+      <h2>Центр обновления</h2>
+      <p class="lead">Проверка GitHub, установка, перезапуск, история и полный список файлов.</p>
+
+      <div class="grid">
+        <div class="card"><div class="label">Текущая версия</div><div id="updateLocal" class="value">—</div></div>
+        <div class="card"><div class="label">Версия на GitHub</div><div id="updateRemote" class="value">—</div></div>
+        <div class="card"><div class="label">Состояние</div><div id="updateState" class="value">Проверка…</div></div>
+        <div class="card"><div class="label">GitHub SHA</div><div id="updateSha" class="value" style="font-size:15px">—</div></div>
+      </div>
+
+      <div class="spacer"></div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <b>Ход обновления</b>
+          <span id="updatePercent" class="muted">0%</span>
+        </div>
+        <div class="update-progress-shell"><div id="updateProgressBar" class="update-progress-bar"></div></div>
+        <div id="updateProgress" class="statusbar">Автопроверка включена.</div>
+        <div id="updateHeartbeat" class="update-meta"></div>
+        <div class="spacer"></div>
+        <div class="row">
+          <button id="checkUpdate" class="secondary">Проверить GitHub</button>
+          <button id="installUpdate" class="primary" disabled>Скачать и установить</button>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+      <div class="grid">
+        <div class="card"><div class="label">Скачано файлов</div><div id="filesDownloadedCount" class="value">0</div></div>
+        <div class="card"><div class="label">Изменено файлов</div><div id="filesChangedCount" class="value">0</div></div>
+        <div class="card"><div class="label">Новых файлов</div><div id="filesNewCount" class="value">0</div></div>
+        <div class="card"><div class="label">Удалено файлов</div><div id="filesRemovedCount" class="value">0</div></div>
+      </div>
+
+      <div class="spacer"></div>
+      <div class="card">
+        <b>Файлы текущего / последнего обновления</b>
+        <details open><summary>Скачанные файлы</summary><div id="downloadedFiles" class="file-list">Нет данных.</div></details>
+        <details><summary>Изменённые файлы</summary><div id="changedFiles" class="file-list">Нет данных.</div></details>
+        <details><summary>Новые файлы</summary><div id="newFiles" class="file-list">Нет данных.</div></details>
+        <details><summary>Удалённые файлы</summary><div id="removedFiles" class="file-list">Нет данных.</div></details>
+      </div>
+
+      <div class="spacer"></div>
+      <h3>История обновлений</h3>
+      <div id="updateHistory" class="update-history">
+        <div class="card muted">История пока пуста.</div>
+      </div>
     </section>
 
     <section id="settings" class="view">
@@ -166,7 +211,9 @@ const $=id=>document.getElementById(id);
 const fmtBytes=n=>{if(n==null)return"—";const u=["Б","КБ","МБ","ГБ","ТБ"];let i=0,v=Number(n);while(v>=1024&&i<u.length-1){v/=1024;i++}return (i<2?v.toFixed(0):v.toFixed(1))+" "+u[i]};
 function state(el,text,kind=""){el.textContent=text;el.className="value "+kind}
 async function api(url,opts={}){const r=await fetch(url,{cache:"no-store",headers:{"Content-Type":"application/json",...(opts.headers||{})},...opts});let d;try{d=await r.json()}catch{d={detail:await r.text()}}if(!r.ok)throw new Error(typeof d.detail==="string"?d.detail:JSON.stringify(d.detail||d));return d}
-document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");if(b.dataset.view==="diagnostics")refreshDiag();if(b.dataset.view==="settings")loadSettings()});
+function showView(view,source=null){document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));$("openUpdate").classList.remove("active");if(source)source.classList.add("active");$(view).classList.add("active");if(view==="diagnostics")refreshDiag();if(view==="settings")loadSettings();if(view==="updates"){updateStatus();refreshUpdateHistory()}}
+document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>showView(b.dataset.view,b));
+$("openUpdate").onclick=()=>showView("updates",$("openUpdate"));
 function addMsg(role,text){const d=document.createElement("div");d.className="msg "+role;d.textContent=text;$("chatBox").appendChild(d);$("chatBox").scrollTop=$("chatBox").scrollHeight}
 async function sendChat(){const text=$("chatInput").value.trim();if(!text)return;$("chatInput").value="";addMsg("user",text);$("sendChat").disabled=true;$("chatStatus").textContent="Тоору думает…";try{const d=await api("/v1/chat",{method:"POST",body:JSON.stringify({message:text,project_id:$("chatProject").value.trim()||null,provider:$("chatProvider").value,remember:$("chatRemember").checked,history:history.slice(-20)})});addMsg("assistant",d.answer);history.push({role:"user",content:text},{role:"assistant",content:d.answer});$("chatStatus").textContent=d.provider+" · "+d.model+" · контекст: "+d.context_memories+" · "+d.routing_reason+(d.fallback_used?" · резервный переход":"")+" · память: "+d.memory_status}catch(e){addMsg("system","Ошибка: "+e.message);$("chatStatus").textContent="Ошибка API"}finally{$("sendChat").disabled=false}}
 $("sendChat").onclick=sendChat;$("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}});$("clearChat").onclick=()=>{$("chatBox").innerHTML="";history.length=0};
@@ -184,48 +231,50 @@ $("testClaude").onclick=async()=>{try{$("claudeSettingsStatus").textContent="П�
 
 let updateWasStarted=false;
 let updatePollTimer=null;
-const phaseNames={idle:"Готово",checking:"Проверка GitHub…",current:"Актуальная версия",available:"Доступно обновление",starting:"Запуск updater…",downloading:"Скачивание…",backing_up:"Резервная копия…",stopping:"Остановка…",installing:"Установка…",restarting:"Перезапуск…",verifying:"Проверка…",rolling_back:"Откат…",success:"Обновлено",failed:"Ошибка обновления",error:"Ошибка проверки"};
+const phaseNames={idle:"Готово",checking:"Проверка GitHub…",current:"Актуальная версия",available:"Доступно обновление",starting:"Запуск процесса…",downloading:"Скачивание…",extracting:"Распаковка и сверка…",backing_up:"Резервная копия…",stopping:"Остановка…",installing:"Установка…",restarting:"Перезапуск…",verifying:"Проверка новой версии…",rolling_back:"Автоматический откат…",success:"Обновлено",failed:"Ошибка обновления",error:"Ошибка проверки"};
+function renderFiles(id,files){const box=$(id);box.innerHTML="";if(!files||!files.length){box.textContent="Нет файлов.";return}files.forEach(name=>{const row=document.createElement("div");row.textContent=name;box.appendChild(row)})}
+function fmtUpdateDate(value){if(!value)return"—";const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleString()}
 function renderUpdate(d){
-  $("updateState").textContent=phaseNames[d.phase]||d.message||d.phase||"—";
-  $("updateState").className="update-state "+(d.phase==="available"?"warn":(["failed","error"].includes(d.phase)?"bad":(["success","current"].includes(d.phase)?"ok":"")));
+  const phase=phaseNames[d.phase]||d.message||d.phase||"—";
+  state($("updateState"),phase,d.phase==="available"?"warn":(["failed","error"].includes(d.phase)?"bad":(["success","current"].includes(d.phase)?"ok":"")));
   $("updateLocal").textContent=d.local_version||"—";
   $("updateRemote").textContent=d.remote_version||"—";
-  $("updateSha").textContent=d.remote_sha?"SHA: "+d.remote_sha.slice(0,8):"";
+  $("updateSha").textContent=d.remote_sha?d.remote_sha.slice(0,12):"—";
+  const pct=Math.max(0,Math.min(100,Number(d.progress_percent||0)));
+  $("updatePercent").textContent=pct+"%";
+  $("updateProgressBar").style.width=pct+"%";
   $("updateProgress").textContent=d.error?d.error:(d.message||"Автопроверка включена.");
+  $("updateHeartbeat").textContent=(d.heartbeat_at?"Последний статус: "+fmtUpdateDate(d.heartbeat_at):"")+(d.stalled?" · ВНИМАНИЕ: процесс не передаёт статус более 3 минут.":"");
   $("installUpdate").disabled=!d.update_available||!!d.running;
   $("checkUpdate").disabled=!!d.running;
-  if(d.running) startUpdatePolling();
-  if(updateWasStarted&&d.phase==="success"){updateWasStarted=false;setTimeout(()=>location.reload(),900)}
+  const downloaded=d.downloaded_files||[],changed=d.changed_files||[],fresh=d.new_files||[],removed=d.removed_files||[];
+  $("filesDownloadedCount").textContent=downloaded.length;$("filesChangedCount").textContent=changed.length;$("filesNewCount").textContent=fresh.length;$("filesRemovedCount").textContent=removed.length;
+  renderFiles("downloadedFiles",downloaded);renderFiles("changedFiles",changed);renderFiles("newFiles",fresh);renderFiles("removedFiles",removed);
+  if(d.running)startUpdatePolling();
+  if(updateWasStarted&&d.phase==="success"){updateWasStarted=false;refreshUpdateHistory();setTimeout(()=>location.reload(),1200)}
 }
 async function updateStatus(){
   try{renderUpdate(await api("/v1/update/status"))}
-  catch(e){
-    if(updateWasStarted){$("updateState").textContent="Перезапуск…";$("updateProgress").textContent="Ожидание запуска новой версии…";startUpdatePolling()}
-    else{$("updateState").textContent="Недоступно";$("updateProgress").textContent=e.message}
-  }
+  catch(e){if(updateWasStarted){state($("updateState"),"Перезапуск…","warn");$("updateProgress").textContent="Сервер временно недоступен. Жду автоматического запуска…";startUpdatePolling()}else{state($("updateState"),"Недоступно","bad");$("updateProgress").textContent=e.message}}
+}
+async function refreshUpdateHistory(){
+  try{const d=await api("/v1/update/history?limit=30");const box=$("updateHistory");box.innerHTML="";if(!d.items.length){box.innerHTML='<div class="card muted">История пока пуста.</div>';return}d.items.forEach(item=>{const el=document.createElement("div");el.className="history-item";const ok=item.result==="success";const files=(item.downloaded_files||[]).length;el.innerHTML='<div class="history-head"><div><div class="history-title '+(ok?"ok":"bad")+'">'+(item.description||"Обновление")+'</div><div class="update-meta">'+(item.from_version||"—")+' → '+(item.to_version||"—")+(item.sha?" · "+item.sha.slice(0,10):"")+'</div></div><div class="history-date">'+fmtUpdateDate(item.finished_at)+'</div></div><div class="update-meta" style="margin-top:8px">Скачано файлов: '+files+' · изменено: '+((item.changed_files||[]).length)+' · новых: '+((item.new_files||[]).length)+' · удалено: '+((item.removed_files||[]).length)+(item.rolled_back?" · выполнен автоматический откат":"")+'</div>'+(item.error?'<div class="statusbar bad">'+item.error+'</div>':"");box.appendChild(el)})}catch(e){$("updateHistory").innerHTML='<div class="card bad">Не удалось загрузить историю: '+e.message+'</div>'}
 }
 async function checkForUpdate(){
   $("checkUpdate").disabled=true;
-  try{renderUpdate(await api("/v1/update/check",{method:"POST"}))}
-  catch(e){$("updateState").textContent="Ошибка проверки";$("updateState").className="update-state bad";$("updateProgress").textContent=e.message}
+  try{renderUpdate(await api("/v1/update/check",{method:"POST"}));await refreshUpdateHistory()}
+  catch(e){state($("updateState"),"Ошибка проверки","bad");$("updateProgress").textContent=e.message}
   finally{await updateStatus()}
 }
 async function installUpdate(){
-  if(!confirm("Установить обновление Dragon Tory? Локальная память, .env и runtime будут сохранены."))return;
+  if(!confirm("Скачать и установить обновление Дракончика Тоору? Локальная память, ключи, runtime и журналы будут сохранены."))return;
   updateWasStarted=true;$("installUpdate").disabled=true;$("checkUpdate").disabled=true;
   try{renderUpdate(await api("/v1/update/install",{method:"POST",body:JSON.stringify({force:false})}));startUpdatePolling()}
-  catch(e){updateWasStarted=false;$("updateState").textContent="Ошибка запуска";$("updateState").className="update-state bad";$("updateProgress").textContent=e.message;await updateStatus()}
+  catch(e){updateWasStarted=false;state($("updateState"),"Ошибка запуска","bad");$("updateProgress").textContent=e.message;await updateStatus();await refreshUpdateHistory()}
 }
 function startUpdatePolling(){
   if(updatePollTimer)return;
-  updatePollTimer=setInterval(async()=>{
-    try{
-      const d=await api("/v1/update/status");renderUpdate(d);
-      if(!d.running&&["success","failed","error","current","available"].includes(d.phase)){clearInterval(updatePollTimer);updatePollTimer=null}
-    }catch{
-      $("updateState").textContent="Перезапуск…";$("updateProgress").textContent="Сервер временно недоступен. Жду автоматического запуска…";
-    }
-  },2000);
+  updatePollTimer=setInterval(async()=>{try{const d=await api("/v1/update/status");renderUpdate(d);if(!d.running&&["success","failed","error","current","available"].includes(d.phase)){clearInterval(updatePollTimer);updatePollTimer=null;await refreshUpdateHistory()}}catch{state($("updateState"),"Перезапуск…","warn");$("updateProgress").textContent="Сервер временно недоступен. Жду автоматического запуска…"}},2000)
 }
 $("checkUpdate").onclick=checkForUpdate;
 $("installUpdate").onclick=installUpdate;
