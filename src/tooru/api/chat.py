@@ -52,7 +52,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
             remember=payload.remember,
             history=payload.history,
         )
-    except Exception as exc:  # noqa: BLE001 - external AI boundary
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=_friendly_ai_error(exc),
