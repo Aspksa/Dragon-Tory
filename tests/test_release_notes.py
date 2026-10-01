@@ -109,3 +109,20 @@ def test_release_0035_lists_adaptive_grey_matter() -> None:
         for change in modules["memory"]["changes"]
     )
 
+def test_release_0036_lists_adaptive_reasoning_router() -> None:
+    release = release_notes_for("0.0.36")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert {"reasoning", "dashboard", "memory", "drive", "memos", "updater"} <= set(modules)
+    assert modules["reasoning"]["version"] == "03.00.00"
+    assert modules["dashboard"]["version"] == "01.11.00"
+    assert any(
+        "Chain, Tree или Hybrid" in change
+        for change in modules["reasoning"]["changes"]
+    )
+    assert any(
+        "Кнопки" in change
+        for change in modules["dashboard"]["changes"]
+    )
+

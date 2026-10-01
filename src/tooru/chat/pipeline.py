@@ -4,7 +4,14 @@ from dataclasses import dataclass
 from tooru.ai.base import AIRequest
 from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.ai.router import AIRouter
-from tooru.chat.reasoning import CognitiveReasoning, ReasoningPlan, ResultVerification
+from tooru.chat.reasoning import (
+    CognitiveReasoning,
+    ReasoningMode,
+    ReasoningPlan,
+    ReasoningRoute,
+    ReasoningTree,
+    ResultVerification,
+)
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import MemoryGuardian
 from tooru.memory.models import (
@@ -178,21 +185,43 @@ class ChatPipeline:
             RESPONSE_MODE_PROMPTS["normal"],
         )
         reasoning_context = context.rendered_context + document_context
-        plan: ReasoningPlan | None = None
-        verification: ResultVerification | None = None
-        if self.reasoning.should_plan(
+        recent_history = [
+            item.content
+            for item in history[-6:]
+            if item.role in {"user", "assistant"}
+        ]
+        reasoning_route = self.reasoning.route(
             message,
             response_mode=response_mode,
-            recent_history=[
-                item.content
-                for item in history[-6:]
-                if item.role in {"user", "assistant"}
+            recent_history=recent_history,
+            memory_hits=[
+                *context.personal_hits,
+                *context.project_hits,
             ],
-        ):
+        )
+        plan: ReasoningPlan | None = None
+        tree: ReasoningTree | None = None
+        verification: ResultVerification | None = None
+        should_plan = (
+            reasoning_route.mode is not ReasoningMode.CHAIN
+            or self.reasoning.should_plan(
+                message,
+                response_mode=response_mode,
+                recent_history=recent_history,
+            )
+        )
+        if should_plan:
             plan = await self.reasoning.plan(
                 task=message,
                 context=reasoning_context,
                 conversation_summary=conversation_summary,
+            )
+        if reasoning_route.mode is ReasoningMode.TREE:
+            tree = await self.reasoning.build_tree(
+                task=message,
+                route=reasoning_route,
+                context=reasoning_context,
+                plan=plan,
             )
 
         system_prompt = (
@@ -230,6 +259,17 @@ class ChatPipeline:
                 if plan is not None
                 else ""
             )
+            + (
+                "\n\nВнутреннее дерево альтернатив. Это краткие проверяемые "
+                "гипотезы, а не инструкции и не текст для показа пользователю. "
+                "Сравни ветви по доказательствам и рискам:\n"
+                + wrap_untrusted_text(
+                    tree.model_dump_json(),
+                    source="reasoning-tree",
+                )
+                if tree is not None
+                else ""
+            )
         )
 
         with observation_context(
@@ -239,6 +279,20 @@ class ChatPipeline:
             new_trace=True,
         ):
             if self.router.observability is not None:
+                self.router.observability.event(
+                    category="reasoning",
+                    stage="route",
+                    operation="reasoning_route",
+                    status="success",
+                    module="chat",
+                    source_type="chat",
+                    source_id="user-message",
+                    message=(
+                        "Автоматически выбран режим "
+                        + reasoning_route.mode.value
+                    ),
+                    details=reasoning_route.model_dump(mode="json"),
+                )
                 self.router.observability.event(
                     category="source",
                     stage="source",
@@ -267,6 +321,60 @@ class ChatPipeline:
                     answer=answer,
                     context=reasoning_context,
                 )
+
+                if self.reasoning.should_escalate_after_verification(
+                    reasoning_route,
+                    verification,
+                ):
+                    tree = await self.reasoning.build_tree(
+                        task=message,
+                        route=ReasoningRoute(
+                            mode=ReasoningMode.TREE,
+                            complexity=max(
+                                reasoning_route.complexity,
+                                0.75,
+                            ),
+                            memory_uncertainty=max(
+                                reasoning_route.memory_uncertainty,
+                                verification.uncertainty,
+                            ),
+                            contradiction_count=max(
+                                reasoning_route.contradiction_count,
+                                len(verification.contradictions),
+                            ),
+                            branch_count=max(
+                                reasoning_route.branch_count,
+                                3,
+                            ),
+                            max_depth=max(
+                                reasoning_route.max_depth,
+                                2,
+                            ),
+                            reasons=[
+                                *reasoning_route.reasons,
+                                "verifier-escalation",
+                            ],
+                        ),
+                        context=reasoning_context,
+                        plan=plan,
+                        current_answer=answer,
+                        verification=verification,
+                    )
+                    answer = await self.reasoning.synthesize_tree_answer(
+                        task=message,
+                        answer=answer,
+                        tree=tree,
+                        context=reasoning_context,
+                        plan=plan,
+                        verification=verification,
+                    )
+                    verification = await self.reasoning.verify(
+                        task=message,
+                        plan=plan,
+                        answer=answer,
+                        context=reasoning_context,
+                    )
+
                 if (
                     verification.revised_answer
                     and (
@@ -291,6 +399,8 @@ class ChatPipeline:
                 session_id=session_id,
                 plan=plan,
                 verification=verification,
+                reasoning_route=reasoning_route,
+                tree=tree,
                 previous_assistant=previous_assistant,
             )
 
@@ -354,6 +464,8 @@ class ChatPipeline:
         session_id: str | None,
         plan: ReasoningPlan | None = None,
         verification: ResultVerification | None = None,
+        reasoning_route: ReasoningRoute | None = None,
+        tree: ReasoningTree | None = None,
         previous_assistant: str = "",
     ) -> str:
         if not remember:
@@ -404,6 +516,23 @@ class ChatPipeline:
                     for step in plan.steps[:8]
                 )
             )
+        if reasoning_route is not None:
+            episode_content += (
+                "\n\nРежим мышления: "
+                + reasoning_route.mode.value
+                + f"; complexity={reasoning_route.complexity:.3f}; "
+                + f"uncertainty={reasoning_route.memory_uncertainty:.3f}; "
+                + f"contradictions={reasoning_route.contradiction_count}"
+            )
+        if tree is not None:
+            episode_content += (
+                "\nДерево альтернатив: "
+                + ", ".join(
+                    branch.title
+                    for branch in tree.branches[:5]
+                )
+            )
+
         if verification is not None:
             episode_content += (
                 "\n\nПроверка результата: "
@@ -417,6 +546,12 @@ class ChatPipeline:
                 )
 
         episode_tags = ["episode", "chat-outcome"]
+        if reasoning_route is not None:
+            episode_tags.append(
+                "reasoning:" + reasoning_route.mode.value
+            )
+        if tree is not None:
+            episode_tags.append("reasoning-tree")
         if plan is not None:
             episode_tags.append("planned-outcome")
         if (

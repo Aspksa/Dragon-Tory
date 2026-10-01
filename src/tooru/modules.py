@@ -6,10 +6,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "dashboard",
         "title": "Главная / Системный мозг",
-        "version": "01.10.00",
+        "version": "01.11.00",
         "area": "system",
         "description": "Real-time дашборд состояния, архитектуры, памяти, нагрузки и активных процессов.",
-        "last_update": "Cognitive Core V: Grey Matter, uncertainty, multi-hop, причинность, цели и навыки.",
+        "last_update": "Observability показывает автоматический режим Chain/Tree/Hybrid как внутреннее событие без кнопок управления.",
         "depends_on": ["memory", "grey_matter", "drive", "updater"],
     },
     {
@@ -96,10 +96,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "reasoning",
         "title": "Мышление Тоору",
-        "version": "02.00.00",
+        "version": "03.00.00",
         "area": "system",
         "description": "Планирование сложных задач, самопроверка результата и безопасное обучение на опыте.",
-        "last_update": "Verifier получил counterfactual checks, альтернативные объяснения и явную uncertainty.",
+        "last_update": "Adaptive Reasoning Router автоматически выбирает Chain, Tree или Hybrid без ручного переключателя.",
         "depends_on": ["memory", "grey_matter"],
     },
     {
