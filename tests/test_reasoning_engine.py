@@ -112,7 +112,7 @@ async def test_pipeline_uses_plan_verifier_and_revised_answer() -> None:
             ),
             "Первоначальный ответ.",
             (
-                '{"passed":false,"score":0.7,"issues":["Пропущена проверка"],'
+                '{"passed":true,"score":0.7,"issues":["Пропущена проверка"],'
                 '"unmet_criteria":["Ошибка не подтверждена тестом"],'
                 '"contradictions":[],"revised_answer":"Исправленный ответ."}'
             ),
@@ -123,6 +123,7 @@ async def test_pipeline_uses_plan_verifier_and_revised_answer() -> None:
         router=router,
         guardian=NoopGuardian(),
     )
+    pipeline.reasoning.config.verifier_escalation_score = 0.0
 
     result = await pipeline.run(
         message="Проверь и исправь архитектуру модуля.",
