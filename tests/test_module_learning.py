@@ -2,6 +2,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from openpyxl import Workbook
 
 from tooru.ai.router import AIRouter
 from tooru.cloud.document_intelligence import DocumentIntelligence
@@ -269,3 +270,67 @@ async def test_service_memo_module_studies_into_project_memory(
     )
     assert hits
     assert document["id"] in hits[0].content
+
+@pytest.mark.asyncio
+async def test_invoice_learning_keeps_sheet_cell_provenance(
+    tmp_path: Path,
+) -> None:
+    cloud, smart, intelligence, memory, learning = _stack(tmp_path)
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Оферта"
+    sheet.append(["Счёт-оферта № 77", ""])
+    sheet.append(["Поставщик", "ООО Таблица"])
+    sheet.append(["Итого", "2500 RUB"])
+    source = cloud.incoming_dir / "offer.xlsx.upload"
+    workbook.save(source)
+    payload = source.read_bytes()
+    document = cloud.register_upload(
+        source,
+        name="offer.xlsx",
+        content_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+        size_bytes=len(payload),
+        sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    smart.update_dna(
+        document["id"],
+        {
+            "kind": "счёт-оферта",
+            "counterparty": "ООО Таблица",
+            "document_number": "77",
+            "amount_value": 2500,
+            "amount_currency": "RUB",
+        },
+    )
+    smart.update_contract(
+        document["id"],
+        {
+            "metadata_search": True,
+            "content_read": True,
+            "answer": True,
+            "memory": True,
+            "external_ai": False,
+        },
+    )
+    analysis = intelligence.analyze(document["id"])
+    assert analysis["evidence"]
+
+    result = await learning.study("invoice_offers")
+
+    assert result["studied"] == 1
+    memory_id = result["memory_ids"][0]
+    evidence = memory.evidence(memory_id)
+    precise = [
+        item
+        for item in evidence
+        if item.extraction_method == "document-intelligence-v2"
+    ]
+    assert precise
+    assert any(item.document_id == document["id"] for item in precise)
+    assert any(item.table_ref == "Оферта" for item in precise)
+    assert any(item.cell_ref and item.cell_ref.startswith("A1:") for item in precise)
+    assert any(item.chunk_no == 1 for item in precise)
+
