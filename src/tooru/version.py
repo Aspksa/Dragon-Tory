@@ -1,6 +1,6 @@
 import re
 
-__version__ = "0.0.26"
+__version__ = "0.0.27"
 
 
 def display_version(value: str = __version__) -> str:
