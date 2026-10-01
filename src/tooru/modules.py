@@ -4,6 +4,15 @@ from typing import Any
 
 MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
+        "id": "dashboard",
+        "title": "Главная / Системный мозг",
+        "version": "01.00.00",
+        "area": "system",
+        "description": "Real-time дашборд состояния, архитектуры, памяти, нагрузки и активных процессов.",
+        "last_update": "Deep Dark Bento UI, интерактивный граф модулей, live-метрики и системный drawer.",
+        "depends_on": ["memory", "drive", "updater"],
+    },
+    {
         "id": "drive",
         "title": "Мой диск",
         "version": "01.04.00",

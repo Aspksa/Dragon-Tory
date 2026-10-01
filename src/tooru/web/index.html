@@ -117,9 +117,80 @@
     button:disabled{opacity:.5;cursor:not-allowed}
     a{color:#1947b8;text-decoration:none;font-weight:650}
     @media(max-width:800px){.app{grid-template-columns:1fr}aside{height:auto;position:static;border-right:0;border-bottom:1px solid #e6eaf0;overflow:visible}.sidebar-bottom{margin-top:14px}.nav-section-label{display:none}nav{grid-template-columns:repeat(2,1fr)}.nav,.nav.module-nav{text-align:left;padding:9px 8px;font-size:12px}main{padding:18px}.chat-layout{grid-template-columns:1fr}.chat-sidebar{height:230px}.chatbox{height:48vh}.chat-head-actions{gap:2px}.composer-tools{gap:4px}.cloud-head{display:block}.cloud-primary-actions{width:100%}.cloud-primary-actions .cloud-search{min-width:100%;max-width:none}.cloud-workbar{align-items:flex-start}.cloud-file{grid-template-columns:1fr}.cloud-actions{justify-content:flex-start}.passport-meta{grid-template-columns:1fr}.module-hero{grid-template-columns:1fr}.module-icon{display:none}}
+      /* 00.00.22 · Tory System Brain dashboard */
+    body.home-mode{background:#050811;color:#dfe7f3}
+    body.home-mode aside{background:rgba(7,11,20,.96);border-right-color:rgba(148,163,184,.12);box-shadow:14px 0 40px rgba(0,0,0,.22)}
+    body.home-mode .brand h1{color:#f8fbff}
+    body.home-mode .brand .muted,body.home-mode .nav-section-label{color:#64748b}
+    body.home-mode .nav{color:#9aa9bd}
+    body.home-mode .nav:hover,body.home-mode .nav.active{background:rgba(77,124,255,.12);color:#dbe7ff;box-shadow:inset 0 0 0 1px rgba(104,145,255,.12)}
+    body.home-mode .bottom-update{color:#93a4bb}
+    body.home-mode .bottom-update:hover{background:rgba(255,255,255,.05);color:#e9f0fb}
+    body.home-mode main{max-width:none;background:
+      radial-gradient(circle at 44% 4%,rgba(55,98,194,.19),transparent 34%),
+      radial-gradient(circle at 84% 16%,rgba(25,189,153,.08),transparent 24%),
+      #050811}
+    #home.home-dashboard{position:relative;min-height:calc(100vh - 56px);border:1px solid rgba(148,163,184,.1);border-radius:26px;overflow:hidden;padding:24px;background:
+      linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px),
+      radial-gradient(circle at 52% 44%,rgba(61,99,190,.14),transparent 32%),
+      rgba(5,9,18,.94);background-size:36px 36px,36px 36px,auto,auto}
+    #home.home-dashboard::before,#home.home-dashboard::after{content:"";position:absolute;border-radius:999px;filter:blur(60px);pointer-events:none;opacity:.35}
+    #home.home-dashboard::before{width:280px;height:280px;background:#214cb3;right:-80px;top:-120px}
+    #home.home-dashboard::after{width:220px;height:220px;background:#087b6a;left:22%;bottom:-150px}
+    .home-shell{position:relative;z-index:1}
+    .home-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px}
+    .home-kicker{font:700 10px/1.2 Consolas,"Cascadia Code",monospace;letter-spacing:.16em;text-transform:uppercase;color:#6f86a7;margin-bottom:7px}
+    .home-title{margin:0;color:#f7fbff;font-size:30px;line-height:1.08;letter-spacing:-.025em}
+    .home-subtitle{margin:8px 0 0;color:#7789a2;font-size:13px}
+    .home-global{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .home-status-pill,.home-head-btn{border:1px solid rgba(148,163,184,.12);background:rgba(12,18,31,.72);backdrop-filter:blur(16px);color:#cbd6e5;border-radius:12px;padding:9px 11px;font-size:11px}
+    .home-status-pill{display:flex;align-items:center;gap:7px;font-weight:750}
+    .home-status-dot{width:8px;height:8px;border-radius:50%;background:#3dd6a0;box-shadow:0 0 14px rgba(61,214,160,.55)}
+    .home-status-pill.attention .home-status-dot{background:#e4ae5d;box-shadow:0 0 14px rgba(228,174,93,.45)}
+    .home-head-btn{cursor:pointer;padding:8px 10px}
+    .home-head-btn:hover{border-color:rgba(119,151,229,.35);color:#fff;transform:translateY(-1px)}
+    .home-bento{display:grid;grid-template-columns:1.35fr .92fr .92fr;grid-template-areas:"brain pulse memory" "brain tasks tasks";gap:12px}
+    .home-glass{position:relative;background:linear-gradient(180deg,rgba(17,25,42,.72),rgba(8,13,24,.74));border:1px solid rgba(148,163,184,.11);box-shadow:0 16px 48px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.02);backdrop-filter:blur(18px);border-radius:18px;overflow:hidden;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+    .home-glass:hover{transform:translateY(-2px);border-color:rgba(104,145,255,.22);box-shadow:0 18px 54px rgba(0,0,0,.24),0 0 28px rgba(61,99,190,.07)}
+    .home-brain{grid-area:brain;min-height:520px}
+    .home-pulse{grid-area:pulse;padding:16px}.home-memory{grid-area:memory;padding:16px}.home-tasks{grid-area:tasks;padding:16px}
+    .home-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .home-card-title{color:#eaf1fb;font-size:13px;font-weight:800}.home-card-meta{color:#64748b;font:600 10px/1.2 Consolas,"Cascadia Code",monospace}
+    .brain-toolbar{position:absolute;z-index:5;left:14px;right:14px;top:14px;display:flex;align-items:center;justify-content:space-between;pointer-events:none}
+    .brain-toolbar>*{pointer-events:auto}
+    .brain-title strong{display:block;color:#eff5ff;font-size:13px}.brain-title span{display:block;color:#64748b;font-size:10px;margin-top:2px}
+    .brain-actions{display:flex;gap:5px}.brain-action{border:1px solid rgba(148,163,184,.12);background:rgba(8,13,23,.7);color:#8293aa;border-radius:9px;padding:6px 8px;cursor:pointer;font-size:11px}.brain-action:hover{color:#fff;border-color:rgba(104,145,255,.34)}
+    #homeBrainSvg{display:block;width:100%;height:100%;min-height:520px;cursor:grab;touch-action:none;user-select:none}
+    #homeBrainSvg.dragging{cursor:grabbing}
+    .brain-edge{stroke:#42618e;stroke-width:1.2;fill:none;stroke-dasharray:4 9;opacity:.48;animation:homeFlow 4s linear infinite}
+    .brain-edge.hot{stroke:#39c49a;opacity:.7;stroke-width:1.5;animation-duration:2.1s}
+    .brain-node{cursor:pointer;transform-origin:center;transition:filter .18s ease}
+    .brain-node .node-ring{fill:#0b1424;stroke:#42618e;stroke-width:1.2}
+    .brain-node .node-core{fill:#1f4c9b;filter:drop-shadow(0 0 9px rgba(76,120,255,.34));animation:homePulseNode 2.8s ease-in-out infinite}
+    .brain-node.online .node-core{fill:#167c67;filter:drop-shadow(0 0 10px rgba(48,201,154,.36))}
+    .brain-node.attention .node-core{fill:#9a6927;filter:drop-shadow(0 0 9px rgba(231,176,88,.32))}
+    .brain-node.center .node-ring{fill:#0b1730;stroke:#5c80d9;stroke-width:1.5}.brain-node.center .node-core{fill:#3563c6}
+    .brain-node:hover{filter:brightness(1.25)}.brain-node:hover .node-ring{stroke:#7ea1f4}
+    .brain-node text{font-family:Inter,"Segoe UI",sans-serif;fill:#c8d5e8;font-size:10px;font-weight:750;pointer-events:none}
+    .brain-node .node-sub{fill:#60728d;font:600 7.5px Consolas,"Cascadia Code",monospace}
+    .home-metric-list{display:grid;gap:10px}.home-metric{border:1px solid rgba(148,163,184,.08);background:rgba(7,12,22,.54);border-radius:13px;padding:10px}
+    .home-metric-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.home-metric-label{color:#8292aa;font-size:10px}.home-metric-value{color:#e7eef9;font:800 13px Consolas,"Cascadia Code",monospace}
+    .home-spark{height:34px;margin-top:4px}.home-spark svg{width:100%;height:100%;overflow:visible}.home-spark path{fill:none;stroke:#5b7ed1;stroke-width:1.5;vector-effect:non-scaling-stroke}.home-spark .area{fill:url(#sparkGradient);stroke:none;opacity:.15}
+    .home-memory-ring{display:grid;grid-template-columns:110px 1fr;gap:13px;align-items:center}.home-ring{width:104px;height:104px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#2a8a73 var(--pct),rgba(148,163,184,.1) 0);position:relative}.home-ring::after{content:"";position:absolute;inset:9px;border-radius:50%;background:#0a111f}.home-ring-center{position:relative;z-index:1;text-align:center}.home-ring-value{color:#e8f0fb;font:800 18px Consolas,"Cascadia Code",monospace}.home-ring-label{color:#667892;font-size:9px;margin-top:3px}
+    .home-memory-bars{display:grid;gap:9px}.home-memory-row{display:grid;gap:5px}.home-memory-row-head{display:flex;justify-content:space-between;color:#8495ad;font-size:9.5px}.home-progress{height:5px;background:rgba(148,163,184,.09);border-radius:99px;overflow:hidden}.home-progress>span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#286e90,#2a9b79)}
+    .home-task-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}.home-task{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px 10px;border:1px solid rgba(148,163,184,.08);border-radius:12px;background:rgba(7,12,22,.46)}.home-task-dot{width:7px;height:7px;border-radius:50%;background:#3bc69a;box-shadow:0 0 9px rgba(59,198,154,.3)}.home-task-dot.warn{background:#dfaa56}.home-task-main{min-width:0}.home-task-title{color:#cfd9e8;font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.home-task-sub{color:#5f718d;font-size:9px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.home-task-time{color:#63738b;font:600 8.5px Consolas,"Cascadia Code",monospace}
+    .home-mini-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.home-mini{padding:9px;border-radius:11px;border:1px solid rgba(148,163,184,.08);background:rgba(7,12,22,.44)}.home-mini b{display:block;color:#eef4fc;font:800 14px Consolas,"Cascadia Code",monospace}.home-mini span{display:block;color:#60718b;font-size:8.5px;margin-top:3px}
+    .home-node-drawer{position:fixed;z-index:60;right:0;top:0;height:100vh;width:min(390px,94vw);transform:translateX(105%);transition:transform .24s ease;background:rgba(6,11,20,.96);border-left:1px solid rgba(148,163,184,.13);box-shadow:-18px 0 55px rgba(0,0,0,.36);backdrop-filter:blur(20px);padding:22px;color:#dce6f4}.home-node-drawer.open{transform:translateX(0)}
+    .home-drawer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:14px;border-bottom:1px solid rgba(148,163,184,.1)}.home-drawer-icon{font-size:28px}.home-drawer-title{font-size:19px;font-weight:850;margin:5px 0 3px;color:#f3f7fd}.home-drawer-version{color:#697b94;font:700 10px Consolas,"Cascadia Code",monospace}.home-drawer-close{border:0;background:rgba(255,255,255,.04);color:#8291a6;border-radius:9px;padding:7px 9px;cursor:pointer}.home-drawer-close:hover{color:#fff}.home-drawer-body{display:grid;gap:12px;padding-top:14px}.home-drawer-block{border:1px solid rgba(148,163,184,.08);background:rgba(15,23,38,.55);border-radius:13px;padding:12px}.home-drawer-block h4{margin:0 0 6px;color:#aebed3;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.home-drawer-block p{margin:0;color:#7f90a8;font-size:11px;line-height:1.55}.home-drawer-kpi{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid rgba(148,163,184,.06);font-size:10.5px}.home-drawer-kpi:last-child{border-bottom:0}.home-drawer-kpi span{color:#73849c}.home-drawer-kpi b{color:#e1e9f4;font-family:Consolas,"Cascadia Code",monospace}
+    .home-dashboard.reduced-glow::before,.home-dashboard.reduced-glow::after{opacity:.12}.home-dashboard.reduced-glow .brain-node .node-core{filter:none}
+    @keyframes homeFlow{to{stroke-dashoffset:-26}}@keyframes homePulseNode{0%,100%{opacity:.78}50%{opacity:1}}@keyframes homeAppear{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+    .home-glass{animation:homeAppear .45s ease both}.home-pulse{animation-delay:.06s}.home-memory{animation-delay:.1s}.home-tasks{animation-delay:.14s}
+    @media(max-width:1180px){.home-bento{grid-template-columns:1fr 1fr;grid-template-areas:"brain brain" "pulse memory" "tasks tasks"}.home-brain{min-height:460px}#homeBrainSvg{min-height:460px}}
+    @media(max-width:760px){#home.home-dashboard{padding:15px;border-radius:18px}.home-topbar{display:block}.home-global{justify-content:flex-start;margin-top:12px}.home-bento{grid-template-columns:1fr;grid-template-areas:"brain" "pulse" "memory" "tasks"}.home-brain,#homeBrainSvg{min-height:420px}.home-task-list{grid-template-columns:1fr}.home-memory-ring{grid-template-columns:92px 1fr}.home-ring{width:88px;height:88px}.home-mini-stats{grid-template-columns:1fr 1fr}}
   </style>
 </head>
-<body>
+<body class="home-mode">
 <div class="app">
   <aside>
     <div class="brand"><h1>🐉 Дракончик Тоору</h1><div class="muted">Dragon Tory · <span id="brandVersion">—</span></div></div>
@@ -139,17 +210,77 @@
   </aside>
 
   <main>
-    <section id="home" class="view active">
-      <h2>Главная</h2><p class="lead">Локальный центр проекта, AI и памяти.</p>
-      <div class="grid">
-        <div class="card"><div class="label">Backend</div><div id="homeBackend" class="value">Проверка…</div></div>
-        <div class="card"><div class="label">DeepSeek</div><div id="homeAI" class="value">Проверка…</div></div>
-        <div class="card"><div class="label">Хранитель памяти</div><div id="homeGuardian" class="value">Проверка…</div></div>
-        <div class="card"><div class="label">Записей памяти</div><div id="homeMemories" class="value">—</div></div>
-        <div class="card"><div class="label">Сохранённых чатов</div><div id="homeChats" class="value">—</div></div>
+    <section id="home" class="view active home-dashboard">
+      <div class="home-shell">
+        <div class="home-topbar">
+          <div>
+            <div class="home-kicker">Dragon Tory · System Observatory</div>
+            <h2 class="home-title">Главная</h2>
+            <p class="home-subtitle">Локальный центр проекта, AI и памяти · архитектура и состояние системы в реальном времени.</p>
+          </div>
+          <div class="home-global">
+            <div id="homeGlobalStatus" class="home-status-pill"><span class="home-status-dot"></span><span>Проверка системы…</span></div>
+            <button id="homeThemeToggle" class="home-head-btn" title="Уменьшить/вернуть свечение">◐</button>
+            <button id="homeOpenSettings" class="home-head-btn" title="Настройки">⚙</button>
+          </div>
+        </div>
+
+        <div class="home-bento">
+          <div class="home-glass home-brain">
+            <div class="brain-toolbar">
+              <div class="brain-title"><strong>Мозг системы</strong><span>перетаскивание · колесо = масштаб · клик = детали</span></div>
+              <div class="brain-actions"><button id="homeBrainReset" class="brain-action">Сброс</button></div>
+            </div>
+            <svg id="homeBrainSvg" viewBox="0 0 760 520" role="img" aria-label="Интерактивная архитектура модулей Dragon Tory">
+              <defs>
+                <radialGradient id="brainGlow"><stop offset="0%" stop-color="#4a73d4" stop-opacity=".35"/><stop offset="100%" stop-color="#4a73d4" stop-opacity="0"/></radialGradient>
+              </defs>
+              <g id="homeBrainViewport"></g>
+            </svg>
+          </div>
+
+          <div class="home-glass home-pulse">
+            <div class="home-card-head"><div class="home-card-title">Пульс системы</div><div id="homePulseStamp" class="home-card-meta">live</div></div>
+            <div class="home-metric-list">
+              <div class="home-metric"><div class="home-metric-top"><span class="home-metric-label">CPU</span><span id="homeCpu" class="home-metric-value">—</span></div><div id="homeCpuSpark" class="home-spark"></div></div>
+              <div class="home-metric"><div class="home-metric-top"><span class="home-metric-label">RAM</span><span id="homeRam" class="home-metric-value">—</span></div><div id="homeRamSpark" class="home-spark"></div></div>
+              <div class="home-metric"><div class="home-metric-top"><span class="home-metric-label">VRAM / Shared GPU</span><span id="homeVram" class="home-metric-value">—</span></div><div id="homeVramSpark" class="home-spark"></div></div>
+              <div class="home-metric"><div class="home-metric-top"><span class="home-metric-label">Температура</span><span id="homeTemp" class="home-metric-value">—</span></div><div id="homeTempSpark" class="home-spark"></div></div>
+            </div>
+          </div>
+
+          <div class="home-glass home-memory">
+            <div class="home-card-head"><div class="home-card-title">Память и контекст</div><div id="homeMemoryHealth" class="home-card-meta">—</div></div>
+            <div class="home-memory-ring">
+              <div id="homeMemoryRing" class="home-ring" style="--pct:0%"><div class="home-ring-center"><div id="homeMemories" class="home-ring-value">—</div><div class="home-ring-label">записей</div></div></div>
+              <div class="home-memory-bars">
+                <div class="home-memory-row"><div class="home-memory-row-head"><span>Личная</span><span id="homePersonalMemory">—</span></div><div class="home-progress"><span id="homePersonalBar" style="width:0"></span></div></div>
+                <div class="home-memory-row"><div class="home-memory-row-head"><span>Проектная</span><span id="homeProjectMemory">—</span></div><div class="home-progress"><span id="homeProjectBar" style="width:0"></span></div></div>
+                <div class="home-memory-row"><div class="home-memory-row-head"><span>Векторное покрытие</span><span id="homeVectorCoverage">—</span></div><div class="home-progress"><span id="homeVectorBar" style="width:0"></span></div></div>
+              </div>
+            </div>
+            <div class="home-mini-stats">
+              <div class="home-mini"><b id="homeChats">—</b><span>чатов</span></div>
+              <div class="home-mini"><b id="homeMessages">—</b><span>сообщений</span></div>
+              <div class="home-mini"><b id="homeAiRequests">—</b><span>AI запросов</span></div>
+              <div class="home-mini"><b id="homeUptime">—</b><span>аптайм</span></div>
+            </div>
+            <div style="display:none"><span id="homeBackend">—</span><span id="homeAI">—</span><span id="homeGuardian">—</span></div>
+          </div>
+
+          <div class="home-glass home-tasks">
+            <div class="home-card-head"><div class="home-card-title">Активные процессы и события</div><div class="home-card-meta">последнее состояние</div></div>
+            <div id="homeTaskList" class="home-task-list"><div class="home-task"><span class="home-task-dot"></span><div class="home-task-main"><div class="home-task-title">Загрузка состояния…</div><div class="home-task-sub">Dragon Tory</div></div><span class="home-task-time">live</span></div></div>
+          </div>
+        </div>
       </div>
-      <div class="spacer"></div>
-      <div class="card"><b>Система запущена с текущего носителя.</b><p class="muted">Диагностика обновляется автоматически. API-ключи хранятся только локально в .env и не показываются обратно в интерфейсе.</p></div>
+      <aside id="homeNodeDrawer" class="home-node-drawer" aria-hidden="true">
+        <div class="home-drawer-head">
+          <div><div id="homeDrawerIcon" class="home-drawer-icon">◈</div><div id="homeDrawerTitle" class="home-drawer-title">Модуль</div><div id="homeDrawerVersion" class="home-drawer-version">—</div></div>
+          <button id="homeDrawerClose" class="home-drawer-close" title="Закрыть">✕</button>
+        </div>
+        <div id="homeDrawerBody" class="home-drawer-body"></div>
+      </aside>
     </section>
 
     <section id="chat" class="view">
@@ -689,10 +820,14 @@ const $=id=>document.getElementById(id);
 const fmtBytes=n=>{if(n==null)return"—";const u=["Б","КБ","МБ","ГБ","ТБ"];let i=0,v=Number(n);while(v>=1024&&i<u.length-1){v/=1024;i++}return (i<2?v.toFixed(0):v.toFixed(1))+" "+u[i]};
 function state(el,text,kind=""){el.textContent=text;el.className="value "+kind}
 async function api(url,opts={}){const r=await fetch(url,{cache:"no-store",headers:{"Content-Type":"application/json",...(opts.headers||{})},...opts});let d;try{d=await r.json()}catch{d={detail:await r.text()}}if(!r.ok)throw new Error(typeof d.detail==="string"?d.detail:JSON.stringify(d.detail||d));return d}
-function showView(view,source=null){document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".bottom-update").forEach(x=>x.classList.remove("active"));if(source)source.classList.add("active");if(view==="cloud"&&source&&source.dataset.view==="cloud"){cloudTrashMode=false;cloudFavoritesOnly=false}$(view).classList.add("active");if(view==="chat")ensureChatReady();if(view==="cloud")loadCloud();if(view==="documentModule")loadDocumentModule(source&&source.dataset.module?source.dataset.module:activeDocumentModule);if(view==="diagnostics")refreshDiag();if(view==="settings")loadSettings();if(view==="updates"){updateStatus();refreshUpdateHistory()}}
+function showView(view,source=null){document.body.classList.toggle("home-mode",view==="home");document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".bottom-update").forEach(x=>x.classList.remove("active"));if(source)source.classList.add("active");if(view==="cloud"&&source&&source.dataset.view==="cloud"){cloudTrashMode=false;cloudFavoritesOnly=false}$(view).classList.add("active");if(view==="home"){loadHomeDashboard();refreshDiag()}if(view==="chat")ensureChatReady();if(view==="cloud")loadCloud();if(view==="documentModule")loadDocumentModule(source&&source.dataset.module?source.dataset.module:activeDocumentModule);if(view==="diagnostics")refreshDiag();if(view==="settings")loadSettings();if(view==="updates"){updateStatus();refreshUpdateHistory()}}
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>showView(b.dataset.view,b));
 $("openUpdate").onclick=()=>showView("updates",$("openUpdate"));
 $("openSettings").onclick=()=>showView("settings",$("openSettings"));
+$("homeOpenSettings").onclick=()=>showView("settings",$("openSettings"));
+$("homeThemeToggle").onclick=()=>$("home").classList.toggle("reduced-glow");
+$("homeBrainReset").onclick=resetHomeBrain;
+$("homeDrawerClose").onclick=closeHomeNode;
 
 
 let cloudLoaded=false;
@@ -1545,7 +1680,154 @@ $("chatInput").addEventListener("input",()=>{saveDraft();resizeComposer();update
 $("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}});
 $("chatSearch").addEventListener("input",()=>{clearTimeout(chatSearchTimer);chatSearchTimer=setTimeout(()=>loadChatList($("chatSearch").value.trim()),250)});
 document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="n"){e.preventDefault();createNewChat()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();showView("chat",document.querySelector('.nav[data-view="chat"]'));$("chatSearch").focus();$("chatSearch").select()}});
-async function refreshDiag(){try{const d=await api("/v1/diagnostics/status");$("brandVersion").textContent=d.backend.version||"—";state($("homeBackend"),"Работает","ok");state($("homeAI"),d.ai.configured?"Подключён":"Не настроен",d.ai.configured?"ok":"warn");state($("homeGuardian"),d.guardian.queued_pending?"Ожидают: "+d.guardian.queued_pending:"Работает",d.guardian.queued_pending?"warn":"ok");$("homeMemories").textContent=d.memory_engine.total;$("homeChats").textContent=d.chat_history.chats;
+const homeTelemetry={cpu:[],ram:[],vram:[],temp:[]};
+let homeModules=[];
+let homeLastDiag=null;
+let homeLastUpdate=null;
+let homeRecentChats=[];
+let homeUpdateHistory=[];
+let homeBrainReady=false;
+let homeBrainPan={x:0,y:0,scale:1,dragging:false,lastX:0,lastY:0};
+
+function homePushMetric(name,value){
+  const list=homeTelemetry[name];const numeric=Number(value);
+  if(Number.isFinite(numeric))list.push(numeric);else list.push(null);
+  if(list.length>36)list.shift();
+}
+function homeSpark(id,values,maxValue=100){
+  const box=$(id);if(!box)return;box.innerHTML="";
+  const clean=values.map((v,i)=>({v:Number.isFinite(v)?v:null,i})).filter(x=>x.v!==null);
+  if(clean.length<2){const empty=document.createElement("span");empty.className="home-card-meta";empty.textContent="недостаточно данных";box.append(empty);return}
+  const width=220,height=34,pad=2;
+  const min=Math.min(0,...clean.map(x=>x.v));
+  const max=Math.max(maxValue||0,...clean.map(x=>x.v),min+1);
+  const points=clean.map(x=>{
+    const px=pad+(x.i/Math.max(1,values.length-1))*(width-pad*2);
+    const py=height-pad-((x.v-min)/(max-min))*(height-pad*2);
+    return [px,py];
+  });
+  const ns="http://www.w3.org/2000/svg";const svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox",`0 0 ${width} ${height}`);
+  const path=document.createElementNS(ns,"path");path.setAttribute("d",points.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" "));svg.append(path);box.append(svg);
+}
+function homeUptime(seconds){
+  const n=Math.max(0,Number(seconds||0));const d=Math.floor(n/86400),h=Math.floor((n%86400)/3600),m=Math.floor((n%3600)/60);
+  return d?d+"д "+h+"ч":h?h+"ч "+m+"м":m+"м";
+}
+function homePercentPart(part,total){return total?Math.max(0,Math.min(100,(Number(part||0)/Number(total))*100)):0}
+function homeStatusClass(ok,attention=false){return ok?"online":attention?"attention":""}
+function homeModuleById(id){return homeModules.find(x=>x.id===id)||null}
+function homeNodeStatus(id){
+  if(id==="deepseek")return homeLastDiag&&homeLastDiag.ai.configured?"online":"attention";
+  if(id==="memory")return homeLastDiag&&homeLastDiag.memory_engine.health&&homeLastDiag.memory_engine.health.status==="ok"?"online":"attention";
+  if(id==="guardian")return homeLastDiag&&Number(homeLastDiag.guardian.queued_dead||0)>0?"attention":"online";
+  return"online";
+}
+function homeNodeVersion(id){
+  if(id==="deepseek")return homeLastDiag?homeLastDiag.ai.model:"DeepSeek";
+  if(id==="chat")return"локальная история";
+  if(id==="guardian")return"Memory Guardian";
+  const m=homeModuleById(id);return m?"v"+m.version:"core";
+}
+function homeGraphNodes(){
+  const virtual=[
+    {id:"deepseek",title:"DeepSeek",icon:"AI",description:"Облачная модель рассуждения через Cloud.ru Foundation Models.",depends_on:["memory"]},
+    {id:"chat",title:"Чат",icon:"CH",description:"Локальная история диалогов и контекст взаимодействия с Тоору.",depends_on:["memory","deepseek"]},
+    {id:"guardian",title:"Guardian",icon:"GD",description:"Контроль, фильтрация и обслуживание долговременной памяти.",depends_on:["memory"]},
+  ];
+  return [...homeModules.filter(x=>x.id!=="dashboard"),...virtual];
+}
+function homeBrainTransform(){
+  const vp=$("homeBrainViewport");if(vp)vp.setAttribute("transform",`translate(${homeBrainPan.x} ${homeBrainPan.y}) scale(${homeBrainPan.scale})`);
+}
+function renderHomeBrain(){
+  const vp=$("homeBrainViewport");if(!vp)return;vp.innerHTML="";
+  const ns="http://www.w3.org/2000/svg";const nodes=homeGraphNodes();const center={id:"dashboard",title:"ТОИРУ",icon:"T",description:"Центральная оркестрация Dragon Tory.",x:380,y:260};
+  const positions=new Map([[center.id,center]]);
+  const rx=285,ry=202;
+  nodes.forEach((node,i)=>{const angle=(-Math.PI/2)+(i/nodes.length)*Math.PI*2;positions.set(node.id,{...node,x:380+Math.cos(angle)*rx,y:260+Math.sin(angle)*ry})});
+  const edges=[];
+  nodes.forEach(node=>edges.push(["dashboard",node.id]));
+  nodes.forEach(node=>(node.depends_on||[]).forEach(dep=>{if(positions.has(dep)&&dep!==node.id)edges.push([node.id,dep])}));
+  edges.forEach(([from,to],idx)=>{
+    const a=positions.get(from),b=positions.get(to);if(!a||!b)return;
+    const line=document.createElementNS(ns,"line");line.setAttribute("x1",a.x);line.setAttribute("y1",a.y);line.setAttribute("x2",b.x);line.setAttribute("y2",b.y);line.setAttribute("class","brain-edge "+(idx%4===0?"hot":""));line.style.animationDelay=(-idx*.13)+"s";vp.append(line);
+  });
+  const drawNode=node=>{
+    const isCenter=node.id==="dashboard";const g=document.createElementNS(ns,"g");g.setAttribute("class","brain-node "+homeNodeStatus(node.id)+(isCenter?" center":""));g.setAttribute("transform",`translate(${node.x} ${node.y})`);g.dataset.nodeId=node.id;
+    const title=document.createElementNS(ns,"title");title.textContent=(node.title||node.id)+" · "+(node.description||"Нажмите для деталей");
+    const ring=document.createElementNS(ns,"circle");ring.setAttribute("class","node-ring");ring.setAttribute("r",isCenter?"34":"24");
+    const core=document.createElementNS(ns,"circle");core.setAttribute("class","node-core");core.setAttribute("r",isCenter?"17":"10");
+    const label=document.createElementNS(ns,"text");label.setAttribute("text-anchor","middle");label.setAttribute("y",isCenter?"51":"39");label.textContent=(node.title||node.id).slice(0,20);
+    const sub=document.createElementNS(ns,"text");sub.setAttribute("class","node-sub");sub.setAttribute("text-anchor","middle");sub.setAttribute("y",isCenter?"63":"50");sub.textContent=homeNodeVersion(node.id).slice(0,24);
+    g.append(title,ring,core,label,sub);g.onclick=e=>{e.stopPropagation();openHomeNode(node.id,node)};vp.append(g);
+  };
+  drawNode(center);nodes.forEach(node=>drawNode(positions.get(node.id)));
+  homeBrainTransform();
+}
+function homeLiveKpis(id){
+  const d=homeLastDiag||{};if(id==="deepseek"){const s=(d.ai||{}).stats||{};return[["Состояние",d.ai&&d.ai.configured?"Подключён":"Не настроен"],["Запросов",s.requests||0],["Успешно",s.successes||0],["Ошибок",s.failures||0]]}
+  if(id==="memory"){const m=d.memory_engine||{};return[["Активных",m.active||0],["Личных",m.personal||0],["Проектных",m.project||0],["Векторов",m.vectors||0]]}
+  if(id==="guardian"){const g=d.guardian||{};return[["Ожидают",g.queued_pending||0],["Применено",g.queued_applied||0],["Отклонено",g.queued_rejected||0],["Dead-letter",g.queued_dead||0]]}
+  if(id==="chat"){const h=d.chat_history||{};return[["Чатов",h.chats||0],["Сообщений",h.messages||0],["База",fmtBytes(h.database_bytes||0)]]}
+  if(id==="updater"&&homeLastUpdate)return[["Локальная",homeLastUpdate.local_version||"—"],["GitHub",homeLastUpdate.remote_version||"—"],["Фаза",homeLastUpdate.phase||"—"],["Прогресс",(homeLastUpdate.progress_percent||0)+"%"]];
+  return[];
+}
+function openHomeNode(id,fallback=null){
+  const item=homeModuleById(id)||fallback||{id,title:id,description:"Системный модуль Dragon Tory.",depends_on:[]};
+  $("homeDrawerIcon").textContent=item.icon||({deepseek:"AI",chat:"CH",guardian:"GD",dashboard:"🐉"}[id]||"◈");
+  $("homeDrawerTitle").textContent=item.title||id;$("homeDrawerVersion").textContent=homeNodeVersion(id);
+  const body=$("homeDrawerBody");body.innerHTML="";
+  const desc=document.createElement("div");desc.className="home-drawer-block";const h=document.createElement("h4");h.textContent="Назначение";const p=document.createElement("p");p.textContent=item.description||"Компонент локальной AI-системы.";desc.append(h,p);body.append(desc);
+  const live=homeLiveKpis(id);if(live.length){const block=document.createElement("div");block.className="home-drawer-block";const title=document.createElement("h4");title.textContent="Live";block.append(title);live.forEach(([k,v])=>{const row=document.createElement("div");row.className="home-drawer-kpi";const a=document.createElement("span");a.textContent=k;const b=document.createElement("b");b.textContent=String(v);row.append(a,b);block.append(row)});body.append(block)}
+  const deps=item.depends_on||[];const dep=document.createElement("div");dep.className="home-drawer-block";const dh=document.createElement("h4");dh.textContent="Связи";const dp=document.createElement("p");dp.textContent=deps.length?"Зависит от: "+deps.join(", "):"Прямой системный узел без объявленных зависимостей.";dep.append(dh,dp);body.append(dep);
+  if(item.last_update){const ch=document.createElement("div");ch.className="home-drawer-block";const hh=document.createElement("h4");hh.textContent="Последнее изменение";const pp=document.createElement("p");pp.textContent=item.last_update;ch.append(hh,pp);body.append(ch)}
+  $("homeNodeDrawer").classList.add("open");$("homeNodeDrawer").setAttribute("aria-hidden","false");
+}
+function closeHomeNode(){$("homeNodeDrawer").classList.remove("open");$("homeNodeDrawer").setAttribute("aria-hidden","true")}
+function initHomeBrain(){
+  if(homeBrainReady)return;homeBrainReady=true;const svg=$("homeBrainSvg");
+  svg.addEventListener("wheel",e=>{e.preventDefault();const next=Math.max(.55,Math.min(1.9,homeBrainPan.scale*(e.deltaY<0?1.09:.92)));homeBrainPan.scale=next;homeBrainTransform()},{passive:false});
+  svg.addEventListener("pointerdown",e=>{if(e.target.closest&&e.target.closest(".brain-node"))return;homeBrainPan.dragging=true;homeBrainPan.lastX=e.clientX;homeBrainPan.lastY=e.clientY;svg.classList.add("dragging");svg.setPointerCapture(e.pointerId)});
+  svg.addEventListener("pointermove",e=>{if(!homeBrainPan.dragging)return;homeBrainPan.x+=(e.clientX-homeBrainPan.lastX)/homeBrainPan.scale;homeBrainPan.y+=(e.clientY-homeBrainPan.lastY)/homeBrainPan.scale;homeBrainPan.lastX=e.clientX;homeBrainPan.lastY=e.clientY;homeBrainTransform()});
+  const end=e=>{homeBrainPan.dragging=false;svg.classList.remove("dragging");try{svg.releasePointerCapture(e.pointerId)}catch{}};
+  svg.addEventListener("pointerup",end);svg.addEventListener("pointercancel",end);
+}
+function resetHomeBrain(){homeBrainPan={x:0,y:0,scale:1,dragging:false,lastX:0,lastY:0};homeBrainTransform()}
+function homeTask(title,sub,time,warn=false){
+  const row=document.createElement("div");row.className="home-task";const dot=document.createElement("span");dot.className="home-task-dot"+(warn?" warn":"");const main=document.createElement("div");main.className="home-task-main";const t=document.createElement("div");t.className="home-task-title";t.textContent=title;const s=document.createElement("div");s.className="home-task-sub";s.textContent=sub;main.append(t,s);const tm=document.createElement("span");tm.className="home-task-time";tm.textContent=time;row.append(dot,main,tm);return row;
+}
+function renderHomeTasks(){
+  const box=$("homeTaskList");if(!box||!homeLastDiag)return;box.innerHTML="";const d=homeLastDiag;const now=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+  box.append(homeTask("Memory Guardian",Number(d.guardian.queued_pending||0)?"Ожидают проверки: "+d.guardian.queued_pending:"Очередь обработана",now,Number(d.guardian.queued_dead||0)>0));
+  box.append(homeTask("Memory Automation",d.memory_automation.running?"Идёт обслуживание":"Автоматика активна",now,!d.memory_automation.started));
+  if(homeLastUpdate)box.append(homeTask("Центр обновления",(homeLastUpdate.message||homeLastUpdate.phase||"Готово")+" · "+(homeLastUpdate.local_version||""),homeLastUpdate.running?"live":"state",["failed","error"].includes(homeLastUpdate.phase)));
+  if(homeRecentChats.length){const chat=homeRecentChats[0];box.append(homeTask("Последний чат",chat.title||"Новый чат",(chat.message_count||0)+" сообщ.",false))}
+  else box.append(homeTask("Чат","История пока пуста","—",false));
+}
+async function loadHomeDashboard(){
+  initHomeBrain();
+  try{
+    const [modules,update,chats,history]=await Promise.all([
+      api("/v1/settings/modules"),
+      api("/v1/update/status"),
+      api("/v1/chats?limit=5"),
+      api("/v1/update/history?limit=5")
+    ]);
+    homeModules=modules.items||[];homeLastUpdate=update;homeRecentChats=chats.items||[];homeUpdateHistory=history.items||[];renderHomeBrain();renderHomeTasks();
+  }catch(e){const box=$("homeTaskList");if(box){box.innerHTML="";box.append(homeTask("Дашборд","Часть данных недоступна: "+e.message,"!",true))}}
+}
+function updateHomeDashboard(d){
+  homeLastDiag=d;const health=(d.memory_engine.health||{}).status==="ok";const ai=!!d.ai.configured;const global=$("homeGlobalStatus");const healthy=health&&ai&&Number(d.guardian.queued_dead||0)===0;
+  global.classList.toggle("attention",!healthy);global.querySelector("span:last-child").textContent=healthy?"Все системы в норме":(!ai?"Требуется настройка DeepSeek":"Есть компоненты, требующие внимания");
+  const cpu=Number((d.system||{}).cpu_percent||0),ram=Number(d.system_memory.percent||0),temp=(d.system||{}).cpu_temperature_c;
+  $("homeCpu").textContent=cpu.toFixed(1)+"%";$("homeRam").textContent=ram.toFixed(1)+"%";$("homeVram").textContent=(d.system&&d.system.gpu&&d.system.gpu.vram_total_bytes)?fmtBytes(d.system.gpu.vram_used_bytes||0)+" / "+fmtBytes(d.system.gpu.vram_total_bytes):"shared";$("homeTemp").textContent=temp==null?"н/д":Number(temp).toFixed(1)+"°C";
+  homePushMetric("cpu",cpu);homePushMetric("ram",ram);homePushMetric("vram",null);homePushMetric("temp",temp);homeSpark("homeCpuSpark",homeTelemetry.cpu,100);homeSpark("homeRamSpark",homeTelemetry.ram,100);homeSpark("homeVramSpark",homeTelemetry.vram,100);homeSpark("homeTempSpark",homeTelemetry.temp,100);
+  $("homePulseStamp").textContent=new Date().toLocaleTimeString();const total=Number(d.memory_engine.total||0),personal=Number(d.memory_engine.personal||0),project=Number(d.memory_engine.project||0),coverage=Number((d.memory_engine.health||{}).vector_coverage_percent||0);
+  $("homeMemories").textContent=total;$("homePersonalMemory").textContent=personal;$("homeProjectMemory").textContent=project;$("homeVectorCoverage").textContent=coverage+"%";$("homePersonalBar").style.width=homePercentPart(personal,total)+"%";$("homeProjectBar").style.width=homePercentPart(project,total)+"%";$("homeVectorBar").style.width=Math.max(0,Math.min(100,coverage))+"%";$("homeMemoryRing").style.setProperty("--pct",Math.max(0,Math.min(100,coverage))+"%");$("homeMemoryHealth").textContent=health?"health · ok":"health · attention";
+  $("homeChats").textContent=d.chat_history.chats||0;$("homeMessages").textContent=d.chat_history.messages||0;$("homeAiRequests").textContent=(d.ai.stats||{}).requests||0;$("homeUptime").textContent=homeUptime(d.backend.uptime_seconds);
+  renderHomeTasks();if(homeModules.length)renderHomeBrain();
+}
+async function refreshDiag(){try{const d=await api("/v1/diagnostics/status");$("brandVersion").textContent=d.backend.version||"—";state($("homeBackend"),"Работает","ok");state($("homeAI"),d.ai.configured?"Подключён":"Не настроен",d.ai.configured?"ok":"warn");state($("homeGuardian"),d.guardian.queued_pending?"Ожидают: "+d.guardian.queued_pending:"Работает",d.guardian.queued_pending?"warn":"ok");updateHomeDashboard(d);
 state($("dBackend"),"Работает","ok");state($("dAI"),d.ai.configured?"Подключён":"Нет ключа",d.ai.configured?"ok":"warn");state($("dGuardian"),"Работает","ok");state($("dMemoryAuto"),d.memory_automation.started?(d.memory_automation.running?"Выполняется":"Активна"):"Выключена",d.memory_automation.started?"ok":"warn");state($("dGuardianAuto"),d.guardian_automation.started?(d.guardian_automation.running?"Выполняется":"Активна"):"Выключена",d.guardian_automation.started?"ok":"warn");
 $("dRam").textContent=fmtBytes(d.system_memory.used_bytes)+" / "+fmtBytes(d.system_memory.total_bytes)+" ("+d.system_memory.percent+"%)";$("dProcessRam").textContent=fmtBytes(d.process.rss_bytes);$("dDisk").textContent=fmtBytes(d.disk.free_bytes);$("dChats").textContent=d.chat_history.chats+" чатов / "+d.chat_history.messages+" сообщений";
 $("mTotal").textContent=d.memory_engine.total;$("mActive").textContent=d.memory_engine.active;$("mArchived").textContent=d.memory_engine.archived;$("mSuperseded").textContent=d.memory_engine.superseded;$("mPersonal").textContent=d.memory_engine.personal;$("mProject").textContent=d.memory_engine.project;const mh=d.memory_engine.health||{};state($("mHealth"),mh.status==="ok"?"OK":(mh.status==="warning"?"Предупреждение":"Ошибка"),mh.status==="ok"?"ok":(mh.status==="warning"?"warn":"bad"));$("mVectors").textContent=(mh.active_vectors||0)+" · "+(mh.vector_coverage_percent||0)+"%";$("mDb").textContent=fmtBytes(d.memory_engine.database_bytes);
@@ -1611,7 +1893,7 @@ function startUpdatePolling(){
 $("checkUpdate").onclick=checkForUpdate;
 $("installUpdate").onclick=installUpdate;
 
-refreshDiag();setInterval(refreshDiag,3000);
+loadHomeDashboard();refreshDiag();setInterval(refreshDiag,3000);
 updateStatus();setTimeout(checkForUpdate,1200);setInterval(checkForUpdate,600000);
 </script>
 </body></html>

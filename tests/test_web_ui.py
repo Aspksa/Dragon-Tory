@@ -17,6 +17,17 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="moduleRegistryCount"' in response.text
     assert "Чат" in response.text
     assert "Мой диск Тори" in response.text
+    assert 'id="homeGlobalStatus"' in response.text
+    assert 'id="homeBrainSvg"' in response.text
+    assert 'id="homeBrainViewport"' in response.text
+    assert 'id="homeNodeDrawer"' in response.text
+    assert 'id="homeCpu"' in response.text
+    assert 'id="homeRam"' in response.text
+    assert 'id="homeVram"' in response.text
+    assert 'id="homeTemp"' in response.text
+    assert 'id="homeMemoryRing"' in response.text
+    assert 'id="homeTaskList"' in response.text
+    assert "System Observatory" in response.text
     assert 'id="cloudNewFolder"' in response.text
     assert 'id="cloudTrashSidebar"' in response.text
     assert 'id="passportVersions"' in response.text
@@ -107,6 +118,10 @@ def test_diagnostics_status_is_available() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["backend"]["status"] == "ok"
+    assert "system" in payload
+    assert "cpu_percent" in payload["system"]
+    assert "cpu_temperature_c" in payload["system"]
+    assert "gpu" in payload["system"]
     assert "system_memory" in payload
     assert "memory_engine" in payload
     assert "chat_history" in payload
@@ -201,6 +216,7 @@ def test_module_version_registry_endpoint_is_available() -> None:
     items = response.json()["items"]
     ids = {item["id"] for item in items}
     assert {
+        "dashboard",
         "drive",
         "memos",
         "invoice_offers",

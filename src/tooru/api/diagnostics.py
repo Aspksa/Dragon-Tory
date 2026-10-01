@@ -22,6 +22,20 @@ def _path_size(path: Path) -> int:
     return total
 
 
+def _cpu_temperature() -> float | None:
+    try:
+        groups = psutil.sensors_temperatures(fahrenheit=False)
+    except (AttributeError, NotImplementedError, OSError):
+        return None
+    values: list[float] = []
+    for entries in groups.values():
+        for entry in entries:
+            current = getattr(entry, "current", None)
+            if isinstance(current, (int, float)) and -20 <= current <= 130:
+                values.append(float(current))
+    return round(max(values), 1) if values else None
+
+
 def _memory_counts(db_path: Path) -> dict[str, int]:
     counts = {
         "total": 0,
@@ -94,6 +108,8 @@ def diagnostics_status(request: Request) -> dict:
     settings = request.app.state.settings
 
     vm = psutil.virtual_memory()
+    cpu_percent = psutil.cpu_percent(interval=None)
+    cpu_temperature = _cpu_temperature()
     process = psutil.Process()
     process_memory = process.memory_info()
     data_dir = settings.data_dir.resolve()
@@ -127,6 +143,17 @@ def diagnostics_status(request: Request) -> dict:
             "model": request.app.state.deepseek_config["model"],
             "base_url": request.app.state.deepseek_config["base_url"],
             "stats": request.app.state.ai_router.provider_status("deepseek"),
+        },
+        "system": {
+            "cpu_percent": round(float(cpu_percent), 1),
+            "cpu_count_logical": psutil.cpu_count(logical=True) or 0,
+            "cpu_temperature_c": cpu_temperature,
+            "gpu": {
+                "name": None,
+                "vram_used_bytes": None,
+                "vram_total_bytes": None,
+                "shared_memory": True,
+            },
         },
         "system_memory": {
             "total_bytes": vm.total,
