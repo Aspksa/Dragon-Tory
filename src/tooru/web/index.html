@@ -82,6 +82,7 @@
     .cloud-badge.ai{background:#eef4ff;color:#1947b8}.cloud-badge.lock{background:#fff4e5;color:#9a3412}
     .cloud-actions{display:flex;gap:4px;justify-content:flex-end}.cloud-empty{padding:38px;text-align:center;color:#667085;background:#fff;border:1px solid #e4e7ec;border-radius:16px}
     .passport-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.35);z-index:50;display:flex;justify-content:flex-end;backdrop-filter:blur(2px)}
+    .passport-backdrop[hidden]{display:none!important}
     .passport-panel{height:100%;width:min(520px,100%);background:#fff;padding:24px;overflow:auto;box-shadow:-18px 0 50px rgba(16,24,40,.16)}
     .passport-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:20px}.passport-head h3{margin:0 0 4px;font-size:22px}
     .passport-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}.passport-meta>div{background:#f8fafc;border:1px solid #eef0f3;border-radius:12px;padding:11px}
@@ -340,7 +341,11 @@
           <div><div class="label">Тип</div><div id="passportType" class="passport-value">—</div></div>
           <div style="grid-column:1/-1"><div class="label">SHA-256</div><div id="passportSha" class="passport-value">—</div></div>
           <div><div class="label">ИИ-индекс</div><div id="passportIndex" class="passport-value">—</div></div>
+          <div><div class="label">Целостность</div><div id="passportIntegrity" class="passport-value">Не проверялась</div></div>
           <div><div class="label">Создан</div><div id="passportCreated" class="passport-value">—</div></div>
+          <div><div class="label">Изменён</div><div id="passportUpdated" class="passport-value">—</div></div>
+          <div><div class="label">Хранение</div><div class="passport-value">Мой диск Тори</div></div>
+          <div><div class="label">Источник</div><div id="passportSource" class="passport-value">—</div></div>
         </div>
 
         <div class="passport-section">
@@ -362,18 +367,20 @@
               <option value="confidential">Конфиденциальный</option>
               <option value="highly_protected">Особо защищённый</option>
             </select>
+            <div id="passportSecurityHint" class="secret-note"></div>
           </div>
         </div>
 
         <div class="passport-section">
-          <h4>Контекст документа</h4>
-          <div class="field"><label>Область</label>
+          <h4>Где используется документ</h4>
+          <div class="field"><label>Контекст</label>
             <select id="passportScope">
-              <option value="personal">Личный диск</option>
-              <option value="project">Проект</option>
+              <option value="personal">Мой диск Тори · личный документ</option>
+              <option value="project">Мой диск Тори · связан с проектом</option>
             </select>
+            <div class="secret-note">Файл всегда остаётся в вашем «Моём диске Тори». Связь с проектом только определяет, в каком проектном контексте Тоору сможет искать и использовать документ.</div>
           </div>
-          <div class="field"><label>ID проекта</label><input id="passportProject" placeholder="Например: dragon-tory"></div>
+          <div class="field"><label>Проект</label><input id="passportProject" placeholder="Например: dragon-tory"></div>
         </div>
 
         <div class="cloud-note">
@@ -384,6 +391,7 @@
         <div class="spacer"></div>
         <div class="row">
           <button id="passportSave" class="primary">Сохранить паспорт</button>
+          <button id="passportVerify" class="secondary">Проверить целостность</button>
           <a id="passportDownload" class="secondary" href="#" download>Скачать файл</a>
           <button id="passportTrash" class="secondary">В корзину</button>
         </div>
@@ -416,6 +424,7 @@ let activePassportId=null;
 const aiAccessNames={denied:"ИИ запрещён",search:"Поиск по паспорту",read:"Чтение",answer:"Для ответов",memory:"Ответы + память",full:"Полный анализ"};
 const indexNames={blocked:"Заблокирован",not_indexed:"Не индексирован",needs_indexing:"Требуется индексация",ready:"Готов"};
 const confidentialityNames={ordinary:"Обычный",personal:"Личный",confidential:"Конфиденциальный",highly_protected:"Особо защищённый"};
+const securityHints={ordinary:"Обычный: специальных ограничений нет; допуск ИИ задаёте вручную.",personal:"Личный: документ относится к вашему личному диску. ИИ по умолчанию запрещён, но вы можете разрешить его вручную.",confidential:"Конфиденциальный: запрещены ответы по содержимому, долговременная память и полный облачный анализ. Разрешены только запрет, поиск по паспорту и чтение.",highly_protected:"Особо защищённый: ИИ-доступ принудительно запрещён."};
 function cloudIcon(name){
   const ext=(String(name).split(".").pop()||"").toLowerCase();
   if(["png","jpg","jpeg","gif","webp","svg"].includes(ext))return"🖼️";
@@ -483,14 +492,34 @@ async function openPassport(documentId){
     const d=await api("/v1/cloud/files/"+encodeURIComponent(documentId)+"/passport");
     $("passportName").textContent=d.name;$("passportId").textContent=d.id;$("passportVersion").textContent="v"+d.version;
     $("passportSize").textContent=fmtBytes(d.size_bytes);$("passportType").textContent=d.content_type||"—";$("passportSha").textContent=d.sha256;
-    $("passportIndex").textContent=indexNames[d.ai_index_status]||d.ai_index_status;$("passportCreated").textContent=fmtChatDate(d.created_at);
-    $("passportAiAccess").value=d.ai_access;$("passportConfidentiality").value=d.confidentiality;$("passportScope").value=d.scope;
+    $("passportIndex").textContent=indexNames[d.ai_index_status]||d.ai_index_status;$("passportIntegrity").textContent="Не проверялась";
+    $("passportCreated").textContent=fmtChatDate(d.created_at);$("passportUpdated").textContent=fmtChatDate(d.updated_at);$("passportSource").textContent=d.source||"—";
+    $("passportAiAccess").value=d.ai_access;$("passportConfidentiality").value=d.confidentiality;$("passportScope").value=d.scope;applyConfidentialityPolicy();
     $("passportProject").value=d.project_id||"";$("passportProject").disabled=d.scope!=="project";
     $("passportDownload").href="/v1/cloud/files/"+encodeURIComponent(d.id)+"/content";
     $("passportStatus").textContent="Паспорт загружен. "+confidentialityNames[d.confidentiality]+".";
   }catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
 }
 function closePassport(){$("passportModal").hidden=true;activePassportId=null}
+function applyConfidentialityPolicy(){
+  const confidentiality=$("passportConfidentiality").value;
+  const ai=$("passportAiAccess");
+  const allowed=confidentiality==="highly_protected"?["denied"]:(confidentiality==="confidential"?["denied","search","read"]:["denied","search","read","answer","memory","full"]);
+  Array.from(ai.options).forEach(option=>option.disabled=!allowed.includes(option.value));
+  if(!allowed.includes(ai.value))ai.value="denied";
+  ai.disabled=confidentiality==="highly_protected";
+  $("passportSecurityHint").textContent=securityHints[confidentiality]||"";
+}
+async function verifyPassportIntegrity(){
+  if(!activePassportId)return;
+  try{
+    $("passportIntegrity").textContent="Проверка…";
+    const d=await api("/v1/cloud/files/"+encodeURIComponent(activePassportId)+"/verify",{method:"POST"});
+    $("passportIntegrity").textContent=d.ok?"✓ Файл подлинный":"⚠ Файл изменён";
+    $("passportIntegrity").className="passport-value "+(d.ok?"ok":"bad");
+    $("passportStatus").textContent=d.ok?"SHA-256 и размер совпадают с цифровым паспортом.":"ВНИМАНИЕ: содержимое файла не совпадает с цифровым паспортом.";
+  }catch(e){$("passportIntegrity").textContent="Ошибка";$("passportStatus").textContent="Ошибка проверки: "+e.message}
+}
 async function savePassport(){
   if(!activePassportId)return;
   const scope=$("passportScope").value;const project=$("passportProject").value.trim();
@@ -513,9 +542,11 @@ $("cloudDropZone").onclick=()=>$("cloudFileInput").click();$("cloudDropZone").on
 ["dragleave","drop"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.remove("dragging")}));
 $("cloudDropZone").addEventListener("drop",e=>uploadCloudFiles(e.dataTransfer.files));
 $("cloudSearch").addEventListener("input",()=>{clearTimeout(cloudSearchTimer);cloudSearchTimer=setTimeout(loadCloud,250)});
-$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportTrash").onclick=trashPassport;
+$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportVerify").onclick=verifyPassportIntegrity;$("passportTrash").onclick=trashPassport;
+$("passportConfidentiality").onchange=applyConfidentialityPolicy;
 $("passportScope").onchange=()=>{$("passportProject").disabled=$("passportScope").value!=="project";if($("passportScope").value!=="project")$("passportProject").value=""};
 $("passportModal").addEventListener("click",e=>{if(e.target===$("passportModal"))closePassport()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("passportModal").hidden)closePassport()});
 
 function fmtChatDate(value){if(!value)return"";const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleString()}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]))}

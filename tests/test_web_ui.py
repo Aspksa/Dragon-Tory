@@ -16,6 +16,9 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="cloudDropZone"' in response.text
     assert 'id="cloudFileInput"' in response.text
     assert 'id="passportModal"' in response.text
+    assert ".passport-backdrop[hidden]{display:none!important}" in response.text
+    assert 'id="passportVerify"' in response.text
+    assert "Мой диск Тори · личный документ" in response.text
     assert "Цифровой паспорт" in response.text
     assert "DeepSeek" in response.text
     assert 'id="newChat"' in response.text

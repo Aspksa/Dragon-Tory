@@ -136,6 +136,17 @@ def update_passport(
         ) from exc
 
 
+@router.post("/files/{document_id}/verify")
+def verify_file(document_id: str, request: Request) -> dict:
+    try:
+        return request.app.state.cloud_store.verify_integrity(document_id)
+    except (KeyError, FileNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Файл документа не найден.",
+        ) from exc
+
+
 @router.get("/files/{document_id}/content")
 def download_file(document_id: str, request: Request) -> FileResponse:
     store = request.app.state.cloud_store

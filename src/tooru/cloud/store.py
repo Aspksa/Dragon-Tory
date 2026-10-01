@@ -24,6 +24,13 @@ CONFIDENTIALITY_LEVELS = {
 }
 SCOPES = {"personal", "project"}
 
+AI_ACCESS_BY_CONFIDENTIALITY = {
+    "ordinary": AI_ACCESS_LEVELS,
+    "personal": AI_ACCESS_LEVELS,
+    "confidential": {"denied", "search", "read"},
+    "highly_protected": {"denied"},
+}
+
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat()
@@ -94,6 +101,12 @@ class CloudStore:
     def _row(row: sqlite3.Row) -> dict[str, Any]:
         item = dict(row)
         item["trashed"] = bool(item["trashed"])
+        item["allowed_ai_access"] = sorted(
+            AI_ACCESS_BY_CONFIDENTIALITY.get(
+                item["confidentiality"],
+                {"denied"},
+            )
+        )
         item["ai_ready_for_current_version"] = bool(
             item["indexed_version"]
             and item["indexed_version"] == item["version"]
@@ -224,6 +237,12 @@ class CloudStore:
             raise ValueError("Недопустимый уровень доступа ИИ.")
         if next_confidentiality not in CONFIDENTIALITY_LEVELS:
             raise ValueError("Недопустимый уровень конфиденциальности.")
+        allowed_ai = AI_ACCESS_BY_CONFIDENTIALITY[next_confidentiality]
+        if next_ai_access not in allowed_ai:
+            raise ValueError(
+                "Этот уровень конфиденциальности не разрешает выбранный "
+                "доступ ИИ."
+            )
         if next_scope not in SCOPES:
             raise ValueError("Недопустимая область документа.")
         if next_scope == "personal":
@@ -267,6 +286,33 @@ class CloudStore:
         if not path.is_file():
             raise FileNotFoundError(document_id)
         return path
+
+    def verify_integrity(self, document_id: str) -> dict[str, Any]:
+        import hashlib
+
+        item = self.get(document_id)
+        path = self.content_path(document_id)
+        digest = hashlib.sha256()
+        size_bytes = 0
+
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                size_bytes += len(chunk)
+                digest.update(chunk)
+
+        actual_sha256 = digest.hexdigest()
+        return {
+            "document_id": document_id,
+            "ok": (
+                size_bytes == item["size_bytes"]
+                and actual_sha256 == item["sha256"]
+            ),
+            "expected_sha256": item["sha256"],
+            "actual_sha256": actual_sha256,
+            "expected_size_bytes": item["size_bytes"],
+            "actual_size_bytes": size_bytes,
+            "checked_at": utc_now(),
+        }
 
     def trash(self, document_id: str) -> dict[str, Any]:
         item = self.get(document_id)
