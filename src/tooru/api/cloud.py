@@ -202,7 +202,7 @@ async def upload_file(
         max_bytes=max_bytes,
     )
     try:
-        return store.register_upload(
+        result = store.register_upload(
             temp,
             name=safe_name,
             content_type=content_type,
@@ -210,6 +210,14 @@ async def upload_file(
             sha256=sha256,
             folder_id=_folder_value(folder_id),
         )
+        request.app.state.cloud_smart.ensure_document(result["id"])
+        request.app.state.cloud_smart.record_provenance(
+            result["id"],
+            "uploaded",
+            actor="user",
+            details={"name": result["name"], "version": result["version"]},
+        )
+        return result
     finally:
         temp.unlink(missing_ok=True)
 
@@ -226,7 +234,7 @@ def update_document(
             folder = None
         elif payload.folder_id is not None:
             folder = _folder_value(payload.folder_id)
-        return request.app.state.cloud_store.update_document(
+        result = request.app.state.cloud_store.update_document(
             document_id,
             name=payload.name,
             folder_id=folder,
@@ -234,6 +242,13 @@ def update_document(
             description=payload.description,
             tags=payload.tags,
         )
+        request.app.state.cloud_smart.record_provenance(
+            document_id,
+            "document_metadata_updated",
+            actor="user",
+            details={"name": result["name"], "folder_id": result["folder_id"]},
+        )
+        return result
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -298,12 +313,17 @@ def search_document_content(
     query: str = Query(min_length=2, max_length=500),
     limit: int = Query(default=30, ge=1, le=100),
 ) -> dict:
-    return {
-        "items": request.app.state.cloud_store.search_chunks(
-            query,
-            limit=limit,
-        )
-    }
+    smart = request.app.state.cloud_smart
+    items = request.app.state.cloud_store.search_chunks(
+        query,
+        limit=limit * 3,
+    )
+    allowed = [
+        item
+        for item in items
+        if smart.permission(item["document_id"], "content_read")
+    ][:limit]
+    return {"items": allowed}
 
 
 @router.get("/files/{document_id}/preview")
@@ -349,12 +369,15 @@ def index_file(document_id: str, request: Request) -> dict:
     store = request.app.state.cloud_store
     try:
         item = store.get(document_id)
-        if item["ai_access"] not in {"read", "answer", "memory", "full"}:
+        if not request.app.state.cloud_smart.permission(
+            document_id,
+            "content_read",
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    "Сначала разрешите Тоору читать содержимое "
-                    "в цифровом паспорте."
+                    "ИИ-договор не разрешает Тоору читать содержимое "
+                    "этого документа."
                 ),
             )
         path, cleanup = store.materialize_plaintext(document_id)
@@ -424,12 +447,23 @@ async def ask_document(
             detail="Документ не найден.",
         ) from exc
 
-    if item["ai_access"] not in {"answer", "memory", "full"}:
+    smart = request.app.state.cloud_smart
+    contract = smart.get_contract(document_id)
+    if contract["expired"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Срок ИИ-договора этого документа истёк.",
+        )
+    if not (
+        contract["content_read"]
+        and contract["answer"]
+        and contract["external_ai"]
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "Паспорт не разрешает использовать документ "
-                "для ответов Тоору."
+                "ИИ-договор не разрешает передавать фрагменты документа "
+                "во внешний ИИ для ответа."
             ),
         )
     if (
@@ -498,6 +532,18 @@ async def ask_document(
             max_tokens=1_800,
         ),
     )
+    smart.record_provenance(
+        document_id,
+        "ai_answer_generated",
+        actor="tooru",
+        details={
+            "version": item["version"],
+            "source_count": len(sources),
+            "provider": response.provider,
+            "memory_written": False,
+        },
+    )
+    smart.consume_one_time_answer(document_id)
     return {
         "answer": response.text,
         "document_id": document_id,
@@ -505,6 +551,13 @@ async def ask_document(
         "provider": response.provider,
         "model": response.model,
         "sources": sources,
+        "proof": {
+            "document_id": document_id,
+            "version": item["version"],
+            "sha256": item["sha256"],
+            "source_count": len(sources),
+            "memory_written": False,
+        },
     }
 
 
@@ -526,13 +579,25 @@ def update_passport(
     request: Request,
 ) -> dict:
     try:
-        return request.app.state.cloud_store.update_passport(
+        result = request.app.state.cloud_store.update_passport(
             document_id,
             ai_access=payload.ai_access,
             confidentiality=payload.confidentiality,
             scope=payload.scope,
             project_id=payload.project_id,
         )
+        request.app.state.cloud_smart.reconcile_contract(document_id)
+        request.app.state.cloud_smart.emit_event(
+            document_id,
+            "passport_changed",
+            actor="user",
+            details={
+                "confidentiality": result["confidentiality"],
+                "ai_access": result["ai_access"],
+                "scope": result["scope"],
+            },
+        )
+        return result
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -589,7 +654,7 @@ async def add_version(
         max_bytes=max_bytes,
     )
     try:
-        return store.add_version(
+        result = store.add_version(
             document_id,
             temp,
             name=safe_name,
@@ -597,6 +662,13 @@ async def add_version(
             size_bytes=size_bytes,
             sha256=sha256,
         )
+        request.app.state.cloud_smart.emit_event(
+            document_id,
+            "version_changed",
+            actor="user",
+            details={"version": result["version"], "name": result["name"]},
+        )
+        return result
     except PermissionError as exc:
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
@@ -613,10 +685,20 @@ def restore_version(
     request: Request,
 ) -> dict:
     try:
-        return request.app.state.cloud_store.restore_version(
+        result = request.app.state.cloud_store.restore_version(
             document_id,
             version,
         )
+        request.app.state.cloud_smart.emit_event(
+            document_id,
+            "version_changed",
+            actor="user",
+            details={
+                "version": result["version"],
+                "restored_from_version": version,
+            },
+        )
+        return result
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -645,7 +727,23 @@ def document_activity(document_id: str, request: Request) -> dict:
 @router.post("/files/{document_id}/verify")
 def verify_file(document_id: str, request: Request) -> dict:
     try:
-        return request.app.state.cloud_store.verify_integrity(document_id)
+        result = request.app.state.cloud_store.verify_integrity(document_id)
+        if not result["ok"]:
+            request.app.state.cloud_smart.emit_event(
+                document_id,
+                "integrity_failed",
+                details={
+                    "expected_sha256": result["expected_sha256"],
+                    "actual_sha256": result["actual_sha256"],
+                },
+            )
+        else:
+            request.app.state.cloud_smart.record_provenance(
+                document_id,
+                "integrity_verified",
+                details={"ok": True},
+            )
+        return result
     except PermissionError as exc:
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
@@ -691,6 +789,11 @@ def download_file(document_id: str, request: Request) -> FileResponse:
 def trash_file(document_id: str, request: Request) -> dict:
     try:
         request.app.state.cloud_store.trash(document_id)
+        request.app.state.cloud_smart.record_provenance(
+            document_id,
+            "trashed",
+            actor="user",
+        )
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -702,7 +805,13 @@ def trash_file(document_id: str, request: Request) -> dict:
 @router.post("/files/{document_id}/restore")
 def restore_file(document_id: str, request: Request) -> dict:
     try:
-        return request.app.state.cloud_store.restore(document_id)
+        result = request.app.state.cloud_store.restore(document_id)
+        request.app.state.cloud_smart.record_provenance(
+            document_id,
+            "restored_from_trash",
+            actor="user",
+        )
+        return result
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

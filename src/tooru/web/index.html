@@ -69,6 +69,7 @@
     .sidebar-bottom{display:grid;gap:7px}
     .cloud-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
     .cloud-navline{display:flex;align-items:center;gap:8px;margin-bottom:12px;min-height:38px}.cloud-breadcrumbs{display:flex;gap:4px;align-items:center;flex:1;min-width:0;overflow:auto}.cloud-filter-actions{display:flex;gap:4px;margin-left:auto}.cloud-folder{border-color:#d6e4ff;background:#fbfdff}.cloud-file[draggable="true"]{cursor:grab}.cloud-folder.drag-target{border-color:#1947b8;background:#eef4ff}.cloud-selected{outline:2px solid #84adff}.cloud-version-list,.cloud-activity-list{display:grid;gap:8px;max-height:260px;overflow:auto}.cloud-version-row,.cloud-activity-row{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid #e4e7ec;border-radius:10px;padding:9px 10px;background:#f8fafc}.cloud-version-meta,.cloud-activity-meta{font-size:11px;color:#667085}.cloud-details{margin-top:14px;border-top:1px solid #eef0f3;padding-top:14px}.cloud-details h4{margin:0 0 10px}
+    .smart-contract-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.smart-check{display:flex;align-items:center;gap:8px;border:1px solid #e4e7ec;border-radius:10px;padding:9px 10px;background:#f8fafc;font-size:12px}.smart-check input{width:auto;margin:0}.smart-panel{width:min(720px,100%)}.smart-list{display:grid;gap:9px}.smart-line{border:1px solid #e4e7ec;border-radius:11px;padding:11px;background:#f8fafc}.smart-line strong{display:block;margin-bottom:4px}.smart-danger{background:#fff5f5;border-color:#fecdca}.smart-good{background:#ecfdf3;border-color:#abefc6}.smart-actions{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.smart-hero{padding:15px;border-radius:14px;background:linear-gradient(135deg,#eef4ff,#f8faff);border:1px solid #d6e4ff;margin-bottom:12px}.smart-hero h4{margin:0 0 5px}.smart-proof{font-family:Consolas,monospace;font-size:11px;word-break:break-all;background:#f8fafc;border:1px solid #e4e7ec;border-radius:9px;padding:8px}
     .cloud-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .cloud-search{min-width:280px;max-width:430px}
     .cloud-drop{border:2px dashed #c7d7ff;background:linear-gradient(135deg,#f8fbff,#f5f7fb);border-radius:18px;padding:24px;text-align:center;transition:.18s ease;cursor:pointer}
@@ -197,6 +198,9 @@
             <option value="created">По дате создания</option>
           </select>
           <button id="cloudVault" class="secondary">🔐 Сейф Тори</button>
+          <button id="cloudKnowledgeGraph" class="secondary">🕸 Карта знаний</button>
+          <button id="cloudTimeMachine" class="secondary">🕒 Машина времени</button>
+          <button id="cloudAlerts" class="secondary">🔔 Сигналы</button>
           <button id="cloudContentSearch" class="secondary">⌕ По содержимому</button>
           <button id="cloudNewFolder" class="secondary">＋ Папка</button>
           <button id="cloudUploadButton" class="primary">＋ Загрузить</button>
@@ -373,8 +377,18 @@
         </div>
 
         <div class="passport-section">
+          <h4>🧬 ДНК документа</h4>
+          <div class="field"><label>Тип / роль документа</label><input id="passportDnaKind" placeholder="договор, чек, диагностика…"></div>
+          <div class="field"><label>Происхождение</label><input id="passportDnaOrigin" placeholder="Откуда появился документ"></div>
+          <div class="field"><label>Внешняя ссылка / номер</label><input id="passportDnaExternalRef" placeholder="Номер договора, URL, ID"></div>
+          <div class="field"><label>Важная дата</label><input id="passportDnaImportantDate" placeholder="2027-11-14"></div>
+          <div class="field"><label>Язык</label><input id="passportDnaLanguage" placeholder="ru / en / nl"></div>
+          <div class="field"><label>Примечание происхождения</label><textarea id="passportDnaNotes"></textarea></div>
+        </div>
+
+        <div class="passport-section">
           <h4>Допуск Тоору</h4>
-          <div class="field"><label>Что ИИ разрешено делать</label>
+          <div class="field"><label>Базовый режим ИИ (синхронизируется автоматически)</label>
             <select id="passportAiAccess">
               <option value="denied">Запрещён</option>
               <option value="search">Только поиск по паспорту</option>
@@ -393,6 +407,23 @@
             </select>
             <div id="passportSecurityHint" class="secret-note"></div>
           </div>
+        </div>
+
+        <div class="passport-section">
+          <h4>🤝 ИИ-договор документа</h4>
+          <div class="smart-contract-grid">
+            <label class="smart-check"><input id="contractMetadataSearch" type="checkbox"> Искать по паспорту</label>
+            <label class="smart-check"><input id="contractContentRead" type="checkbox"> Читать локально</label>
+            <label class="smart-check"><input id="contractAnswer" type="checkbox"> Формировать ответы</label>
+            <label class="smart-check"><input id="contractCompare" type="checkbox"> Сравнивать документы</label>
+            <label class="smart-check"><input id="contractMemory" type="checkbox"> Записывать в память</label>
+            <label class="smart-check"><input id="contractProposeEdits" type="checkbox"> Предлагать изменения</label>
+            <label class="smart-check"><input id="contractExternalAI" type="checkbox"> Передавать фрагменты DeepSeek</label>
+            <label class="smart-check"><input id="contractCleanRoom" type="checkbox"> Разрешить Чистую комнату</label>
+            <label class="smart-check"><input id="contractOneTime" type="checkbox"> Только один ответ</label>
+          </div>
+          <div class="field" style="margin-top:10px"><label>Срок действия договора</label><input id="contractExpiresAt" placeholder="ISO-дата/время или пусто"></div>
+          <div class="secret-note">Права проверяются backend. Запрет внешнего ИИ нельзя обойти прямым вызовом API.</div>
         </div>
 
         <div class="passport-section">
@@ -415,6 +446,14 @@
         <div class="spacer"></div>
         <div class="row">
           <button id="passportSave" class="primary">Сохранить паспорт</button>
+          <button id="passportCard" class="secondary">💡 Карточка знаний</button>
+          <button id="passportTimeline" class="secondary">🧬 История ДНК</button>
+          <button id="passportRelations" class="secondary">🔗 Связи</button>
+          <button id="passportCleanRoom" class="secondary">🧼 Чистая комната</button>
+          <button id="passportCompare" class="secondary">⇄ Сравнить</button>
+          <button id="passportSeal" class="secondary">🔏 Печать</button>
+          <button id="passportSealVerify" class="secondary">✓ Проверить печать</button>
+          <button id="passportWatchers" class="secondary">👁 Наблюдатели</button>
           <button id="passportPreview" class="secondary">Просмотр</button>
           <button id="passportIndexNow" class="secondary">Изучить документ</button>
           <button id="passportAsk" class="secondary">Спросить Тоору</button>
@@ -428,6 +467,17 @@
         </div>
         <div id="passportStatus" class="statusbar"></div>
         <div id="passportDetails" class="cloud-details" hidden></div>
+      </div>
+    </div>
+
+    <div id="smartModal" class="passport-backdrop" hidden>
+      <div class="passport-panel smart-panel" role="dialog" aria-modal="true" aria-labelledby="smartTitle">
+        <div class="passport-head">
+          <div><h3 id="smartTitle">Умный диск Тори</h3><div id="smartSubtitle" class="muted">—</div></div>
+          <button id="smartClose" class="icon-btn" title="Закрыть">✕</button>
+        </div>
+        <div id="smartBody" class="smart-list"></div>
+        <div id="smartStatus" class="statusbar"></div>
       </div>
     </div>
 
@@ -632,6 +682,7 @@ async function openPassport(documentId){
     $("passportAiAccess").value=d.ai_access;$("passportConfidentiality").value=d.confidentiality;$("passportScope").value=d.scope;applyConfidentialityPolicy();
     $("passportProject").value=d.project_id||"";$("passportProject").disabled=d.scope!=="project";
     $("passportDownload").href="/v1/cloud/files/"+encodeURIComponent(d.id)+"/content";
+    await loadSmartPassport(documentId);
     $("passportStatus").textContent="Паспорт загружен. "+confidentialityNames[d.confidentiality]+".";
   }catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
 }
@@ -640,13 +691,25 @@ function applyConfidentialityPolicy(){
   const confidentiality=$("passportConfidentiality").value;const ai=$("passportAiAccess");
   const allowed=confidentiality==="highly_protected"?["denied"]:(confidentiality==="confidential"?["denied","search","read"]:["denied","search","read","answer","memory","full"]);
   Array.from(ai.options).forEach(option=>option.disabled=!allowed.includes(option.value));
-  if(!allowed.includes(ai.value))ai.value="denied";ai.disabled=confidentiality==="highly_protected";
+  if(!allowed.includes(ai.value))ai.value="denied";ai.disabled=true;
   $("passportSecurityHint").textContent=securityHints[confidentiality]||"";
 }
 async function verifyPassportIntegrity(){
   if(!activePassportId)return;
   try{$("passportIntegrity").textContent="Проверка…";const d=await api("/v1/cloud/files/"+encodeURIComponent(activePassportId)+"/verify",{method:"POST"});$("passportIntegrity").textContent=d.ok?"✓ Файл подлинный":"⚠ Файл изменён";$("passportIntegrity").className="passport-value "+(d.ok?"ok":"bad");$("passportStatus").textContent=d.ok?"SHA-256 и размер совпадают с цифровым паспортом.":"ВНИМАНИЕ: содержимое файла не совпадает с паспортом."}catch(e){$("passportIntegrity").textContent="Ошибка";$("passportStatus").textContent="Ошибка проверки: "+e.message}
 }
+async function loadSmartPassport(documentId){
+  try{
+    const [dna,contract]=await Promise.all([
+      api("/v1/cloud/smart/files/"+encodeURIComponent(documentId)+"/dna"),
+      api("/v1/cloud/smart/files/"+encodeURIComponent(documentId)+"/ai-contract")
+    ]);
+    $("passportDnaKind").value=dna.kind||"";$("passportDnaOrigin").value=dna.origin||"";$("passportDnaExternalRef").value=dna.external_ref||"";$("passportDnaImportantDate").value=dna.important_date||"";$("passportDnaLanguage").value=dna.language||"";$("passportDnaNotes").value=dna.notes||"";
+    $("contractMetadataSearch").checked=!!contract.metadata_search;$("contractContentRead").checked=!!contract.content_read;$("contractAnswer").checked=!!contract.answer;$("contractCompare").checked=!!contract.compare;$("contractMemory").checked=!!contract.memory;$("contractProposeEdits").checked=!!contract.propose_edits;$("contractExternalAI").checked=!!contract.external_ai;$("contractCleanRoom").checked=!!contract.clean_room;$("contractOneTime").checked=!!contract.one_time_answer;$("contractExpiresAt").value=contract.expires_at||"";
+  }catch(e){$("passportStatus").textContent="Умный паспорт: "+e.message}
+}
+function smartContractPayload(){return {metadata_search:$("contractMetadataSearch").checked,content_read:$("contractContentRead").checked,answer:$("contractAnswer").checked,compare:$("contractCompare").checked,memory:$("contractMemory").checked,propose_edits:$("contractProposeEdits").checked,external_ai:$("contractExternalAI").checked,clean_room:$("contractCleanRoom").checked,one_time_answer:$("contractOneTime").checked,expires_at:$("contractExpiresAt").value.trim()||null}}
+function smartDNApayload(){return {kind:$("passportDnaKind").value.trim(),origin:$("passportDnaOrigin").value.trim(),external_ref:$("passportDnaExternalRef").value.trim(),important_date:$("passportDnaImportantDate").value.trim()||null,language:$("passportDnaLanguage").value.trim(),notes:$("passportDnaNotes").value.trim()}}
 async function savePassport(){
   if(!activePassportId)return;const scope=$("passportScope").value;const project=$("passportProject").value.trim();
   if(scope==="project"&&!project){$("passportStatus").textContent="Укажите ID проекта.";return}
@@ -654,7 +717,10 @@ async function savePassport(){
     $("passportStatus").textContent="Сохранение…";
     await api("/v1/cloud/files/"+encodeURIComponent(activePassportId),{method:"PATCH",body:JSON.stringify({name:$("passportDocumentName").value.trim(),favorite:$("passportFavorite").checked,description:$("passportDescription").value,tags:$("passportTags").value.split(",").map(x=>x.trim()).filter(Boolean)})});
     const d=await api("/v1/cloud/files/"+encodeURIComponent(activePassportId)+"/passport",{method:"PATCH",body:JSON.stringify({ai_access:$("passportAiAccess").value,confidentiality:$("passportConfidentiality").value,scope:scope,project_id:scope==="project"?project:null})});
-    $("passportName").textContent=d.name;$("passportIndex").textContent=indexNames[d.ai_index_status]||d.ai_index_status;$("passportStatus").textContent="Паспорт сохранён.";await loadCloud();
+    await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/dna",{method:"PATCH",body:JSON.stringify(smartDNApayload())});
+    const contract=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/ai-contract",{method:"PUT",body:JSON.stringify(smartContractPayload())});
+    $("passportAiAccess").value=contract.memory?"memory":(contract.propose_edits||contract.compare?"full":(contract.answer?"answer":(contract.content_read?"read":(contract.metadata_search?"search":"denied"))));
+    $("passportName").textContent=d.name;$("passportIndex").textContent=indexNames[d.ai_index_status]||d.ai_index_status;$("passportStatus").textContent="Паспорт, ДНК и ИИ-договор сохранены.";await loadCloud();
   }catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
 }
 async function previewPassportDocument(){
@@ -688,6 +754,23 @@ async function askPassportDocument(){
     box.append(q,answer,sources);$("passportStatus").textContent="Ответ сформирован по v"+d.version+" документа.";
   }catch(e){$("passportStatus").textContent="Тоору не может ответить: "+e.message}
 }
+function openSmartModal(title,subtitle=""){$("smartTitle").textContent=title;$("smartSubtitle").textContent=subtitle;$("smartBody").innerHTML="";$("smartStatus").textContent="";$("smartModal").hidden=false}
+function closeSmartModal(){$("smartModal").hidden=true}
+function smartLine(title,body,kind=""){const row=document.createElement("div");row.className="smart-line "+kind;const h=document.createElement("strong");h.textContent=title;const p=document.createElement("div");p.className="muted";p.style.whiteSpace="pre-wrap";p.textContent=body;row.append(h,p);return row}
+async function showKnowledgeCard(){
+  if(!activePassportId)return;openSmartModal("💡 Карточка знаний","Целостная картина документа");
+  try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/card");const hero=document.createElement("div");hero.className="smart-hero";hero.innerHTML="<h4>"+escapeHtml(d.document.name)+"</h4><div class='muted'>"+escapeHtml(d.document.id)+" · v"+d.document.version+"</div>";$("smartBody").append(hero);$("smartBody").append(smartLine("ДНК",(d.dna.kind||"Тип не задан")+"\nПроисхождение: "+(d.dna.origin||"—")+"\nВажная дата: "+(d.dna.important_date||"—")));$("smartBody").append(smartLine("ИИ-договор","Чтение: "+(d.ai_contract.content_read?"да":"нет")+" · ответы: "+(d.ai_contract.answer?"да":"нет")+" · внешний ИИ: "+(d.ai_contract.external_ai?"да":"нет")+" · чистая комната: "+(d.ai_contract.clean_room?"да":"нет")));$("smartBody").append(smartLine("Структура","Версий: "+d.version_count+" · связей: "+d.relations.length+" · наблюдателей: "+d.watchers.length+" · печать: "+(d.latest_seal?"v"+d.latest_seal.version:"нет")));if(d.relation_suggestions.length)$("smartBody").append(smartLine("Предлагаемые связи",d.relation_suggestions.map(x=>x.name+" · совпадение "+x.score).join("\n")))}catch(e){$("smartStatus").textContent=e.message}
+}
+async function showDnaTimeline(){if(!activePassportId)return;openSmartModal("🧬 История ДНК","Происхождение и действия");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/timeline");if(!d.items.length)$("smartBody").append(smartLine("История","Пока пуста."));d.items.forEach(x=>$("smartBody").append(smartLine(x.event,fmtChatDate(x.created_at)+" · "+x.actor+"\n"+(typeof x.details==="string"?x.details:JSON.stringify(x.details,null,2)))))}catch(e){$("smartStatus").textContent=e.message}}
+async function showRelations(){if(!activePassportId)return;openSmartModal("🔗 Связи документа","Граф знаний без копирования файлов");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/relations");const add=document.createElement("button");add.className="primary";add.textContent="＋ Добавить связь";add.onclick=async()=>{const target=prompt("Tory Document ID второго документа:");if(!target)return;const type=prompt("Тип: related / derived_from / replaces / supports / attachment / same_subject / reference","related")||"related";try{await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/relations",{method:"POST",body:JSON.stringify({target_id:target.trim(),relation_type:type.trim(),note:""})});showRelations()}catch(e){$("smartStatus").textContent=e.message}};$("smartBody").append(add);d.items.forEach(r=>{const other=r.source_id===activePassportId?r.target_name:r.source_name;$("smartBody").append(smartLine(r.relation_type,other+"\n"+(r.note||"")))});if(d.suggestions.length)$("smartBody").append(smartLine("Тоору предлагает",d.suggestions.map(x=>x.name+" · общие теги: "+(x.shared_tags.join(", ")||"—")).join("\n")))}catch(e){$("smartStatus").textContent=e.message}}
+async function cleanRoomAsk(){if(!activePassportId)return;const question=prompt("Вопрос для Чистой комнаты:");if(!question||!question.trim())return;openSmartModal("🧼 Чистая комната","Без постоянного индекса и записи в память");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/clean-room",{method:"POST",body:JSON.stringify({question:question.trim()})});$("smartBody").append(smartLine("Ответ Тоору",d.answer));$("smartBody").append(smartLine("Переданные источники",d.sources.map(x=>"Источник "+x.source_no+": "+x.label+(x.page?" · стр. "+x.page:"")+" · "+x.characters_sent+" символов").join("\n"),"smart-good"));$("smartBody").append(smartLine("Политика","Постоянный индекс: нет\nПамять: нет\nСодержание документа этим режимом не сохраняется.","smart-good"))}catch(e){$("smartStatus").textContent=e.message}}
+async function comparePassportDocument(){if(!activePassportId)return;const other=prompt("Tory Document ID второго документа:");if(!other)return;const question=prompt("Что сравнить?","Сравни документы и перечисли существенные различия.")||"Сравни документы";openSmartModal("⇄ Сравнение документов","С доказательствами из обоих документов");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/compare",{method:"POST",body:JSON.stringify({other_document_id:other.trim(),question})});$("smartBody").append(smartLine("Результат",d.answer));$("smartBody").append(smartLine("Источники",d.sources.map(s=>"Источник "+s.source_no+": "+s.document_name+" · "+s.label+(s.page?" · стр. "+s.page:"")).join("\n"),"smart-good"))}catch(e){$("smartStatus").textContent=e.message}}
+async function sealPassportDocument(){if(!activePassportId)return;openSmartModal("🔏 Криптопечать Тори","Ed25519-подпись текущей версии");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/seal",{method:"POST"});$("smartBody").append(smartLine("Печать создана","Версия: "+d.version+"\nОтпечаток ключа: "+d.public_key_fingerprint+"\nSHA паспорта: "+d.payload_sha256,"smart-good"));$("smartBody").append(smartLine("Важно","Это локальная криптографическая печать этой установки Dragon Tory, не государственная квалифицированная электронная подпись."))}catch(e){$("smartStatus").textContent=e.message}}
+async function verifyPassportSeal(){if(!activePassportId)return;openSmartModal("✓ Проверка криптопечати","Подпись и физическая целостность");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/seal/verify",{method:"POST"});$("smartBody").append(smartLine(d.ok?"Печать подтверждена":"Проверка не пройдена","Подпись: "+(d.signature_valid?"верна":"ошибка")+"\nФайл: "+(d.storage_verified===null?"не проверен":(d.storage_verified?"совпадает":"изменён"))+"\n"+d.storage_message,d.ok?"smart-good":"smart-danger"));$("smartBody").append(smartLine("Отпечаток ключа",d.public_key_fingerprint))}catch(e){$("smartStatus").textContent=e.message}}
+async function showWatchers(){if(!activePassportId)return;openSmartModal("👁 Наблюдатели","Реакция на будущие изменения");try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/watchers");const actions=document.createElement("div");actions.className="smart-actions";[["version_changed","Версии"],["integrity_failed","Целостность"],["passport_changed","Паспорт"],["seal_failed","Криптопечать"]].forEach(([event,label])=>{const b=document.createElement("button");b.className="secondary";b.textContent="＋ "+label;b.onclick=async()=>{try{await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/watchers",{method:"POST",body:JSON.stringify({event_type:event,config:{}})});showWatchers()}catch(e){$("smartStatus").textContent=e.message}};actions.append(b)});$("smartBody").append(actions);d.items.forEach(w=>$("smartBody").append(smartLine(w.event_type,w.enabled?"Активен":"Выключен")))}catch(e){$("smartStatus").textContent=e.message}}
+async function showKnowledgeGraph(){openSmartModal("🕸 Карта знаний","Связи между документами");try{const d=await api("/v1/cloud/smart/graph");$("smartBody").append(smartLine("Масштаб","Документов: "+d.nodes.length+" · связей: "+d.edges.length));d.edges.forEach(e=>{const a=d.nodes.find(n=>n.id===e.source_id),b=d.nodes.find(n=>n.id===e.target_id);$("smartBody").append(smartLine(e.relation_type,(a?a.name:e.source_id)+" → "+(b?b.name:e.target_id)))})}catch(e){$("smartStatus").textContent=e.message}}
+async function showTimeMachine(){openSmartModal("🕒 Машина времени Тори","Снимки структуры и версий диска");try{const d=await api("/v1/cloud/smart/snapshots");const create=document.createElement("button");create.className="primary";create.textContent="＋ Создать снимок сейчас";create.onclick=async()=>{const label=prompt("Название снимка:","Снимок "+new Date().toLocaleString())||"Снимок диска";try{await api("/v1/cloud/smart/snapshots",{method:"POST",body:JSON.stringify({label})});showTimeMachine()}catch(e){$("smartStatus").textContent=e.message}};$("smartBody").append(create);d.items.forEach(s=>{const row=document.createElement("div");row.className="smart-line";const title=document.createElement("strong");title.textContent=s.label;const meta=document.createElement("div");meta.className="muted";meta.textContent=fmtChatDate(s.created_at);const restore=document.createElement("button");restore.className="secondary";restore.textContent="Восстановить";restore.onclick=async()=>{if(!confirm("Восстановить имена, расположение и доступную версию? Текущие правила безопасности будут сохранены."))return;try{const r=await api("/v1/cloud/smart/snapshots/"+encodeURIComponent(s.id)+"/restore",{method:"POST"});$("smartStatus").textContent="Восстановлено: "+r.restored_documents+" · пропущено: "+r.skipped_documents;await loadCloud()}catch(e){$("smartStatus").textContent=e.message}};row.append(title,meta,restore);$("smartBody").append(row)})}catch(e){$("smartStatus").textContent=e.message}}
+async function showCloudAlerts(){openSmartModal("🔔 Сигналы Тори","События от наблюдателей");try{const d=await api("/v1/cloud/smart/alerts");if(!d.items.length)$("smartBody").append(smartLine("Спокойно","Новых сигналов нет.","smart-good"));d.items.forEach(a=>{const row=smartLine(a.title,a.document_name+"\n"+a.message,a.severity==="high"?"smart-danger":"");const resolve=document.createElement("button");resolve.className="secondary";resolve.textContent="Закрыть сигнал";resolve.onclick=async()=>{await api("/v1/cloud/smart/alerts/"+encodeURIComponent(a.id)+"/resolve",{method:"POST"});showCloudAlerts()};row.append(resolve);$("smartBody").append(row)})}catch(e){$("smartStatus").textContent=e.message}}
 async function loadVaultStatus(){
   try{
     const d=await api("/v1/cloud/vault/status");
@@ -741,7 +824,7 @@ async function trashPassport(){
   if(!activePassportId||!confirm("Переместить документ в корзину?"))return;
   try{await api("/v1/cloud/files/"+encodeURIComponent(activePassportId),{method:"DELETE"});closePassport();await loadCloud()}catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
 }
-$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);$("cloudNewFolder").onclick=createCloudFolder;$("cloudContentSearch").onclick=searchCloudContent;$("cloudVault").onclick=openVault;
+$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);$("cloudNewFolder").onclick=createCloudFolder;$("cloudContentSearch").onclick=searchCloudContent;$("cloudVault").onclick=openVault;$("cloudKnowledgeGraph").onclick=showKnowledgeGraph;$("cloudTimeMachine").onclick=showTimeMachine;$("cloudAlerts").onclick=showCloudAlerts;
 $("cloudRoot").onclick=()=>{cloudCurrentFolder=null;cloudFolderStack=[];cloudTrashMode=false;cloudFavoritesOnly=false;loadCloud()};
 $("cloudFavorites").onclick=()=>{cloudFavoritesOnly=!cloudFavoritesOnly;cloudTrashMode=false;loadCloud()};
 $("cloudTrash").onclick=()=>{cloudTrashMode=true;cloudFavoritesOnly=false;loadCloud()};$("cloudSort").onchange=loadCloud;
@@ -749,9 +832,9 @@ $("cloudDropZone").onclick=()=>$("cloudFileInput").click();$("cloudDropZone").on
 ["dragenter","dragover"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.add("dragging")}));
 ["dragleave","drop"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.remove("dragging")}));
 $("cloudDropZone").addEventListener("drop",e=>uploadCloudFiles(e.dataTransfer.files));$("cloudSearch").addEventListener("input",()=>{clearTimeout(cloudSearchTimer);cloudSearchTimer=setTimeout(loadCloud,250)});
-$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportVerify").onclick=verifyPassportIntegrity;$("passportPreview").onclick=previewPassportDocument;$("passportIndexNow").onclick=indexPassportDocument;$("passportAsk").onclick=askPassportDocument;$("passportVersions").onclick=showPassportVersions;$("passportActivity").onclick=showPassportActivity;$("passportNewVersion").onclick=()=>$("passportVersionInput").click();$("passportVersionInput").onchange=e=>{const file=e.target.files[0];e.target.value="";uploadNewPassportVersion(file)};$("passportTrash").onclick=trashPassport;
+$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportVerify").onclick=verifyPassportIntegrity;$("passportPreview").onclick=previewPassportDocument;$("passportIndexNow").onclick=indexPassportDocument;$("passportAsk").onclick=askPassportDocument;$("passportCard").onclick=showKnowledgeCard;$("passportTimeline").onclick=showDnaTimeline;$("passportRelations").onclick=showRelations;$("passportCleanRoom").onclick=cleanRoomAsk;$("passportCompare").onclick=comparePassportDocument;$("passportSeal").onclick=sealPassportDocument;$("passportSealVerify").onclick=verifyPassportSeal;$("passportWatchers").onclick=showWatchers;$("passportVersions").onclick=showPassportVersions;$("passportActivity").onclick=showPassportActivity;$("passportNewVersion").onclick=()=>$("passportVersionInput").click();$("passportVersionInput").onchange=e=>{const file=e.target.files[0];e.target.value="";uploadNewPassportVersion(file)};$("passportTrash").onclick=trashPassport;
 $("passportConfidentiality").onchange=applyConfidentialityPolicy;$("passportScope").onchange=()=>{$("passportProject").disabled=$("passportScope").value!=="project";if($("passportScope").value!=="project")$("passportProject").value=""};
-$("passportModal").addEventListener("click",e=>{if(e.target===$("passportModal"))closePassport()});$("vaultClose").onclick=closeVault;$("vaultSetup").onclick=setupVault;$("vaultUnlock").onclick=unlockVault;$("vaultLock").onclick=lockVault;$("vaultModal").addEventListener("click",e=>{if(e.target===$("vaultModal"))closeVault()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("passportModal").hidden)closePassport();if(e.key==="Escape"&&!$("vaultModal").hidden)closeVault()});
+$("passportModal").addEventListener("click",e=>{if(e.target===$("passportModal"))closePassport()});$("smartClose").onclick=closeSmartModal;$("smartModal").addEventListener("click",e=>{if(e.target===$("smartModal"))closeSmartModal()});$("vaultClose").onclick=closeVault;$("vaultSetup").onclick=setupVault;$("vaultUnlock").onclick=unlockVault;$("vaultLock").onclick=lockVault;$("vaultModal").addEventListener("click",e=>{if(e.target===$("vaultModal"))closeVault()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("passportModal").hidden)closePassport();if(e.key==="Escape"&&!$("smartModal").hidden)closeSmartModal();if(e.key==="Escape"&&!$("vaultModal").hidden)closeVault()});
 
 function fmtChatDate(value){if(!value)return"";const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleString()}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]))}

@@ -1,0 +1,223 @@
+import hashlib
+from pathlib import Path
+
+from tooru.cloud.smart import SmartDrive
+from tooru.cloud.store import CloudStore
+from tooru.cloud.vault import ToryVault
+
+
+def _stack(tmp_path: Path) -> tuple[CloudStore, SmartDrive]:
+    root = tmp_path / "cloud"
+    vault = ToryVault(root / "vault.json")
+    store = CloudStore(
+        root,
+        root / "tooru_cloud.sqlite3",
+        vault=vault,
+    )
+    store.initialize()
+    smart = SmartDrive(store)
+    smart.initialize()
+    return store, smart
+
+
+def _upload(
+    store: CloudStore,
+    name: str,
+    content: bytes,
+) -> dict:
+    temp = store.incoming_dir / (name + ".upload")
+    temp.write_bytes(content)
+    return store.register_upload(
+        temp,
+        name=name,
+        content_type="text/plain",
+        size_bytes=len(content),
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+
+
+def test_ai_contract_syncs_with_legacy_and_supports_one_time_access(
+    tmp_path: Path,
+) -> None:
+    store, smart = _stack(tmp_path)
+    document = _upload(store, "contract.txt", b"contract")
+
+    initial = smart.get_contract(document["id"])
+    assert initial["content_read"] is False
+    assert initial["answer"] is False
+
+    store.update_passport(
+        document["id"],
+        ai_access="read",
+        confidentiality="personal",
+    )
+    synced = smart.reconcile_contract(document["id"])
+    assert synced["content_read"] is True
+    assert synced["answer"] is False
+
+    contract = smart.update_contract(
+        document["id"],
+        {
+            "metadata_search": True,
+            "content_read": True,
+            "answer": True,
+            "external_ai": True,
+            "clean_room": True,
+            "one_time_answer": True,
+        },
+    )
+    assert contract["clean_room"] is True
+    assert store.get(document["id"])["ai_access"] == "answer"
+
+    assert smart.consume_one_time_answer(document["id"]) is True
+    consumed = smart.get_contract(document["id"])
+    assert consumed["answer"] is False
+    assert consumed["external_ai"] is False
+    assert consumed["one_time_answer"] is False
+    assert store.get(document["id"])["ai_access"] == "read"
+
+
+def test_confidential_contract_blocks_external_ai(tmp_path: Path) -> None:
+    store, smart = _stack(tmp_path)
+    document = _upload(store, "confidential.txt", b"secret")
+    store.update_passport(
+        document["id"],
+        ai_access="read",
+        confidentiality="confidential",
+    )
+    smart.reconcile_contract(document["id"])
+
+    try:
+        smart.update_contract(
+            document["id"],
+            {
+                "metadata_search": True,
+                "content_read": True,
+                "answer": True,
+                "external_ai": True,
+            },
+        )
+    except ValueError as exc:
+        assert "Конфиденциальный" in str(exc)
+    else:
+        raise AssertionError("External AI must be blocked for confidential files.")
+
+
+def test_relations_knowledge_card_and_watchers(tmp_path: Path) -> None:
+    store, smart = _stack(tmp_path)
+    first = _upload(store, "contract.txt", b"a")
+    second = _upload(store, "invoice.txt", b"b")
+    store.update_document(first["id"], tags=["Subaru", "2026"])
+    store.update_document(second["id"], tags=["Subaru"])
+
+    relation = smart.add_relation(
+        first["id"],
+        second["id"],
+        "supports",
+        "Счёт подтверждает договор",
+    )
+    assert relation["relation_type"] == "supports"
+
+    card = smart.knowledge_card(first["id"])
+    assert card["relations"][0]["target_id"] == second["id"]
+    assert any(
+        item["document_id"] == second["id"]
+        for item in card["relation_suggestions"]
+    )
+
+    smart.create_watch(first["id"], "version_changed")
+    alerts = smart.emit_event(
+        first["id"],
+        "version_changed",
+        details={"version": 2},
+    )
+    assert alerts
+    assert smart.alerts()[0]["document_id"] == first["id"]
+    assert smart.resolve_alert(alerts[0]["id"]) is True
+
+
+def test_time_machine_restores_metadata_and_version_but_not_security(
+    tmp_path: Path,
+) -> None:
+    store, smart = _stack(tmp_path)
+    original = b"version one"
+    second = b"version two"
+    document = _upload(store, "history.txt", original)
+    snapshot = smart.create_snapshot("До изменений")
+
+    store.update_document(
+        document["id"],
+        name="renamed.txt",
+        favorite=True,
+    )
+    temp = store.incoming_dir / "second.upload"
+    temp.write_bytes(second)
+    store.add_version(
+        document["id"],
+        temp,
+        name="history.txt",
+        content_type="text/plain",
+        size_bytes=len(second),
+        sha256=hashlib.sha256(second).hexdigest(),
+    )
+    store.update_passport(
+        document["id"],
+        ai_access="read",
+        confidentiality="confidential",
+    )
+    smart.reconcile_contract(document["id"])
+
+    restored = smart.restore_snapshot(snapshot["id"])
+    assert restored["security_policy_preserved"] is True
+    current = store.get(document["id"])
+    assert current["name"] == "history.txt"
+    assert current["favorite"] is False
+    assert current["version"] == 3
+    assert current["confidentiality"] == "confidential"
+    assert store.content_path(document["id"]).read_bytes() == original
+
+
+def test_local_ed25519_seal_survives_rename_and_detects_file_change(
+    tmp_path: Path,
+) -> None:
+    store, smart = _stack(tmp_path)
+    content = b"signed content"
+    document = _upload(store, "signed.txt", content)
+
+    seal = smart.seal(document["id"])
+    assert seal["identity_scope"] == "local_dragon_tory_installation"
+
+    store.update_document(document["id"], name="renamed-signed.txt")
+    verified = smart.verify_seal(document["id"])
+    assert verified["ok"] is True
+    assert verified["signature_valid"] is True
+    assert verified["storage_verified"] is True
+
+    store.content_path(document["id"]).write_bytes(b"tampered")
+    failed = smart.verify_seal(document["id"])
+    assert failed["ok"] is False
+    assert failed["storage_verified"] is False
+
+
+def test_dna_and_timeline_are_separate_from_file_bytes(tmp_path: Path) -> None:
+    store, smart = _stack(tmp_path)
+    content = b"document bytes never changed"
+    document = _upload(store, "dna.txt", content)
+    before = store.content_path(document["id"]).read_bytes()
+
+    dna = smart.update_dna(
+        document["id"],
+        {
+            "kind": "договор",
+            "origin": "email import",
+            "external_ref": "AGREEMENT-42",
+            "important_date": "2027-11-14",
+            "language": "ru",
+        },
+    )
+    assert dna["kind"] == "договор"
+    assert store.content_path(document["id"]).read_bytes() == before
+    assert any(
+        item["event"] == "dna_updated"
+        for item in smart.timeline(document["id"])
+    )

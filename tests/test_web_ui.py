@@ -25,6 +25,15 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="vaultModal"' in response.text
     assert 'id="vaultPassphrase"' in response.text
     assert 'id="passportEncryption"' in response.text
+    assert 'id="cloudKnowledgeGraph"' in response.text
+    assert 'id="cloudTimeMachine"' in response.text
+    assert 'id="cloudAlerts"' in response.text
+    assert 'id="passportDnaKind"' in response.text
+    assert 'id="contractExternalAI"' in response.text
+    assert 'id="passportCleanRoom"' in response.text
+    assert 'id="passportSeal"' in response.text
+    assert 'id="passportWatchers"' in response.text
+    assert 'id="smartModal"' in response.text
     assert 'id="cloudDropZone"' in response.text
     assert 'id="cloudFileInput"' in response.text
     assert 'id="passportModal"' in response.text
