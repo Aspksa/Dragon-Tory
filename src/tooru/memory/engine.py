@@ -112,6 +112,10 @@ class MemoryEngine:
             request,
             limit=max(200, request.limit * 20),
         )
+        lexical_rank = {
+            item.id: 1.0 / rank
+            for rank, item in enumerate(lexical_candidates, start=1)
+        }
         candidates_by_id = {
             item.id: item
             for item in [*primary_candidates, *lexical_candidates]
@@ -143,6 +147,7 @@ class MemoryEngine:
                 request.query,
                 item,
                 cosine_similarity(query_vector, vectors.get(item.id, [])),
+                retrieval_score=lexical_rank.get(item.id, 0.0),
             )
             for item in candidates
         ]
