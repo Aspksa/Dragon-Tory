@@ -202,9 +202,11 @@ function Convert-DisplayVersion {
 
 function Get-RelativePathText {
     param([string]$Root, [string]$FullName)
-    return $FullName.Substring($Root.Length).TrimStart(
-        [char[]]"\/"
-    ).Replace("\", "/")
+    $relative = $FullName.Substring($Root.Length)
+    if ($relative.StartsWith("\") -or $relative.StartsWith("/")) {
+        $relative = $relative.Substring(1)
+    }
+    return $relative.Replace("\", "/")
 }
 
 function Build-FileManifest {
@@ -368,14 +370,14 @@ try {
     Remove-Item -LiteralPath $ExtractDir -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $ExtractDir -Force | Out-Null
 
-    Set-State "checking" "Проверка последнего коммита GitHub…" 5
+    Set-State -Phase "checking" -Message "Проверка последнего коммита GitHub…" -Progress 5
     Write-UpdateLog "INFO" "Проверяется последний коммит GitHub."
 
     $repoApi = "https://api.github.com/repos/$Repository"
     $commit = Invoke-GitHubJson "$repoApi/commits/$Branch"
     $remoteSha = [string]$commit.sha
 
-    Set-State "downloading" "Скачивание архива проекта с GitHub…" 15 "" @{
+    Set-State -Phase "downloading" -Message "Скачивание архива проекта с GitHub…" -Progress 15 -Extra @{
         remote_sha = $remoteSha
     }
     Write-UpdateLog "INFO" "Скачивается архив GitHub: $remoteSha"
@@ -390,7 +392,7 @@ try {
         throw "Скачанный архив GitHub имеет недопустимо маленький размер."
     }
 
-    Set-State "extracting" "Распаковка архива и сверка файлов…" 30
+    Set-State -Phase "extracting" -Message "Распаковка архива и сверка файлов…" -Progress 30
     Write-UpdateLog "INFO" "Архив скачан. Выполняется распаковка и сверка файлов."
 
     Expand-Archive -LiteralPath $ZipFile -DestinationPath $ExtractDir -Force
@@ -426,10 +428,11 @@ try {
 
     Build-FileManifest $sourceRoot
 
-    Set-State "extracting" (
+    $manifestMessage = (
         "Сверка завершена: файлов {0}, изменено {1}, новых {2}, удалено {3}."
         -f $DownloadedFiles.Count, $ChangedFiles.Count, $NewFiles.Count, $RemovedFiles.Count
-    ) 40 "" @{
+    )
+    Set-State -Phase "extracting" -Message $manifestMessage -Progress 40 -Extra @{
         remote_version = $remoteVersion
         downloaded_files = @($DownloadedFiles)
         changed_files = @($ChangedFiles)
@@ -437,13 +440,13 @@ try {
         removed_files = @($RemovedFiles)
     }
 
-    Set-State "backing_up" "Создание резервной копии текущего кода…" 50
+    Set-State -Phase "backing_up" -Message "Создание резервной копии текущего кода…" -Progress 50
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $backupPath = Join-Path $BackupsDir "update-$stamp"
     Copy-ProjectSnapshot $backupPath
     Write-UpdateLog "INFO" "Резервная копия создана: $backupPath"
 
-    Set-State "stopping" "Остановка Dragon Tory перед установкой…" 60 "" @{
+    Set-State -Phase "stopping" -Message "Остановка Dragon Tory перед установкой…" -Progress 60 -Extra @{
         backup_path = $backupPath
     }
 
@@ -459,20 +462,18 @@ try {
 
     Start-Sleep -Seconds 1
 
-    Set-State "installing" "Установка файлов новой версии…" 70 "" @{
+    Set-State -Phase "installing" -Message "Установка файлов новой версии…" -Progress 70 -Extra @{
         backup_path = $backupPath
     }
     Install-Archive $sourceRoot
     Write-UpdateLog "INFO" "Файлы новой версии установлены."
 
-    Set-State "restarting" (
-        "Перезапуск Dragon Tory и проверка новых зависимостей…"
-    ) 85 "" @{
+    Set-State -Phase "restarting" -Message "Перезапуск Dragon Tory и проверка новых зависимостей…" -Progress 85 -Extra @{
         backup_path = $backupPath
     }
     Start-DragonTory
 
-    Set-State "verifying" "Проверка новой версии после перезапуска…" 92 "" @{
+    Set-State -Phase "verifying" -Message "Проверка новой версии после перезапуска…" -Progress 92 -Extra @{
         backup_path = $backupPath
     }
     $health = Wait-ForHealth 240
@@ -483,7 +484,7 @@ try {
         -f $fromVersion, $installedVersion
     )
 
-    Set-State "success" $description 100 "" @{
+    Set-State -Phase "success" -Message $description -Progress 100 -Extra @{
         installed_sha = $remoteSha
         remote_sha = $remoteSha
         installed_version = $installedVersion
@@ -498,7 +499,7 @@ try {
         removed_files = @($RemovedFiles)
     }
 
-    Add-History "success" $description $installedVersion $remoteSha
+    Add-History -Result "success" -Description $description -ToVersion $installedVersion -Sha $remoteSha
     Write-UpdateLog "OK" $description
     exit 0
 } catch {
@@ -513,9 +514,7 @@ try {
 
     if ($serverStopped -and $backupPath -and (Test-Path -LiteralPath $backupPath)) {
         try {
-            Set-State "rolling_back" (
-                "Ошибка обновления. Выполняется автоматический откат…"
-            ) 95 $errorText @{
+            Set-State -Phase "rolling_back" -Message "Ошибка обновления. Выполняется автоматический откат…" -Progress 95 -ErrorText $errorText -Extra @{
                 backup_path = $backupPath
             }
 
@@ -528,7 +527,7 @@ try {
                 + "Предыдущая версия восстановлена автоматически."
             ) -f $fromVersion, $targetVersion
 
-            Set-State "failed" $description 0 $errorText @{
+            Set-State -Phase "failed" -Message $description -Progress 0 -ErrorText $errorText -Extra @{
                 backup_path = $backupPath
                 rolled_back = $true
                 downloaded_files = @($DownloadedFiles)
@@ -536,7 +535,7 @@ try {
                 new_files = @($NewFiles)
                 removed_files = @($RemovedFiles)
             }
-            Add-History "failed" $description $targetVersion $remoteSha $errorText $true
+            Add-History -Result "failed" -Description $description -ToVersion $targetVersion -Sha $remoteSha -ErrorText $errorText -RolledBack $true
             Write-UpdateLog "WARN" "Автоматический откат выполнен успешно."
         } catch {
             $rollbackError = (
@@ -545,9 +544,8 @@ try {
             $description = (
                 "Ошибка обновления и автоматического отката."
             )
-            Set-State "failed" $description 0 (
-                "$errorText | Ошибка отката: $rollbackError"
-            ) @{
+            $combinedError = "$errorText | Ошибка отката: $rollbackError"
+            Set-State -Phase "failed" -Message $description -Progress 0 -ErrorText $combinedError -Extra @{
                 backup_path = $backupPath
                 rolled_back = $false
                 downloaded_files = @($DownloadedFiles)
@@ -555,20 +553,18 @@ try {
                 new_files = @($NewFiles)
                 removed_files = @($RemovedFiles)
             }
-            Add-History "failed" $description $targetVersion $remoteSha (
-                "$errorText | Ошибка отката: $rollbackError"
-            ) $false
+            Add-History -Result "failed" -Description $description -ToVersion $targetVersion -Sha $remoteSha -ErrorText $combinedError -RolledBack $false
             Write-UpdateLog "ERROR" "Ошибка отката: $rollbackError"
         }
     } else {
         $description = "Обновление не установлено: $errorText"
-        Set-State "failed" $description 0 $errorText @{
+        Set-State -Phase "failed" -Message $description -Progress 0 -ErrorText $errorText -Extra @{
             downloaded_files = @($DownloadedFiles)
             changed_files = @($ChangedFiles)
             new_files = @($NewFiles)
             removed_files = @($RemovedFiles)
         }
-        Add-History "failed" $description $targetVersion $remoteSha $errorText $false
+        Add-History -Result "failed" -Description $description -ToVersion $targetVersion -Sha $remoteSha -ErrorText $errorText -RolledBack $false
     }
 
     exit 1
