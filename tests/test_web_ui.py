@@ -35,6 +35,10 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="homeTemp"' in response.text
     assert 'id="homeMemoryRing"' in response.text
     assert 'id="homeTaskList"' in response.text
+    assert 'id="homeObsState"' in response.text
+    assert 'id="homeObsCurrent"' in response.text
+    assert 'id="homeTraceList"' in response.text
+    assert "Наблюдаемость · поток Тоору" in response.text
     assert "System Observatory" in response.text
     assert 'id="cloudNewFolder"' in response.text
     assert 'id="cloudTrashSidebar"' in response.text
@@ -290,6 +294,8 @@ def test_dashboard_assets_are_served_separately() -> None:
     assert javascript.status_code == 200
     assert "function sendChat()" in javascript.text
     assert "withBusyButton" in javascript.text
+    assert "refreshHomeObservability" in javascript.text
+    assert "renderHomeObservability" in javascript.text
     assert "javascript" in javascript.headers["content-type"]
 
 
