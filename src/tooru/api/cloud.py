@@ -536,6 +536,11 @@ async def ask_document(
             ],
             max_tokens=1_800,
         ),
+        module="drive",
+        operation="document_qa",
+        source_type="document",
+        source_id=document_id,
+        document_id=document_id,
     )
     smart.record_provenance(
         document_id,
