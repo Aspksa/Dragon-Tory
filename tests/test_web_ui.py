@@ -119,6 +119,8 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Клод" not in response.text
     assert "Центр обновления" in response.text
     assert 'id="openUpdate"' in response.text
+    assert 'id="updateReleaseNotes"' in response.text
+    assert 'id="updateReleaseVersion"' in response.text
     assert 'id="updates"' in response.text
     assert 'id="installUpdate"' in response.text
     assert "История обновлений" in response.text
@@ -165,6 +167,9 @@ def test_update_status_endpoint_is_available() -> None:
     payload = response.json()
     assert payload["local_version"] == APP_VERSION
     assert payload["repository"] == "Aspksa/Dragon-Tory"
+    assert payload["release"]["version"] == APP_VERSION
+    release_modules = {item["id"] for item in payload["release"]["modules"]}
+    assert {"memos", "drive", "memory", "updater"} <= release_modules
 
 
 
@@ -302,6 +307,8 @@ def test_dashboard_assets_are_served_separately() -> None:
     assert "refreshHomeObservability" in javascript.text
     assert "renderHomeObservability" in javascript.text
     assert "uploadChatDocuments" in javascript.text
+    assert "showMemoCard" in javascript.text
+    assert "renderReleaseNotes" in javascript.text
     assert "renderTimesheetGrid" in javascript.text
     assert "openTimesheetEntryEditor" in javascript.text
     assert "carFuelSummer" in javascript.text
