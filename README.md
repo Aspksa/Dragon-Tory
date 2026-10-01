@@ -5,7 +5,7 @@
 Персональная AI-платформа с раздельной личной и проектной памятью,
 инструментами и одной основной облачной моделью DeepSeek.
 
-## Memory Engine v5.1 + Cognitive Core II
+## Memory Engine v5.2 + Cognitive Core III
 
 В ядре уже есть:
 
@@ -40,6 +40,10 @@
 - эпизодическая память успешной работы «задача → результат»;
 - temporal truth: observed_at / event_at / valid_from / valid_to;
 - evidence/provenance для фактов с источником, документом, страницей и фрагментом.
+- Truth Engine с trust-score и штрафом за противоречия;
+- временное различение исторических, текущих и будущих фактов;
+- graph-assisted retrieval по связанным воспоминаниям;
+- temporal_successor / temporal_predecessor вместо ложных конфликтов.
 
 Авторизация и центральная мобильная синхронизация намеренно пока не добавлены.
 
