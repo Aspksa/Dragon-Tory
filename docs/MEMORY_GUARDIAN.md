@@ -11,7 +11,7 @@ improve long-term memory.
 Conversation turn
 → Memory Intelligence
 → Guardian risk policy
-→ optional Claude review
+→ optional DeepSeek second-pass review
 → validated Memory Engine mutation
 → Guardian audit event
 
@@ -37,7 +37,7 @@ Memory Intelligence uses AIRouter.
 
 Default roles:
 - DeepSeek — primary analyzer;
-- Claude — reviewer for high-impact memory.
+- DeepSeek — separate second-pass reviewer for high-impact memory.
 
 When those network providers are not registered, local heuristic analysis still
 works. High-impact fallback decisions wait in pending instead of silently
