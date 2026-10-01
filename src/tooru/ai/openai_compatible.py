@@ -81,6 +81,13 @@ class OpenAICompatibleProvider:
                 + self.circuit_breaker_cooldown_seconds
             )
 
+    @staticmethod
+    def _is_retryable_error(exc: Exception) -> bool:
+        status_code = getattr(exc, "status_code", None)
+        if isinstance(status_code, int):
+            return status_code in {408, 409, 425, 429} or status_code >= 500
+        return True
+
     async def _request(self, messages: list[dict[str, str]], request: AIRequest):
         return await asyncio.wait_for(
             self._client.chat.completions.create(
@@ -112,8 +119,10 @@ class OpenAICompatibleProvider:
             except Exception as exc:
                 last_error = exc
                 self._record_failure()
+                retryable = self._is_retryable_error(exc)
                 if (
-                    attempt + 1 >= self.max_attempts
+                    not retryable
+                    or attempt + 1 >= self.max_attempts
                     or self._circuit_open_until > time.monotonic()
                 ):
                     try:
