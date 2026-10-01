@@ -972,6 +972,18 @@ class SmartDrive:
 
         insurance_start = _normalize_date(payload.get("insurance_start"))
         insurance_end = _normalize_date(payload.get("insurance_end"))
+        for label, value in (
+            ("начала", insurance_start),
+            ("окончания", insurance_end),
+        ):
+            if not value:
+                continue
+            try:
+                date.fromisoformat(value)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Некорректная дата {label} страховки."
+                ) from exc
         if insurance_start and insurance_end and insurance_end < insurance_start:
             raise ValueError(
                 "Дата окончания страховки не может быть раньше даты начала."
