@@ -556,6 +556,22 @@ RELEASE_NOTES: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "00.00.37": {
+        "title": "Windows startup hardening",
+        "modules": [
+            {
+                "id": "updater",
+                "title": "Обновление",
+                "version": "01.06.00",
+                "changes": [
+                    "Backend Dragon Tory запускается и проходит /health до проверки необязательных Tesseract OCR и LibreOffice.",
+                    "Зависший или долгий winget install LibreOffice больше не мешает открыть интерфейс Тоору.",
+                    "bootstrap.ps1 оставлен ASCII-safe для совместимости с Windows PowerShell 5.1 и устранения mojibake в launcher log.",
+                    "Переменная TOORU_SKIP_DOCUMENT_ENGINES=1 по-прежнему позволяет полностью пропустить автоматическую проверку системных движков.",
+                ],
+            },
+        ],
+    },
 }
 
 
