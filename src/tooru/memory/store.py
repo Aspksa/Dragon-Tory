@@ -2078,6 +2078,10 @@ class SQLiteMemoryStore:
             "orphan_links": 0,
             "orphan_history": 0,
             "orphan_evidence": 0,
+            "orphan_entity_aliases": 0,
+            "invalid_entity_alias_scope": 0,
+            "entity_aliases": 0,
+            "source_reliability_entries": 0,
             "active_memories": 0,
             "personal_memories": 0,
             "project_memories": 0,
@@ -2203,6 +2207,50 @@ class SQLiteMemoryStore:
                         or 0
                     )
 
+                if "memory_entity_aliases" in tables:
+                    report["entity_aliases"] = int(
+                        conn.execute(
+                            "SELECT COUNT(*) FROM memory_entity_aliases"
+                        ).fetchone()[0]
+                        or 0
+                    )
+                    if "memory_items" in tables:
+                        report["orphan_entity_aliases"] = int(
+                            conn.execute(
+                                """
+                                SELECT COUNT(*)
+                                FROM memory_entity_aliases a
+                                LEFT JOIN memory_items m
+                                  ON m.id = a.canonical_memory_id
+                                WHERE m.id IS NULL
+                                """
+                            ).fetchone()[0]
+                            or 0
+                        )
+                        report["invalid_entity_alias_scope"] = int(
+                            conn.execute(
+                                """
+                                SELECT COUNT(*)
+                                FROM memory_entity_aliases a
+                                JOIN memory_items m
+                                  ON m.id = a.canonical_memory_id
+                                WHERE a.owner_id != m.owner_id
+                                   OR a.scope != m.scope
+                                   OR COALESCE(a.project_id, '')
+                                      != COALESCE(m.project_id, '')
+                                """
+                            ).fetchone()[0]
+                            or 0
+                        )
+
+                if "memory_source_reliability" in tables:
+                    report["source_reliability_entries"] = int(
+                        conn.execute(
+                            "SELECT COUNT(*) FROM memory_source_reliability"
+                        ).fetchone()[0]
+                        or 0
+                    )
+
                 if "memory_fts" in tables:
                     report["fts_available"] = True
                     report["fts_entries"] = int(
@@ -2250,6 +2298,8 @@ class SQLiteMemoryStore:
                 or report["orphan_links"] > 0
                 or report["orphan_history"] > 0
                 or report["orphan_evidence"] > 0
+                or report["orphan_entity_aliases"] > 0
+                or report["invalid_entity_alias_scope"] > 0
                 or report["foreign_key_errors"] > 0
                 or (
                     deep
