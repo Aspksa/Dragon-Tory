@@ -26,6 +26,19 @@ from tooru.memory.models import (
 class GreyMatterService:
     """Higher cognition over durable memory without bypassing Guardian."""
 
+    _correction_signal = re.compile(
+        r"(?i)(?:"
+        r"\bнет[, ]|"
+        r"\bневерно\b|"
+        r"\bнеправильно\b|"
+        r"\bты\s+ошиб|"
+        r"\bошиблась\b|"
+        r"\bправильно\s+(?:так|будет)|"
+        r"\bна\s+самом\s+деле\b|"
+        r"\bисправ(?:ь|ление)"
+        r")"
+    )
+
     _entity_stop = {
         "ооо",
         "ао",
@@ -451,6 +464,57 @@ class GreyMatterService:
             }
             for role, value in created.items()
         }
+
+    def learn_chat_correction(
+        self,
+        *,
+        user_message: str,
+        previous_assistant: str,
+        session_id: str | None = None,
+        owner_id: str = "local-user",
+        project_id: str = "dragon-tory",
+    ) -> str:
+        if not self._correction_signal.search(user_message):
+            return "correction:no-signal"
+        if not previous_assistant.strip():
+            return "correction:no-previous-answer"
+
+        lesson = self.intake.ingest(
+            MemoryCreate(
+                owner_id=owner_id,
+                scope=MemoryScope.PROJECT,
+                project_id=project_id,
+                kind=MemoryKind.LESSON,
+                content=(
+                    "Пользователь исправил предыдущий вывод Тоору.\n"
+                    "Предыдущий ответ:\n"
+                    + previous_assistant.strip()[:2_500]
+                    + "\n\nУточнение пользователя:\n"
+                    + user_message.strip()[:2_500]
+                    + "\n\nПри похожей задаче сначала перепроверь предпосылку, "
+                    "которая была исправлена пользователем."
+                ),
+                source="chat-correction",
+                source_ref=(f"chat:{session_id}" if session_id else "chat"),
+                confidence=0.98,
+                importance=0.75,
+                tags=[
+                    "correction-lesson",
+                    "error-learning",
+                    "user-correction",
+                ],
+                session_id=session_id,
+            ),
+            reason=(
+                "Explicit user correction converted into a reviewable "
+                "error-learning lesson."
+            ),
+        )
+        if lesson.memory is not None:
+            return "correction:lesson-applied=1"
+        if lesson.decision.queue_id:
+            return "correction:lesson-pending=1"
+        return "correction:lesson-blocked=1"
 
     def register_correction(
         self,
