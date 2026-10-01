@@ -183,6 +183,10 @@ class ChatDocumentAssistant:
                     "для личного помощника. Сохрани все существенные факты, "
                     "раздели их на понятные пункты, явно отметь неопределённости "
                     "и не добавляй ничего, чего нет в исходных данных. "
+                    "Для дат работы в выходной день приоритет имеет блок "
+                    "Локально извлечённые факты. Если там work_date_conflict=true, "
+                    "обязательно опиши расхождение имени файла и тела документа "
+                    "и НЕ выбирай одну из конфликтующих дат как правильную. "
                     + UNTRUSTED_CONTENT_POLICY
                 ),
                 messages=[
@@ -288,6 +292,7 @@ class ChatDocumentAssistant:
             study_blocks = self._group_chunks(chunks)
 
             local_facts = {
+                "document_name": item["name"],
                 "kind": analysis.get("kind"),
                 "confidence": analysis.get("confidence"),
                 "summary_local": analysis.get("summary_local"),
@@ -339,7 +344,29 @@ class ChatDocumentAssistant:
                     "Текст успешно извлечён и доступен в локальном индексе."
                 )
 
-            intake = self.memory_intake.ingest(
+            entities = analysis.get("entities") or {}
+            date_conflict = bool(entities.get("work_date_conflict"))
+            if date_conflict:
+                body_dates = ", ".join(
+                    str(value)
+                    for value in entities.get("work_dates_body") or []
+                ) or "не извлечены"
+                filename_dates = ", ".join(
+                    str(value)
+                    for value in entities.get("work_dates_filename") or []
+                ) or "не извлечены"
+                knowledge = (
+                    "⚠ КОНФЛИКТ ДАТ РАБОТЫ В ВЫХОДНОЙ ДЕНЬ. "
+                    f"Имя файла: {filename_dates}. "
+                    f"Тело документа: {body_dates}. "
+                    "До ручной проверки даты нельзя считать подтверждёнными "
+                    "и нельзя автоматически переносить в табель.\n\n"
+                    + knowledge
+                )
+
+            intake = None
+            if not date_conflict:
+                intake = self.memory_intake.ingest(
                 MemoryCreate(
                     owner_id="local-user",
                     scope=MemoryScope.PERSONAL,
@@ -369,8 +396,16 @@ class ChatDocumentAssistant:
                 ),
             )
 
-            memory_status = intake.decision.outcome.value
-            memory_id = intake.memory.id if intake.memory is not None else None
+            if intake is None:
+                memory_status = "needs-date-review"
+                memory_id = None
+            else:
+                memory_status = intake.decision.outcome.value
+                memory_id = (
+                    intake.memory.id
+                    if intake.memory is not None
+                    else None
+                )
 
             self.smart.record_provenance(
                 document_id,
