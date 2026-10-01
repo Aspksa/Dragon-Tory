@@ -59,15 +59,18 @@ def _memory_counts(db_path: Path) -> dict[str, int]:
         for key in ("total", "active", "archived", "superseded", "personal", "project", "deleted"):
             counts[key] = int(row[key] or 0)
 
-        for key, table in (
-            ("links", "memory_links"),
-            ("vectors", "memory_vectors"),
-            ("history", "memory_history"),
-        ):
-            table_row = conn.execute(
-                f"SELECT COUNT(*) AS count FROM {table}"
-            ).fetchone()
-            counts[key] = int(table_row["count"] or 0)
+        counts["links"] = int(
+            conn.execute("SELECT COUNT(*) AS count FROM memory_links").fetchone()["count"]
+            or 0
+        )
+        counts["vectors"] = int(
+            conn.execute("SELECT COUNT(*) AS count FROM memory_vectors").fetchone()["count"]
+            or 0
+        )
+        counts["history"] = int(
+            conn.execute("SELECT COUNT(*) AS count FROM memory_history").fetchone()["count"]
+            or 0
+        )
 
     return counts
 
