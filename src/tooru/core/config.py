@@ -16,9 +16,6 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://foundation-models.api.cloud.ru/v1"
     deepseek_model: str = "deepseek-ai/DeepSeek-V4-Flash"
 
-    claude_api_key: str | None = None
-    claude_model: str = "claude-sonnet-5-5"
-
     update_repository: str = "Aspksa/Dragon-Tory"
     update_branch: str = "main"
 
@@ -37,8 +34,6 @@ class Settings(BaseSettings):
     memory_auto_consolidate_threshold: int = 40
     memory_consolidate_cooldown_hours: int = 24
 
-    memory_intelligence_primary_provider: str = "deepseek"
-    memory_intelligence_reviewer_provider: str = "claude"
     memory_intelligence_reviewer_threshold: float = 0.85
     memory_intelligence_context_limit: int = 12
 

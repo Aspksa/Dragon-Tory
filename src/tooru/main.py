@@ -5,7 +5,6 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 
-from tooru.ai.anthropic_provider import AnthropicProvider
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
 from tooru.api.chat import router as chat_router
@@ -13,7 +12,10 @@ from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
 from tooru.api.memory import router as memory_router
-from tooru.api.settings import router as settings_router
+from tooru.api.settings import (
+    remove_legacy_claude_settings,
+    router as settings_router,
+)
 from tooru.api.update import router as update_router
 from tooru.chat.pipeline import ChatPipeline
 from tooru.core.config import get_settings
@@ -30,6 +32,8 @@ from tooru.update.service import UpdateService
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    remove_legacy_claude_settings(Path(".env").resolve())
+
     store = SQLiteMemoryStore(settings.memory_db_path)
     memory = MemoryEngine(
         store=store,
@@ -48,20 +52,13 @@ async def lifespan(app: FastAPI):
                 model=settings.deepseek_model,
             )
         )
-    if settings.claude_api_key:
-        ai_router.register(
-            AnthropicProvider(
-                api_key=settings.claude_api_key,
-                model=settings.claude_model,
-            )
-        )
 
     intelligence = MemoryIntelligence(
         engine=memory,
         router=ai_router,
         config=IntelligenceConfig(
-            primary_provider=settings.memory_intelligence_primary_provider,
-            reviewer_provider=settings.memory_intelligence_reviewer_provider,
+            primary_provider="deepseek",
+            reviewer_provider="deepseek",
             reviewer_threshold=settings.memory_intelligence_reviewer_threshold,
             context_limit=settings.memory_intelligence_context_limit,
         ),
@@ -110,10 +107,6 @@ async def lifespan(app: FastAPI):
         "configured": bool(settings.deepseek_api_key),
         "base_url": settings.deepseek_base_url,
         "model": settings.deepseek_model,
-    }
-    app.state.claude_config = {
-        "configured": bool(settings.claude_api_key),
-        "model": settings.claude_model,
     }
     app.state.memory_intelligence = intelligence
     app.state.memory_guardian = guardian

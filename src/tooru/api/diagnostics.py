@@ -121,19 +121,11 @@ def diagnostics_status(request: Request) -> dict:
             "uptime_seconds": uptime_seconds,
         },
         "ai": {
-            "providers": request.app.state.ai_router.available_providers(),
-            "deepseek_configured": (
-                request.app.state.deepseek_config["configured"]
-            ),
-            "deepseek_model": request.app.state.deepseek_config["model"],
-            "deepseek_base_url": (
-                request.app.state.deepseek_config["base_url"]
-            ),
-            "claude_configured": (
-                request.app.state.claude_config["configured"]
-            ),
-            "claude_model": request.app.state.claude_config["model"],
-            "router": request.app.state.ai_router.routing_status(),
+            "provider": "deepseek",
+            "configured": request.app.state.deepseek_config["configured"],
+            "model": request.app.state.deepseek_config["model"],
+            "base_url": request.app.state.deepseek_config["base_url"],
+            "stats": request.app.state.ai_router.provider_status("deepseek"),
         },
         "system_memory": {
             "total_bytes": vm.total,
