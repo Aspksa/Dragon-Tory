@@ -348,6 +348,7 @@ class ModuleLearningService:
                 ],
                 max_tokens=2_400,
             ),
+            operation="document_deep_summary",
         )
         return response.text.strip() or local_summary
 
