@@ -12,6 +12,7 @@ from tooru.memory.models import (
     MemoryDelete,
     MemoryEvidence,
     MemoryEvidenceCreate,
+    EntityAlias,
     MemoryFeedback,
     MemoryGuardianAuditEvent,
     MemoryGuardianDecision,
@@ -32,6 +33,7 @@ from tooru.memory.models import (
     MemorySyncRequest,
     MemorySyncResponse,
     MemoryUpdate,
+    SourceReliability,
 )
 
 
@@ -53,6 +55,8 @@ class SQLiteMemoryStore:
         "memory_maintenance_runs",
         "memory_guardian_events",
         "memory_guardian_queue",
+        "memory_source_reliability",
+        "memory_entity_aliases",
     }
 
     SELECT_COLUMNS = """
@@ -187,6 +191,48 @@ class SQLiteMemoryStore:
                 """
             )
             self._migrate_evidence_schema(conn)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_source_reliability (
+                    source_type TEXT NOT NULL,
+                    source_ref TEXT NOT NULL DEFAULT '',
+                    reliability REAL NOT NULL,
+                    confirmations INTEGER NOT NULL DEFAULT 0,
+                    contradictions INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(source_type, source_ref)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_entity_aliases (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    project_id TEXT,
+                    canonical_memory_id TEXT NOT NULL,
+                    alias TEXT NOT NULL,
+                    normalized_alias TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(
+                        owner_id, scope, project_id,
+                        canonical_memory_id, normalized_alias
+                    ),
+                    FOREIGN KEY(canonical_memory_id)
+                        REFERENCES memory_items(id) ON DELETE CASCADE
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_memory_entity_alias_lookup
+                ON memory_entity_aliases(
+                    owner_id, scope, project_id, normalized_alias
+                )
+                """
+            )
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory_maintenance_runs (
