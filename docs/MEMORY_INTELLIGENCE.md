@@ -19,7 +19,7 @@ database is changed.
 
 Default provider roles are:
 - DeepSeek: primary memory analyzer;
-- Claude: high-impact reviewer.
+- DeepSeek: separate second-pass reviewer for high-impact memory.
 
 The providers are addressed through AIRouter, so the memory system itself does
 not depend on either vendor.
@@ -69,6 +69,5 @@ Set use_ai=false to force the local conservative analyzer.
 The intelligence orchestration, provider routing contract, reviewer flow,
 fallback, validation and tests are implemented.
 
-The actual network adapters and credentials for DeepSeek/Claude are separate
-provider integrations. Until those providers are registered in AIRouter, the
-layer automatically uses the local fallback.
+DeepSeek is the only configured cloud AI provider. Until DeepSeek is registered
+with a valid local API key, the layer automatically uses the local fallback.
