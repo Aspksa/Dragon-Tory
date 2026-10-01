@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,11 +22,59 @@ def _path_size(path: Path) -> int:
     return total
 
 
+def _memory_counts(db_path: Path) -> dict[str, int]:
+    counts = {
+        "total": 0,
+        "active": 0,
+        "archived": 0,
+        "superseded": 0,
+        "personal": 0,
+        "project": 0,
+        "deleted": 0,
+        "links": 0,
+        "vectors": 0,
+        "history": 0,
+    }
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN deleted_at IS NULL AND status = 'active' THEN 1 ELSE 0 END)
+                    AS active,
+                SUM(CASE WHEN deleted_at IS NULL AND status = 'archived' THEN 1 ELSE 0 END)
+                    AS archived,
+                SUM(CASE WHEN deleted_at IS NULL AND status = 'superseded' THEN 1 ELSE 0 END)
+                    AS superseded,
+                SUM(CASE WHEN deleted_at IS NULL AND scope = 'personal' THEN 1 ELSE 0 END)
+                    AS personal,
+                SUM(CASE WHEN deleted_at IS NULL AND scope = 'project' THEN 1 ELSE 0 END)
+                    AS project,
+                SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END)
+                    AS deleted
+            FROM memory_items
+            """
+        ).fetchone()
+        for key in ("total", "active", "archived", "superseded", "personal", "project", "deleted"):
+            counts[key] = int(row[key] or 0)
+
+        for key, table in (
+            ("links", "memory_links"),
+            ("vectors", "memory_vectors"),
+            ("history", "memory_history"),
+        ):
+            table_row = conn.execute(
+                f"SELECT COUNT(*) AS count FROM {table}"
+            ).fetchone()
+            counts[key] = int(table_row["count"] or 0)
+
+    return counts
+
+
 @router.get("/status")
 def diagnostics_status(request: Request) -> dict:
     settings = request.app.state.settings
-    memory = request.app.state.memory
-    store = memory.store
 
     vm = psutil.virtual_memory()
     process = psutil.Process()
@@ -34,7 +83,6 @@ def diagnostics_status(request: Request) -> dict:
     data_dir.mkdir(parents=True, exist_ok=True)
     disk = psutil.disk_usage(str(data_dir))
 
-    memory_counts = store.diagnostic_counts()
     guardian = request.app.state.memory_guardian.status()
     memory_automation = request.app.state.memory_automation.status()
     guardian_automation = request.app.state.memory_guardian_automation.status()
@@ -78,7 +126,7 @@ def diagnostics_status(request: Request) -> dict:
             "percent": disk.percent,
         },
         "memory_engine": {
-            **memory_counts,
+            **_memory_counts(settings.memory_db_path),
             "database_bytes": _path_size(settings.memory_db_path),
         },
         "guardian": guardian.model_dump(mode="json"),
