@@ -24,6 +24,8 @@ class Settings(BaseSettings):
 
     allow_remote_api: bool = False
 
+    observability_retention_days: int = 30
+
     update_repository: str = "Aspksa/Dragon-Tory"
     update_branch: str = "main"
 
@@ -82,6 +84,10 @@ class Settings(BaseSettings):
     @property
     def cloud_db_path(self) -> Path:
         return self.cloud_dir / "tooru_cloud.sqlite3"
+
+    @property
+    def observability_db_path(self) -> Path:
+        return self.data_dir / "observability" / "tooru_observability.sqlite3"
 
 
 @lru_cache
