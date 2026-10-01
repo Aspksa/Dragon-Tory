@@ -121,4 +121,4 @@ installing libraries, or starting the server.
 
 If Python or required libraries are missing, the first setup requires Internet
 access. Once the local environment is prepared, local Dragon Tory features can
-start offline. External Claude/DeepSeek or web features still require Internet.
+start offline. External DeepSeek or web features still require Internet.
