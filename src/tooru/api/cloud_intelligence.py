@@ -8,7 +8,12 @@ from pydantic import BaseModel, Field
 from tooru.ai.base import AIRequest
 from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.cloud.document_intelligence import OCRUnavailableError
-from tooru.cloud.intelligence import UnsupportedDocumentError
+from tooru.cloud.intelligence import (
+    LEGACY_CONVERTIBLE_SUFFIXES,
+    SUPPORTED_NATIVE_SUFFIXES,
+    SUPPORTED_OCR_SUFFIXES,
+    UnsupportedDocumentError,
+)
 from tooru.cloud.module_learning import ModuleLearningService
 
 router = APIRouter(
@@ -79,29 +84,24 @@ def _error(exc: Exception) -> HTTPException:
 def intelligence_status(request: Request) -> dict[str, Any]:
     return {
         "ocr": _service(request).ocr_status(),
+        "converter": _service(request).converter_status(),
         "analysis": {
             "local_first": True,
             "external_ai_required": False,
             "stores_full_raw_text": False,
         },
-        "supported_native": [
-            "TXT",
-            "MD",
-            "JSON",
-            "YAML",
-            "CSV",
-            "PDF с текстовым слоем",
-            "DOCX",
-            "XLSX",
-        ],
-        "supported_ocr": [
-            "PNG",
-            "JPG/JPEG",
-            "TIFF",
-            "BMP",
-            "WEBP",
-            "PDF со встроенными изображениями",
-        ],
+        "supported_native": sorted(
+            suffix.removeprefix(".").upper()
+            for suffix in SUPPORTED_NATIVE_SUFFIXES
+        ),
+        "supported_ocr": sorted(
+            suffix.removeprefix(".").upper()
+            for suffix in SUPPORTED_OCR_SUFFIXES
+        ),
+        "supported_via_converter": sorted(
+            suffix.removeprefix(".").upper()
+            for suffix in LEGACY_CONVERTIBLE_SUFFIXES
+        ),
     }
 
 
