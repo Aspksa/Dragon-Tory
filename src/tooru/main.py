@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
 from tooru.api.chat import router as chat_router
+from tooru.api.cloud import router as cloud_router
 from tooru.api.chats import router as chats_router
 from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
@@ -18,6 +19,7 @@ from tooru.api.settings import router as settings_router
 from tooru.api.update import router as update_router
 from tooru.chat.pipeline import ChatPipeline
 from tooru.chat.store import ChatStore
+from tooru.cloud.store import CloudStore
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
@@ -44,6 +46,9 @@ async def lifespan(app: FastAPI):
 
     chat_store = ChatStore(settings.chat_db_path)
     chat_store.initialize()
+
+    cloud_store = CloudStore(settings.cloud_dir, settings.cloud_db_path)
+    cloud_store.initialize()
 
     ai_router = AIRouter()
     if settings.deepseek_api_key:
@@ -106,6 +111,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.memory = memory
     app.state.chat_store = chat_store
+    app.state.cloud_store = cloud_store
     app.state.chat_tasks = {}
     app.state.ai_router = ai_router
     app.state.deepseek_config = {
@@ -148,6 +154,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(chats_router)
+    app.include_router(cloud_router)
     app.include_router(diagnostics_router)
     app.include_router(settings_router)
     app.include_router(update_router)

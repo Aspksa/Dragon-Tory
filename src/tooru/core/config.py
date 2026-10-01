@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     update_repository: str = "Aspksa/Dragon-Tory"
     update_branch: str = "main"
 
+    cloud_max_upload_bytes: int = 536_870_912
+
     memory_embedding_provider: str = "hash"
     memory_embedding_url: str | None = None
     memory_embedding_api_key: str | None = None
@@ -64,6 +66,14 @@ class Settings(BaseSettings):
     @property
     def chat_db_path(self) -> Path:
         return self.data_dir / "chat" / "tooru_chat.sqlite3"
+
+    @property
+    def cloud_dir(self) -> Path:
+        return self.data_dir / "cloud"
+
+    @property
+    def cloud_db_path(self) -> Path:
+        return self.cloud_dir / "tooru_cloud.sqlite3"
 
 
 @lru_cache

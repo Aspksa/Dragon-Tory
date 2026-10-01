@@ -65,6 +65,29 @@
     .composer-action{width:39px;height:39px;border:0;border-radius:50%;background:#1947b8;color:#fff;font-size:19px;font-weight:800;cursor:pointer;display:grid;place-items:center;flex:0 0 auto;transition:.15s ease}
     .composer-action:hover{transform:translateY(-1px);background:#153b99}.composer-action.stop{background:#344054;font-size:15px}.composer-action.empty{opacity:.4}
     .chat-status{min-height:20px;margin:6px 5px 0;color:#98a2b3;font-size:11px}
+
+    .sidebar-bottom{display:grid;gap:7px}
+    .cloud-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+    .cloud-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .cloud-search{min-width:280px;max-width:430px}
+    .cloud-drop{border:2px dashed #c7d7ff;background:linear-gradient(135deg,#f8fbff,#f5f7fb);border-radius:18px;padding:24px;text-align:center;transition:.18s ease;cursor:pointer}
+    .cloud-drop:hover,.cloud-drop.dragging{border-color:#1947b8;background:#eef4ff;transform:translateY(-1px)}
+    .cloud-drop-icon{font-size:32px;margin-bottom:8px}.cloud-drop strong{display:block;font-size:16px}.cloud-drop span{display:block;margin-top:5px;color:#667085;font-size:13px}
+    .cloud-stats{margin-top:14px}.cloud-list{display:grid;gap:9px;margin-top:14px}
+    .cloud-file{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(130px,.7fr) minmax(120px,.6fr) 120px;gap:14px;align-items:center;background:#fff;border:1px solid #e4e7ec;border-radius:14px;padding:13px 14px;transition:.15s ease}
+    .cloud-file:hover{border-color:#c7d7ff;box-shadow:0 7px 22px rgba(16,24,40,.05)}
+    .cloud-file-main{display:flex;align-items:center;gap:11px;min-width:0}.cloud-icon{width:42px;height:42px;border-radius:12px;background:#eef4ff;display:grid;place-items:center;font-size:21px;flex:0 0 auto}
+    .cloud-name{font-weight:780;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cloud-sub{font-size:11px;color:#98a2b3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cloud-badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 8px;background:#f2f4f7;color:#475467;font-size:11px;font-weight:700}
+    .cloud-badge.ai{background:#eef4ff;color:#1947b8}.cloud-badge.lock{background:#fff4e5;color:#9a3412}
+    .cloud-actions{display:flex;gap:4px;justify-content:flex-end}.cloud-empty{padding:38px;text-align:center;color:#667085;background:#fff;border:1px solid #e4e7ec;border-radius:16px}
+    .passport-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.35);z-index:50;display:flex;justify-content:flex-end;backdrop-filter:blur(2px)}
+    .passport-panel{height:100%;width:min(520px,100%);background:#fff;padding:24px;overflow:auto;box-shadow:-18px 0 50px rgba(16,24,40,.16)}
+    .passport-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:20px}.passport-head h3{margin:0 0 4px;font-size:22px}
+    .passport-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}.passport-meta>div{background:#f8fafc;border:1px solid #eef0f3;border-radius:12px;padding:11px}
+    .passport-meta .label{margin-bottom:4px}.passport-meta .passport-value{font-size:12px;font-weight:700;overflow-wrap:anywhere}
+    .passport-section{border-top:1px solid #eef0f3;padding-top:16px;margin-top:16px}.passport-section h4{margin:0 0 12px}
+    .cloud-note{margin-top:14px;padding:13px 14px;border-radius:13px;background:#f8fafc;border:1px solid #e4e7ec;color:#475467;font-size:12px;line-height:1.55}
     .diag-table{width:100%;border-collapse:collapse}.diag-table td{padding:9px 4px;border-bottom:1px solid #eef0f3}.diag-table td:last-child{text-align:right;font-weight:700}
     .statusbar{font-size:13px;margin-top:10px;color:#667085}.secret-note{font-size:12px;color:#667085;margin-top:6px}
     .sidebar-bottom{margin-top:auto;padding-top:16px}
@@ -81,7 +104,7 @@
     .file-list div{border-bottom:1px dashed #e4e7ec;padding:2px 0}.file-list div:last-child{border-bottom:0}
     button:disabled{opacity:.5;cursor:not-allowed}
     a{color:#1947b8;text-decoration:none;font-weight:650}
-    @media(max-width:800px){.app{grid-template-columns:1fr}aside{height:auto;position:static;border-right:0;border-bottom:1px solid #e6eaf0}.sidebar-bottom{margin-top:14px}nav{grid-template-columns:repeat(4,1fr)}.nav{text-align:center;padding:9px 4px;font-size:12px}main{padding:18px}.chat-layout{grid-template-columns:1fr}.chat-sidebar{height:230px}.chatbox{height:48vh}.chat-head-actions{gap:2px}.composer-tools{gap:4px}}
+    @media(max-width:800px){.app{grid-template-columns:1fr}aside{height:auto;position:static;border-right:0;border-bottom:1px solid #e6eaf0}.sidebar-bottom{margin-top:14px}nav{grid-template-columns:repeat(4,1fr)}.nav{text-align:center;padding:9px 4px;font-size:12px}main{padding:18px}.chat-layout{grid-template-columns:1fr}.chat-sidebar{height:230px}.chatbox{height:48vh}.chat-head-actions{gap:2px}.composer-tools{gap:4px}.cloud-head{display:block}.cloud-toolbar{margin-top:12px}.cloud-search{min-width:100%;max-width:none}.cloud-file{grid-template-columns:1fr}.cloud-actions{justify-content:flex-start}.passport-meta{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -91,11 +114,12 @@
     <nav>
       <button class="nav active" data-view="home">Главная</button>
       <button class="nav" data-view="chat">Чат</button>
+      <button class="nav" data-view="cloud">☁ Облачные документы Тори</button>
       <button class="nav" data-view="diagnostics">Центр диагностики</button>
-      <button class="nav" data-view="settings">Настройки</button>
     </nav>
     <div class="sidebar-bottom">
       <button id="openUpdate" class="bottom-update">↻ Обновление</button>
+      <button id="openSettings" class="bottom-update">⚙ Настройки</button>
     </div>
   </aside>
 
@@ -152,6 +176,45 @@
           </div>
           <div id="chatStatus" class="chat-status"></div>
         </div>
+      </div>
+    </section>
+
+
+    <section id="cloud" class="view">
+      <div class="cloud-head">
+        <div>
+          <h2>Облачные документы Тори</h2>
+          <p class="lead">Личный файловый центр с цифровыми паспортами и управляемым доступом ИИ.</p>
+        </div>
+        <div class="cloud-toolbar">
+          <input id="cloudSearch" class="cloud-search" placeholder="Поиск по документам и паспортам…">
+          <button id="cloudUploadButton" class="primary">＋ Загрузить</button>
+          <input id="cloudFileInput" type="file" multiple hidden>
+        </div>
+      </div>
+
+      <div id="cloudDropZone" class="cloud-drop" tabindex="0">
+        <div class="cloud-drop-icon">☁️</div>
+        <strong>Перетащите файлы сюда</strong>
+        <span>или нажмите, чтобы выбрать несколько файлов. Они сохраняются на текущем носителе.</span>
+      </div>
+      <div id="cloudStatus" class="statusbar"></div>
+
+      <div class="grid cloud-stats">
+        <div class="card"><div class="label">Документов</div><div id="cloudFileCount" class="value">0</div></div>
+        <div class="card"><div class="label">Занято</div><div id="cloudUsed" class="value">0 Б</div></div>
+        <div class="card"><div class="label">ИИ-допуск</div><div id="cloudAiAllowed" class="value">0</div></div>
+        <div class="card"><div class="label">Защищённых</div><div id="cloudProtected" class="value">0</div></div>
+      </div>
+
+      <div class="cloud-note">
+        <b>Цифровой паспорт</b> создаётся автоматически для каждого файла: постоянный ID,
+        SHA-256, версия, область хранения, конфиденциальность и отдельный допуск Тоору.
+        Сам файл, паспорт, память и будущий ИИ-индекс остаются разными слоями.
+      </div>
+
+      <div id="cloudList" class="cloud-list">
+        <div class="cloud-empty">Загрузка документов…</div>
       </div>
     </section>
 
@@ -259,6 +322,74 @@
         <div id="settingsStatus" class="statusbar">Загрузка состояния…</div>
       </div>
     </section>
+
+    <div id="passportModal" class="passport-backdrop" hidden>
+      <div class="passport-panel" role="dialog" aria-modal="true" aria-labelledby="passportTitle">
+        <div class="passport-head">
+          <div>
+            <h3 id="passportTitle">Цифровой паспорт</h3>
+            <div id="passportName" class="muted">—</div>
+          </div>
+          <button id="passportClose" class="icon-btn" title="Закрыть">✕</button>
+        </div>
+
+        <div class="passport-meta">
+          <div><div class="label">Tory Document ID</div><div id="passportId" class="passport-value">—</div></div>
+          <div><div class="label">Версия</div><div id="passportVersion" class="passport-value">—</div></div>
+          <div><div class="label">Размер</div><div id="passportSize" class="passport-value">—</div></div>
+          <div><div class="label">Тип</div><div id="passportType" class="passport-value">—</div></div>
+          <div style="grid-column:1/-1"><div class="label">SHA-256</div><div id="passportSha" class="passport-value">—</div></div>
+          <div><div class="label">ИИ-индекс</div><div id="passportIndex" class="passport-value">—</div></div>
+          <div><div class="label">Создан</div><div id="passportCreated" class="passport-value">—</div></div>
+        </div>
+
+        <div class="passport-section">
+          <h4>Допуск Тоору</h4>
+          <div class="field"><label>Что ИИ разрешено делать</label>
+            <select id="passportAiAccess">
+              <option value="denied">Запрещён</option>
+              <option value="search">Только поиск по паспорту</option>
+              <option value="read">Читать документ</option>
+              <option value="answer">Использовать для ответов</option>
+              <option value="memory">Ответы + разрешённая память</option>
+              <option value="full">Полный анализ</option>
+            </select>
+          </div>
+          <div class="field"><label>Конфиденциальность</label>
+            <select id="passportConfidentiality">
+              <option value="ordinary">Обычный</option>
+              <option value="personal">Личный</option>
+              <option value="confidential">Конфиденциальный</option>
+              <option value="highly_protected">Особо защищённый</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="passport-section">
+          <h4>Контекст документа</h4>
+          <div class="field"><label>Область</label>
+            <select id="passportScope">
+              <option value="personal">Личный диск</option>
+              <option value="project">Проект</option>
+            </select>
+          </div>
+          <div class="field"><label>ID проекта</label><input id="passportProject" placeholder="Например: dragon-tory"></div>
+        </div>
+
+        <div class="cloud-note">
+          Изменение ИИ-допуска не запускает скрытое чтение. Пока индексатор не обработал
+          текущую версию, паспорт показывает статус «требуется индексация».
+        </div>
+
+        <div class="spacer"></div>
+        <div class="row">
+          <button id="passportSave" class="primary">Сохранить паспорт</button>
+          <a id="passportDownload" class="secondary" href="#" download>Скачать файл</a>
+          <button id="passportTrash" class="secondary">В корзину</button>
+        </div>
+        <div id="passportStatus" class="statusbar"></div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -273,9 +404,118 @@ const $=id=>document.getElementById(id);
 const fmtBytes=n=>{if(n==null)return"—";const u=["Б","КБ","МБ","ГБ","ТБ"];let i=0,v=Number(n);while(v>=1024&&i<u.length-1){v/=1024;i++}return (i<2?v.toFixed(0):v.toFixed(1))+" "+u[i]};
 function state(el,text,kind=""){el.textContent=text;el.className="value "+kind}
 async function api(url,opts={}){const r=await fetch(url,{cache:"no-store",headers:{"Content-Type":"application/json",...(opts.headers||{})},...opts});let d;try{d=await r.json()}catch{d={detail:await r.text()}}if(!r.ok)throw new Error(typeof d.detail==="string"?d.detail:JSON.stringify(d.detail||d));return d}
-function showView(view,source=null){document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));$("openUpdate").classList.remove("active");if(source)source.classList.add("active");$(view).classList.add("active");if(view==="chat")ensureChatReady();if(view==="diagnostics")refreshDiag();if(view==="settings")loadSettings();if(view==="updates"){updateStatus();refreshUpdateHistory()}}
+function showView(view,source=null){document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".bottom-update").forEach(x=>x.classList.remove("active"));if(source)source.classList.add("active");$(view).classList.add("active");if(view==="chat")ensureChatReady();if(view==="cloud")loadCloud();if(view==="diagnostics")refreshDiag();if(view==="settings")loadSettings();if(view==="updates"){updateStatus();refreshUpdateHistory()}}
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>showView(b.dataset.view,b));
 $("openUpdate").onclick=()=>showView("updates",$("openUpdate"));
+$("openSettings").onclick=()=>showView("settings",$("openSettings"));
+
+
+let cloudLoaded=false;
+let cloudSearchTimer=null;
+let activePassportId=null;
+const aiAccessNames={denied:"ИИ запрещён",search:"Поиск по паспорту",read:"Чтение",answer:"Для ответов",memory:"Ответы + память",full:"Полный анализ"};
+const indexNames={blocked:"Заблокирован",not_indexed:"Не индексирован",needs_indexing:"Требуется индексация",ready:"Готов"};
+const confidentialityNames={ordinary:"Обычный",personal:"Личный",confidential:"Конфиденциальный",highly_protected:"Особо защищённый"};
+function cloudIcon(name){
+  const ext=(String(name).split(".").pop()||"").toLowerCase();
+  if(["png","jpg","jpeg","gif","webp","svg"].includes(ext))return"🖼️";
+  if(ext==="pdf")return"📕";
+  if(["doc","docx","odt","rtf"].includes(ext))return"📘";
+  if(["xls","xlsx","csv"].includes(ext))return"📗";
+  if(["zip","7z","rar"].includes(ext))return"🗜️";
+  return"📄";
+}
+function renderCloudFiles(items){
+  const box=$("cloudList");box.innerHTML="";
+  if(!items.length){box.innerHTML='<div class="cloud-empty">Документы не найдены. Перетащите первый файл в область загрузки.</div>';return}
+  items.forEach(item=>{
+    const row=document.createElement("div");row.className="cloud-file";
+    const main=document.createElement("div");main.className="cloud-file-main";
+    const icon=document.createElement("div");icon.className="cloud-icon";icon.textContent=cloudIcon(item.name);
+    const names=document.createElement("div");names.style.minWidth="0";
+    const name=document.createElement("div");name.className="cloud-name";name.textContent=item.name;
+    const sub=document.createElement("div");sub.className="cloud-sub";sub.textContent=item.id+" · v"+item.version+" · "+fmtBytes(item.size_bytes);
+    names.append(name,sub);main.append(icon,names);
+
+    const scope=document.createElement("div");
+    const scopeBadge=document.createElement("span");scopeBadge.className="cloud-badge";
+    scopeBadge.textContent=item.scope==="project"?"Проект · "+(item.project_id||"—"):"Личный диск";
+    scope.appendChild(scopeBadge);
+
+    const ai=document.createElement("div");
+    const aiBadge=document.createElement("span");aiBadge.className="cloud-badge ai";
+    aiBadge.textContent=aiAccessNames[item.ai_access]||item.ai_access;ai.appendChild(aiBadge);
+
+    const actions=document.createElement("div");actions.className="cloud-actions";
+    const passport=document.createElement("button");passport.className="icon-btn";passport.title="Цифровой паспорт";passport.textContent="Паспорт";passport.onclick=()=>openPassport(item.id);
+    const download=document.createElement("a");download.className="icon-btn";download.title="Скачать";download.textContent="↓";download.href="/v1/cloud/files/"+encodeURIComponent(item.id)+"/content";download.setAttribute("download","");
+    actions.append(passport,download);
+    row.append(main,scope,ai,actions);box.appendChild(row);
+  });
+}
+async function loadCloud(){
+  cloudLoaded=true;
+  try{
+    const query=$("cloudSearch").value.trim();
+    const d=await api("/v1/cloud/files?limit=200"+(query?"&query="+encodeURIComponent(query):""));
+    $("cloudFileCount").textContent=d.stats.total;$("cloudUsed").textContent=fmtBytes(d.stats.total_bytes);
+    $("cloudAiAllowed").textContent=d.stats.ai_allowed;$("cloudProtected").textContent=d.stats.protected;
+    renderCloudFiles(d.items);$("cloudStatus").textContent=query?"Результаты поиска обновлены.":"";
+  }catch(e){$("cloudStatus").textContent="Ошибка облачных документов: "+e.message}
+}
+async function uploadCloudFiles(fileList){
+  const files=Array.from(fileList||[]);if(!files.length)return;
+  $("cloudStatus").textContent="Подготовка загрузки "+files.length+" файл(ов)…";
+  for(let i=0;i<files.length;i++){
+    const file=files[i];$("cloudStatus").textContent="Загрузка "+(i+1)+" из "+files.length+": "+file.name;
+    try{
+      const r=await fetch("/v1/cloud/files?name="+encodeURIComponent(file.name),{method:"POST",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
+      let d;try{d=await r.json()}catch{d={detail:await r.text()}}
+      if(!r.ok)throw new Error(typeof d.detail==="string"?d.detail:JSON.stringify(d.detail||d));
+    }catch(e){$("cloudStatus").textContent="Ошибка загрузки "+file.name+": "+e.message;await loadCloud();return}
+  }
+  $("cloudStatus").textContent="Загрузка завершена. Для каждого файла создан цифровой паспорт.";
+  $("cloudFileInput").value="";await loadCloud();
+}
+async function openPassport(documentId){
+  activePassportId=documentId;$("passportModal").hidden=false;$("passportStatus").textContent="Загрузка паспорта…";
+  try{
+    const d=await api("/v1/cloud/files/"+encodeURIComponent(documentId)+"/passport");
+    $("passportName").textContent=d.name;$("passportId").textContent=d.id;$("passportVersion").textContent="v"+d.version;
+    $("passportSize").textContent=fmtBytes(d.size_bytes);$("passportType").textContent=d.content_type||"—";$("passportSha").textContent=d.sha256;
+    $("passportIndex").textContent=indexNames[d.ai_index_status]||d.ai_index_status;$("passportCreated").textContent=fmtChatDate(d.created_at);
+    $("passportAiAccess").value=d.ai_access;$("passportConfidentiality").value=d.confidentiality;$("passportScope").value=d.scope;
+    $("passportProject").value=d.project_id||"";$("passportProject").disabled=d.scope!=="project";
+    $("passportDownload").href="/v1/cloud/files/"+encodeURIComponent(d.id)+"/content";
+    $("passportStatus").textContent="Паспорт загружен. "+confidentialityNames[d.confidentiality]+".";
+  }catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
+}
+function closePassport(){$("passportModal").hidden=true;activePassportId=null}
+async function savePassport(){
+  if(!activePassportId)return;
+  const scope=$("passportScope").value;const project=$("passportProject").value.trim();
+  if(scope==="project"&&!project){$("passportStatus").textContent="Укажите ID проекта.";return}
+  try{
+    $("passportStatus").textContent="Сохранение…";
+    const d=await api("/v1/cloud/files/"+encodeURIComponent(activePassportId)+"/passport",{method:"PATCH",body:JSON.stringify({ai_access:$("passportAiAccess").value,confidentiality:$("passportConfidentiality").value,scope:scope,project_id:scope==="project"?project:null})});
+    $("passportIndex").textContent=indexNames[d.ai_index_status]||d.ai_index_status;
+    $("passportStatus").textContent=d.ai_index_status==="needs_indexing"?"Сохранено. Текущей версии требуется будущая ИИ-индексация.":"Паспорт сохранён.";
+    await loadCloud();
+  }catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
+}
+async function trashPassport(){
+  if(!activePassportId||!confirm("Переместить документ в корзину? Файл не будет уничтожен немедленно."))return;
+  try{await api("/v1/cloud/files/"+encodeURIComponent(activePassportId),{method:"DELETE"});closePassport();$("cloudStatus").textContent="Документ перемещён в корзину.";await loadCloud()}catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
+}
+$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);
+$("cloudDropZone").onclick=()=>$("cloudFileInput").click();$("cloudDropZone").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("cloudFileInput").click()}};
+["dragenter","dragover"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.add("dragging")}));
+["dragleave","drop"].forEach(name=>$("cloudDropZone").addEventListener(name,e=>{e.preventDefault();$("cloudDropZone").classList.remove("dragging")}));
+$("cloudDropZone").addEventListener("drop",e=>uploadCloudFiles(e.dataTransfer.files));
+$("cloudSearch").addEventListener("input",()=>{clearTimeout(cloudSearchTimer);cloudSearchTimer=setTimeout(loadCloud,250)});
+$("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportTrash").onclick=trashPassport;
+$("passportScope").onchange=()=>{$("passportProject").disabled=$("passportScope").value!=="project";if($("passportScope").value!=="project")$("passportProject").value=""};
+$("passportModal").addEventListener("click",e=>{if(e.target===$("passportModal"))closePassport()});
 
 function fmtChatDate(value){if(!value)return"";const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleString()}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]))}

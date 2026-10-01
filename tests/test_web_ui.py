@@ -12,6 +12,11 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Центр диагностики" in response.text
     assert "Настройки" in response.text
     assert "Чат" in response.text
+    assert "Облачные документы Тори" in response.text
+    assert 'id="cloudDropZone"' in response.text
+    assert 'id="cloudFileInput"' in response.text
+    assert 'id="passportModal"' in response.text
+    assert "Цифровой паспорт" in response.text
     assert "DeepSeek" in response.text
     assert 'id="newChat"' in response.text
     assert 'id="chatSearch"' in response.text
