@@ -41,34 +41,48 @@ def _memory_counts(db_path: Path) -> dict[str, int]:
             """
             SELECT
                 COUNT(*) AS total,
-                SUM(CASE WHEN deleted_at IS NULL AND status = 'active' THEN 1 ELSE 0 END)
-                    AS active,
-                SUM(CASE WHEN deleted_at IS NULL AND status = 'archived' THEN 1 ELSE 0 END)
-                    AS archived,
-                SUM(CASE WHEN deleted_at IS NULL AND status = 'superseded' THEN 1 ELSE 0 END)
-                    AS superseded,
-                SUM(CASE WHEN deleted_at IS NULL AND scope = 'personal' THEN 1 ELSE 0 END)
-                    AS personal,
-                SUM(CASE WHEN deleted_at IS NULL AND scope = 'project' THEN 1 ELSE 0 END)
-                    AS project,
-                SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END)
-                    AS deleted
+                SUM(CASE WHEN deleted_at IS NULL
+                    AND status = 'active' THEN 1 ELSE 0 END) AS active,
+                SUM(CASE WHEN deleted_at IS NULL
+                    AND status = 'archived' THEN 1 ELSE 0 END) AS archived,
+                SUM(CASE WHEN deleted_at IS NULL
+                    AND status = 'superseded' THEN 1 ELSE 0 END) AS superseded,
+                SUM(CASE WHEN deleted_at IS NULL
+                    AND scope = 'personal' THEN 1 ELSE 0 END) AS personal,
+                SUM(CASE WHEN deleted_at IS NULL
+                    AND scope = 'project' THEN 1 ELSE 0 END) AS project,
+                SUM(CASE WHEN deleted_at IS NOT NULL
+                    THEN 1 ELSE 0 END) AS deleted
             FROM memory_items
             """
         ).fetchone()
-        for key in ("total", "active", "archived", "superseded", "personal", "project", "deleted"):
+        for key in (
+            "total",
+            "active",
+            "archived",
+            "superseded",
+            "personal",
+            "project",
+            "deleted",
+        ):
             counts[key] = int(row[key] or 0)
 
         counts["links"] = int(
-            conn.execute("SELECT COUNT(*) AS count FROM memory_links").fetchone()["count"]
+            conn.execute(
+                "SELECT COUNT(*) AS count FROM memory_links"
+            ).fetchone()["count"]
             or 0
         )
         counts["vectors"] = int(
-            conn.execute("SELECT COUNT(*) AS count FROM memory_vectors").fetchone()["count"]
+            conn.execute(
+                "SELECT COUNT(*) AS count FROM memory_vectors"
+            ).fetchone()["count"]
             or 0
         )
         counts["history"] = int(
-            conn.execute("SELECT COUNT(*) AS count FROM memory_history").fetchone()["count"]
+            conn.execute(
+                "SELECT COUNT(*) AS count FROM memory_history"
+            ).fetchone()["count"]
             or 0
         )
 
@@ -88,7 +102,9 @@ def diagnostics_status(request: Request) -> dict:
 
     guardian = request.app.state.memory_guardian.status()
     memory_automation = request.app.state.memory_automation.status()
-    guardian_automation = request.app.state.memory_guardian_automation.status()
+    guardian_automation = (
+        request.app.state.memory_guardian_automation.status()
+    )
 
     started_at = request.app.state.started_at
     uptime_seconds = max(
@@ -106,9 +122,18 @@ def diagnostics_status(request: Request) -> dict:
         },
         "ai": {
             "providers": request.app.state.ai_router.available_providers(),
-            "deepseek_configured": request.app.state.deepseek_config["configured"],
+            "deepseek_configured": (
+                request.app.state.deepseek_config["configured"]
+            ),
             "deepseek_model": request.app.state.deepseek_config["model"],
-            "deepseek_base_url": request.app.state.deepseek_config["base_url"],
+            "deepseek_base_url": (
+                request.app.state.deepseek_config["base_url"]
+            ),
+            "claude_configured": (
+                request.app.state.claude_config["configured"]
+            ),
+            "claude_model": request.app.state.claude_config["model"],
+            "router": request.app.state.ai_router.routing_status(),
         },
         "system_memory": {
             "total_bytes": vm.total,
@@ -134,5 +159,7 @@ def diagnostics_status(request: Request) -> dict:
         },
         "guardian": guardian.model_dump(mode="json"),
         "memory_automation": memory_automation.model_dump(mode="json"),
-        "guardian_automation": guardian_automation.model_dump(mode="json"),
+        "guardian_automation": guardian_automation.model_dump(
+            mode="json"
+        ),
     }
