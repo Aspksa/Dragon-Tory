@@ -5,7 +5,6 @@ import hashlib
 import json
 import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -55,7 +54,7 @@ def _parse_time(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=UTC)
         return parsed.astimezone(UTC)
@@ -399,11 +398,13 @@ class SmartDrive:
                     "Конфиденциальный документ нельзя передавать внешнему ИИ "
                     "или использовать для ИИ-ответов."
                 )
-        if document["confidentiality"] == "highly_protected":
-            if any(result.values()):
-                raise ValueError(
-                    "Особо защищённый документ не разрешает ИИ-доступ."
-                )
+        if (
+            document["confidentiality"] == "highly_protected"
+            and any(result.values())
+        ):
+            raise ValueError(
+                "Особо защищённый документ не разрешает ИИ-доступ."
+            )
         return result
 
     @staticmethod
