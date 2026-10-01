@@ -12,9 +12,10 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Центр диагностики" in response.text
     assert "Настройки" in response.text
     assert "Чат" in response.text
-    assert "Клод" in response.text
-    assert "Маршрутизатор ИИ" in response.text
-    assert 'id="chatProvider"' in response.text
+    assert "DeepSeek" in response.text
+    assert 'id="chatProject"' not in response.text
+    assert 'id="chatProvider"' not in response.text
+    assert "Клод" not in response.text
     assert "Центр обновления" in response.text
     assert 'id="openUpdate"' in response.text
     assert 'id="updates"' in response.text
