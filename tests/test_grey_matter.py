@@ -496,3 +496,28 @@ def test_learned_skill_is_high_impact_guardian_memory(tmp_path: Path) -> None:
 
     assert decision.queue_id is not None
     assert decision.memory_id is None
+
+def test_grey_matter_tables_are_visible_in_memory_health(
+    tmp_path: Path,
+) -> None:
+    engine, _, grey = make_stack(tmp_path)
+    entity = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.ENTITY,
+            content="ООО Проверка",
+            source="document",
+        )
+    )
+    grey.learn_entity_alias(entity.id, "Проверка ООО")
+    grey.record_source_feedback(entity.id, confirmed=True)
+
+    report = engine.store.health_report(deep=True)
+
+    assert report["status"] == "ok"
+    assert report["entity_aliases"] == 1
+    assert report["source_reliability_entries"] >= 1
+    assert report["orphan_entity_aliases"] == 0
+    assert report["invalid_entity_alias_scope"] == 0
+
