@@ -386,10 +386,8 @@ def update_counterparty(
 @router.get("/timesheet/calendar")
 def timesheet_calendar(
     year: int = Query(ge=2026, le=2027),
-    request: Request = None,
     month: int | None = Query(default=None, ge=1, le=12),
 ) -> dict[str, Any]:
-    del request
     return production_calendar(year, month=month)
 
 
