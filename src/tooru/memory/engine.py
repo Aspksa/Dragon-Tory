@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
+from tooru.memory.adaptive import select_retrieval_strategy
 from tooru.memory.embedding import EmbeddingProvider, cosine_similarity
 from tooru.memory.extractor import HeuristicMemoryExtractor
 from tooru.memory.models import (
@@ -21,6 +22,7 @@ from tooru.memory.models import (
     MemoryLinkType,
     MemoryMaintenanceReport,
     MemoryRecallHit,
+    MemoryRetrievalStrategy,
     MemoryRevision,
     MemoryScope,
     MemorySearch,
@@ -157,13 +159,21 @@ class MemoryEngine:
         *,
         track_usage: bool = True,
     ) -> list[MemoryRecallHit]:
+        strategy = select_retrieval_strategy(request)
+        primary_limit = max(500, request.limit * 50)
+        lexical_limit = max(200, request.limit * 20)
+        if strategy is MemoryRetrievalStrategy.LEXICAL:
+            lexical_limit = max(500, request.limit * 50)
+        elif strategy is MemoryRetrievalStrategy.SEMANTIC:
+            primary_limit = max(800, request.limit * 80)
+
         primary_candidates = self.store.candidates(
             request,
-            limit=max(500, request.limit * 50),
+            limit=primary_limit,
         )
         lexical_candidates = self.store.lexical_candidates(
             request,
-            limit=max(200, request.limit * 20),
+            limit=lexical_limit,
         )
         lexical_rank = {
             item.id: 1.0 / rank
@@ -219,6 +229,7 @@ class MemoryEngine:
                 cosine_similarity(query_vector, vectors.get(item.id, [])),
                 retrieval_score=lexical_rank.get(item.id, 0.0),
                 graph_score=graph_rank.get(item.id, 0.0),
+                strategy=strategy,
             )
             for item in candidates
         ]
@@ -226,8 +237,12 @@ class MemoryEngine:
 
         shortlist = hits[: max(100, request.limit * 10)]
         rescored: list[MemoryRecallHit] = []
+        as_of = self._parse_as_of(request.as_of)
         for hit in shortlist:
-            assessment = self.truth_engine.assess(hit.memory)
+            assessment = self.truth_engine.assess(
+                hit.memory,
+                at=as_of,
+            )
             rescored.append(
                 self.reranker.score(
                     request.query,
@@ -236,6 +251,7 @@ class MemoryEngine:
                     retrieval_score=hit.retrieval_score,
                     graph_score=hit.graph_score,
                     truth_score=assessment.trust_score,
+                    strategy=strategy,
                 )
             )
         rescored.sort(key=lambda hit: hit.score, reverse=True)
@@ -650,6 +666,18 @@ class MemoryEngine:
             rendered = rendered[: request.max_chars].rsplit("\n", 1)[0]
             rendered += "\n</tooru_memory>"
         return rendered, total
+
+    @staticmethod
+    def _parse_as_of(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            moment = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        return moment.astimezone(UTC)
 
     @staticmethod
     def _normalize(text: str) -> str:
