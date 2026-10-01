@@ -50,9 +50,9 @@ def test_chat_upload_studies_indexes_remembers_and_retrieves_document() -> None:
                 f"chat_id={chat_id}&name=forester-service.txt"
             ),
             content=(
-                "Subaru Forester service interval is 12000 km. "
-                "Next maintenance should use this interval."
-            ).encode("utf-8"),
+                b"Subaru Forester service interval is 12000 km. "
+                b"Next maintenance should use this interval."
+            ),
             headers={"Content-Type": "text/plain"},
         )
         assert upload.status_code == 201
