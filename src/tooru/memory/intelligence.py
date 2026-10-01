@@ -28,7 +28,7 @@ _DECISION_ADAPTER = TypeAdapter(list[MemoryIntelligenceDecision])
 @dataclass(slots=True)
 class IntelligenceConfig:
     primary_provider: str = "deepseek"
-    reviewer_provider: str = "claude"
+    reviewer_provider: str = "deepseek"
     reviewer_threshold: float = 0.85
     context_limit: int = 12
 
@@ -81,7 +81,6 @@ class MemoryIntelligence:
         reviewer: str | None = None
         if (
             request.use_ai
-            and reviewer_name != analyzer
             and self.router.has_provider(reviewer_name)
             and self._needs_review(decisions)
         ):
