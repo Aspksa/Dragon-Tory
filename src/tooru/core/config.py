@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Dragon Tory"
-    version: str = "00.00.02"
+    version: str = "00.00.03"
     host: str = "127.0.0.1"
     port: int = 8787
     data_dir: Path = Path("./data")
@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://foundation-models.api.cloud.ru/v1"
     deepseek_model: str = "deepseek-ai/DeepSeek-V4-Flash"
     claude_api_key: str | None = None
+
+    update_repository: str = "Aspksa/Dragon-Tory"
+    update_branch: str = "main"
 
     memory_embedding_provider: str = "hash"
     memory_embedding_url: str | None = None
