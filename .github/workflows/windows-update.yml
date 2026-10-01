@@ -115,6 +115,9 @@ jobs:
             }
           } catch {
             Write-Host "Update API exception: $($_.Exception.Message)"
+            if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+              Write-Host "Update API body: $($_.ErrorDetails.Message)"
+            }
             $statePath = Join-Path $env:UPDATE_TEST_ROOT "data\update\state.json"
             if (Test-Path -LiteralPath $statePath) {
               Write-Host "--- state.json ---"
