@@ -398,7 +398,6 @@ async def test_memory_automation_runs_grey_matter_sleep_cycle(
 
         def consolidate_scope(self, **kwargs):
             self.calls.append(kwargs)
-            return None
 
     fake = FakeGrey()
     automation = MemoryAutomation(
