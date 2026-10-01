@@ -254,7 +254,7 @@ def test_service_memo_process_api_returns_folder_and_fact_card() -> None:
                 "Кому: Руководителю\n"
                 "Тема: Ремонт и техническое состояние\n"
                 "Прошу выполнить ремонт автомобиля А123АА77."
-            ).encode("utf-8"),
+            ).encode(),
         )
         document_id = document["id"]
 
