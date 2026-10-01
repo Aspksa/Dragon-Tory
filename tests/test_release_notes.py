@@ -78,3 +78,17 @@ def test_release_0033_lists_document_intelligence_v2() -> None:
         for change in modules["drive"]["changes"]
     )
 
+def test_release_0034_lists_grey_matter_capabilities() -> None:
+    release = release_notes_for("0.0.34")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert {"grey_matter", "memory", "reasoning", "dashboard", "updater"} <= set(modules)
+    assert modules["grey_matter"]["version"] == "01.00.00"
+    assert modules["memory"]["version"] == "03.00.00"
+    assert len(modules["grey_matter"]["changes"]) == 12
+    assert any(
+        "Multi-hop" in change
+        for change in modules["grey_matter"]["changes"]
+    )
+
