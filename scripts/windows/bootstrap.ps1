@@ -37,6 +37,20 @@ $HealthUrl = "http://{0}:{1}/health" -f $HostAddress, $Port
 
 $PythonVersion = "3.12.10"
 
+function Get-Sha256Hex {
+    param([string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($bytes)).Replace("-", "")
+    } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+}
+
 function Write-LauncherLog {
     param(
         [string]$Level,
@@ -187,7 +201,7 @@ function Test-PythonInstaller {
         return $false
     }
 
-    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $InstallerPath).Hash.ToUpperInvariant()
+    $actualHash = (Get-Sha256Hex -Path $InstallerPath).ToUpperInvariant()
     if ($actualHash -ne $expectedHashes[$name]) {
         Write-LauncherLog "WARN" "Python installer SHA-256 mismatch."
         return $false
@@ -440,7 +454,7 @@ try {
 
     Write-LauncherLog "OK" "Virtual environment: $VenvPython"
 
-    $currentHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PyProject).Hash
+    $currentHash = Get-Sha256Hex -Path $PyProject
     $oldHash = ""
     if (Test-Path -LiteralPath $HashFile -PathType Leaf) {
         $oldHash = (Get-Content -LiteralPath $HashFile -Raw).Trim()
