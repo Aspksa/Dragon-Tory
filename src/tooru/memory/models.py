@@ -371,6 +371,7 @@ class CalibrationReport(BaseModel):
 class ContradictionMember(BaseModel):
     memory_id: str
     content: str
+    status: MemoryStatus
     trust_score: float = Field(ge=0.0, le=1.0)
     valid_from: str | None = None
     valid_to: str | None = None
