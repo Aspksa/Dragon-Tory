@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date, datetime
 from typing import Any
 
 from tooru.ai.base import AIRequest
+from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.cloud.document_intelligence import OCRUnavailableError
 from tooru.cloud.intelligence import UnsupportedDocumentError
+from tooru.cloud.memory_sync import sync_weekend_work
+
+logger = logging.getLogger(__name__)
 
 _WEEKEND_RE = re.compile(
     r"(?:работ[ауы]?\s+в\s+выходн|выходн(?:ой|ого)\s+день)",
@@ -187,7 +192,11 @@ async def create_weekend_work_document(
             }
         )
         source_parts.append(
-            f"[Образец {number}: {item['name']}]\n{text}"
+            f"[Образец {number}: {item['name']}]\n"
+            + wrap_untrusted_text(
+                text,
+                source=f"weekend-template:{item['id']}:v{item['version']}",
+            )
         )
 
     work_date = f"{year:04d}-{month:02d}-{day:02d}"
@@ -221,7 +230,8 @@ async def create_weekend_work_document(
                     "Ты Дракончик Тоору. Создай только готовый текст "
                     "служебной записки в стиле предприятия. Используй "
                     "переданные образцы как эталоны структуры и языка, но "
-                    "не копируй из них чужие персональные данные и факты."
+                    "не копируй из них чужие персональные данные и факты. "
+                    + UNTRUSTED_CONTENT_POLICY
                 ),
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2_200,
@@ -266,7 +276,7 @@ async def create_weekend_work_document(
     )
 
     hours = _requested_hours(message)
-    smart.update_dna(
+    dna = smart.update_dna(
         item["id"],
         {
             "kind": "служебная записка",
@@ -284,6 +294,18 @@ async def create_weekend_work_document(
         },
         actor="tooru-chat",
     )
+    memory_written = False
+    try:
+        memory_result = sync_weekend_work(
+            request.app.state.memory_intake,
+            dna,
+        )
+        memory_written = bool(
+            memory_result is not None and memory_result.memory is not None
+        )
+    except Exception as sync_exc:
+        logger.warning("Weekend-work memory auto-sync failed: %s", sync_exc)
+
     smart.record_provenance(
         item["id"],
         "chat_document_created",
@@ -293,7 +315,7 @@ async def create_weekend_work_document(
             "references": references,
             "employee_id": employee["id"] if employee else None,
             "vehicle_id": vehicle["id"] if vehicle else None,
-            "memory_written": False,
+            "memory_written": memory_written,
             "training_performed": False,
         },
     )
