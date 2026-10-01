@@ -46,6 +46,7 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="passportActivity"' in response.text
     assert 'id="passportPreview"' in response.text
     assert 'id="passportIndexNow"' in response.text
+    assert 'id="passportStudyMemory"' in response.text
     assert 'id="passportAsk"' in response.text
     assert 'id="cloudContentSearch"' in response.text
     assert 'id="cloudVault"' in response.text
@@ -64,6 +65,8 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="counterpartyModal"' in response.text
     assert 'id="passportDocumentSubtype"' in response.text
     assert 'id="passportWorkdayFields"' in response.text
+    assert 'id="passportWorkDates"' in response.text
+    assert 'id="passportWorkDateWarning"' in response.text
     assert 'id="documentModuleTimesheet"' in response.text
     assert 'id="documentModuleDraft"' in response.text
     assert "document-center" in response.text
@@ -99,6 +102,7 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'data-passport-target="security"' in response.text
     assert 'data-passport-target="actions"' in response.text
     assert "DeepSeek" in response.text
+    assert "интернет" in response.text
     assert 'id="newChat"' in response.text
     assert 'id="chatSearch"' in response.text
     assert 'id="renameChat"' in response.text
@@ -306,6 +310,9 @@ def test_dashboard_assets_are_served_separately() -> None:
     assert "openTimesheetEntryEditor" in javascript.text
     assert "carFuelSummer" in javascript.text
     assert "insurance_alerts" in javascript.text
+    assert "restudyPassportDocument" in javascript.text
+    assert "web_research" in javascript.text
+    assert "passportWorkDates" in javascript.text
     assert "javascript" in javascript.headers["content-type"]
 
 

@@ -144,6 +144,7 @@ class MemoryEngine:
         return selected
 
     def context_pack(self, request: MemoryContextRequest) -> MemoryContextPack:
+        search_query = self._bounded_search_query(request.query)
         pinned_personal: list[MemoryItem] = []
         personal_hits: list[MemoryRecallHit] = []
         pinned_project: list[MemoryItem] = []
@@ -161,7 +162,7 @@ class MemoryEngine:
                     MemorySearch(
                         owner_id=request.owner_id,
                         scope=MemoryScope.PERSONAL,
-                        query=request.query,
+                        query=search_query,
                         limit=request.personal_limit,
                     )
                 )
@@ -178,7 +179,7 @@ class MemoryEngine:
                     owner_id=request.owner_id,
                     scope=MemoryScope.PROJECT,
                     project_id=request.project_id,
-                    query=request.query,
+                    query=search_query,
                     limit=request.project_limit,
                 )
             )
@@ -382,6 +383,23 @@ class MemoryEngine:
             )
         return len(items)
 
+    @staticmethod
+    def _bounded_search_query(
+        value: str,
+        *,
+        max_chars: int = 2_000,
+    ) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return "memory"
+        if len(text) <= max_chars:
+            return text
+        # Keep both the beginning and the end. Long document summaries often
+        # put identity/context first and unresolved details/conclusions last.
+        head = max_chars // 2
+        tail = max_chars - head - 5
+        return text[:head].rstrip() + "\n…\n" + text[-tail:].lstrip()
+
     def _near_duplicate(self, memory: MemoryCreate) -> MemoryItem | None:
         if memory.key is not None:
             return None
@@ -390,7 +408,7 @@ class MemoryEngine:
             owner_id=memory.owner_id,
             scope=memory.scope,
             project_id=memory.project_id,
-            query=memory.content,
+            query=self._bounded_search_query(memory.content),
             kind=memory.kind,
             min_importance=0.0,
             limit=20,
@@ -445,7 +463,7 @@ class MemoryEngine:
             owner_id=item.owner_id,
             scope=item.scope,
             project_id=item.project_id,
-            query=item.content,
+            query=self._bounded_search_query(item.content),
             min_importance=0.0,
             limit=8,
         )

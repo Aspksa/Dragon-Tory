@@ -62,6 +62,8 @@ def weekend_work_memory(dna: dict[str, Any]) -> MemoryCreate | None:
         != "работа в выходной день"
     ):
         return None
+    if dna.get("work_date_conflict"):
+        return None
 
     document = dna.get("document") or {}
     document_id = str(dna.get("document_id") or document.get("id") or "")
@@ -77,8 +79,13 @@ def weekend_work_memory(dna: dict[str, Any]) -> MemoryCreate | None:
             f"Tory Document ID: {document_id}.",
             f"Сотрудник: {employee}.",
             f"Подразделение: {dna.get('department') or '—'}.",
-            f"Дата работы: {dna.get('work_date') or '—'}.",
-            f"Часы: {dna.get('work_hours') or 0}.",
+            "Даты работы: "
+            + (
+                ", ".join(str(value) for value in (dna.get("work_dates") or []))
+                or str(dna.get("work_date") or "—")
+            )
+            + ".",
+            f"Часы на запись: {dna.get('work_hours') or 0}.",
             f"Основание: {dna.get('work_reason') or '—'}.",
         ]
     )

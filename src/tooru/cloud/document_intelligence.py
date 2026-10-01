@@ -7,7 +7,7 @@ import sqlite3
 import subprocess
 import tempfile
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -48,6 +48,172 @@ _WORK_DATE_RE = re.compile(
     r"(?i)(?:дата\s+работы|выходной\s+день|работа\s+в\s+выходной\s+день)"
     r"[^\d]{0,30}((?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])[./-](?:19|20)\d{2}|(?:19|20)\d{2}[-/.](?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01]))"
 )
+
+_RU_MONTHS = {
+    "января": 1,
+    "январь": 1,
+    "февраля": 2,
+    "февраль": 2,
+    "марта": 3,
+    "март": 3,
+    "апреля": 4,
+    "апрель": 4,
+    "мая": 5,
+    "май": 5,
+    "июня": 6,
+    "июнь": 6,
+    "июля": 7,
+    "июль": 7,
+    "августа": 8,
+    "август": 8,
+    "сентября": 9,
+    "сентябрь": 9,
+    "октября": 10,
+    "октябрь": 10,
+    "ноября": 11,
+    "ноябрь": 11,
+    "декабря": 12,
+    "декабрь": 12,
+}
+_MONTH_WORDS = "|".join(sorted(_RU_MONTHS, key=len, reverse=True))
+_WORKDAY_DECLARATION_RE = re.compile(
+    r"(?is)(?:прошу\s+)?(?:объявить|считать|установить)"
+    r"(?P<body>.{0,240}?)"
+    r"(?:рабоч(?:им|ими)?\s+дн(?:ем|ями|я)?|рабочими|рабочим)"
+)
+_WEEKEND_TITLE_RE = re.compile(
+    r"(?i)(?:работ\w*\s+в\s+выходн\w*|"
+    r"раб\.?\s*вых\.?\s*день|выходн\w*\s+день)"
+)
+
+
+def _valid_iso(day: int, month: int, year: int) -> str | None:
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
+
+
+def _extract_date_expressions(value: str) -> list[str]:
+    text = str(value or "")
+    found: list[str] = []
+
+    def add(day: int, month: int, year: int) -> None:
+        iso = _valid_iso(day, month, year)
+        if iso and iso not in found:
+            found.append(iso)
+
+    # 24-25.01.2026 / 24–25.01.2026
+    for match in re.finditer(
+        r"\b(\d{1,2})\s*[-–—]\s*(\d{1,2})[./](\d{1,2})[./]((?:19|20)\d{2})\b",
+        text,
+    ):
+        add(int(match.group(1)), int(match.group(3)), int(match.group(4)))
+        add(int(match.group(2)), int(match.group(3)), int(match.group(4)))
+
+    # 31.01 и 01.02.2026
+    for match in re.finditer(
+        r"\b(\d{1,2})[./](\d{1,2})\s*(?:и|,|/|&)\s*"
+        r"(\d{1,2})[./](\d{1,2})[./]((?:19|20)\d{2})\b",
+        text,
+        re.IGNORECASE,
+    ):
+        year = int(match.group(5))
+        add(int(match.group(1)), int(match.group(2)), year)
+        add(int(match.group(3)), int(match.group(4)), year)
+
+    # 31 января и 1 февраля 2026
+    cross_month_pattern = re.compile(
+        rf"\b(\d{{1,2}})\s+({_MONTH_WORDS})\s*"
+        rf"(?:и|,|/|&)\s*(\d{{1,2}})\s+({_MONTH_WORDS})\s+"
+        rf"((?:19|20)\d{{2}})\b",
+        re.IGNORECASE,
+    )
+    for match in cross_month_pattern.finditer(text):
+        year = int(match.group(5))
+        add(
+            int(match.group(1)),
+            _RU_MONTHS[match.group(2).casefold()],
+            year,
+        )
+        add(
+            int(match.group(3)),
+            _RU_MONTHS[match.group(4).casefold()],
+            year,
+        )
+
+    # 21 и 22 марта 2026 / 26 апреля 2026
+    month_pattern = re.compile(
+        rf"\b(\d{{1,2}})(?:\s*(?:и|,|/|&)\s*(\d{{1,2}}))?"
+        rf"\s+({_MONTH_WORDS})\s+((?:19|20)\d{{2}})\b",
+        re.IGNORECASE,
+    )
+    for match in month_pattern.finditer(text):
+        month = _RU_MONTHS[match.group(3).casefold()]
+        year = int(match.group(4))
+        add(int(match.group(1)), month, year)
+        if match.group(2):
+            add(int(match.group(2)), month, year)
+
+    # Ordinary full numeric dates. Add last so range-specific patterns keep
+    # their intended ordering while duplicates are removed.
+    for match in re.finditer(
+        r"\b(\d{1,2})[./-](\d{1,2})[./-]((?:19|20)\d{2})\b",
+        text,
+    ):
+        add(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+
+    return found
+
+
+def _weekend_work_dates(text: str, name: str) -> dict[str, Any]:
+    body_fragments = [
+        match.group("body")
+        for match in _WORKDAY_DECLARATION_RE.finditer(text)
+    ]
+    body_dates: list[str] = []
+    for fragment in body_fragments:
+        for value in _extract_date_expressions(fragment):
+            if value not in body_dates:
+                body_dates.append(value)
+
+    filename_dates = (
+        _extract_date_expressions(name)
+        if _WEEKEND_TITLE_RE.search(name)
+        else []
+    )
+
+    weekend_signal = bool(
+        body_fragments
+        or _WEEKEND_TITLE_RE.search(name)
+        or re.search(r"(?i)работ\w*\s+в\s+выходн\w*", text)
+    )
+    conflict = bool(
+        body_dates
+        and filename_dates
+        and set(body_dates) != set(filename_dates)
+    )
+    if conflict:
+        selected: list[str] = []
+        source = "conflict"
+    elif body_dates and filename_dates:
+        selected = body_dates
+        source = "body+filename"
+    elif body_dates:
+        selected = body_dates
+        source = "body"
+    else:
+        selected = filename_dates
+        source = "filename" if filename_dates else "none"
+
+    return {
+        "weekend_work_detected": weekend_signal,
+        "work_dates": selected,
+        "work_dates_body": body_dates,
+        "work_dates_filename": filename_dates,
+        "work_date_conflict": conflict,
+        "work_date_source": source,
+    }
 _AMOUNT_RE = re.compile(
     r"(?:(?P<currency1>€|EUR|USD|\$|GBP|£|RUB|₽)\s*)?"
     r"(?P<amount>\d+(?:[ .]\d{3})*(?:[,.]\d{1,2})?)"
@@ -491,7 +657,10 @@ class DocumentIntelligence:
         return best_kind, confidence
 
     @staticmethod
-    def _entities(text: str) -> dict[str, Any]:
+    def _entities(
+        text: str,
+        name: str = "",
+    ) -> dict[str, Any]:
         vins = _unique(_VIN_RE.findall(text), limit=30)
         emails = _unique(_EMAIL_RE.findall(text), limit=50)
         urls = _unique(_URL_RE.findall(text), limit=50)
@@ -512,10 +681,8 @@ class DocumentIntelligence:
             [match.group(1).strip(" .;") for match in _DEPARTMENT_RE.finditer(text)],
             limit=30,
         )
-        work_dates = _unique(
-            [match.group(1) for match in _WORK_DATE_RE.finditer(text)],
-            limit=30,
-        )
+        weekend_work = _weekend_work_dates(text, name)
+        work_dates = weekend_work["work_dates"]
         work_hours = []
         for match in _WORK_HOURS_RE.finditer(text):
             try:
@@ -563,6 +730,11 @@ class DocumentIntelligence:
             "departments": departments,
             "work_dates": work_dates,
             "work_hours": work_hours,
+            "weekend_work_detected": weekend_work["weekend_work_detected"],
+            "work_dates_body": weekend_work["work_dates_body"],
+            "work_dates_filename": weekend_work["work_dates_filename"],
+            "work_date_conflict": weekend_work["work_date_conflict"],
+            "work_date_source": weekend_work["work_date_source"],
             "dates": dates,
             "amounts": amounts,
         }
@@ -723,7 +895,10 @@ class DocumentIntelligence:
                 text = "\n\n".join(chunk.text for chunk in chunks)
                 analysis_text = text[:250_000]
                 kind, confidence = self._classify(item["name"], analysis_text)
-                entities = self._entities(analysis_text)
+                entities = self._entities(
+                    analysis_text,
+                    item["name"],
+                )
                 deadlines = self._deadlines(analysis_text)
                 tags = self._suggested_tags(kind, entities, analysis_text)
                 relations = self._relation_suggestions(

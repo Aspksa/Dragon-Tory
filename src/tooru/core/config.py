@@ -24,6 +24,11 @@ class Settings(BaseSettings):
 
     allow_remote_api: bool = False
 
+    internet_enabled: bool = True
+    internet_timeout_seconds: float = 12.0
+    internet_max_results: int = 5
+    internet_fetch_pages: int = 3
+
     observability_retention_days: int = 30
 
     update_repository: str = "Aspksa/Dragon-Tory"

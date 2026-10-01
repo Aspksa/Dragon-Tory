@@ -142,7 +142,7 @@
           <div class="chat-head">
             <div>
               <div id="chatTitle" class="chat-title">Новый чат</div>
-              <div id="chatMeta" class="muted">Личный помощник · документы · память · DeepSeek</div>
+              <div id="chatMeta" class="muted">Личный помощник · документы · память · DeepSeek · интернет</div>
             </div>
             <div class="chat-head-actions">
               <button id="renameChat" class="icon-btn" title="Переименовать чат">✎</button>
@@ -478,8 +478,10 @@
               <div class="passport-data-grid" style="margin-top:10px">
                 <div class="field"><label>Сотрудник</label><input id="passportEmployeeName" placeholder="ФИО сотрудника"></div>
                 <div class="field"><label>Подразделение</label><input id="passportDepartment" placeholder="Отдел / служба"></div>
-                <div class="field"><label>Дата работы</label><input id="passportWorkDate" placeholder="2026-10-03"></div>
+                <div class="field"><label>Основная дата работы</label><input id="passportWorkDate" placeholder="2026-10-03"></div>
                 <div class="field"><label>Часов</label><input id="passportWorkHours" type="number" min="0" max="24" step="0.25" placeholder="8"></div>
+                <div class="field span-2"><label>Все даты работы</label><input id="passportWorkDates" placeholder="2026-03-21, 2026-03-22"></div>
+                <div id="passportWorkDateWarning" class="statusbar warn span-2" hidden></div>
                 <div class="field span-2"><label>Основание / работа</label><textarea id="passportWorkReason" placeholder="Причина и выполняемая работа"></textarea></div>
               </div>
             </div>
@@ -564,7 +566,8 @@
           <button id="passportSealVerify" class="secondary">✓ Проверить печать</button>
           <button id="passportWatchers" class="secondary">👁 Наблюдатели</button>
           <button id="passportPreview" class="secondary">Просмотр</button>
-          <button id="passportIndexNow" class="secondary">Изучить документ</button>
+          <button id="passportIndexNow" class="secondary">Локально индексировать</button>
+          <button id="passportStudyMemory" class="secondary">🧠 Повторно изучить в память</button>
           <button id="passportAsk" class="secondary">Спросить Тоору</button>
           <button id="passportVersions" class="secondary">Версии</button>
           <button id="passportActivity" class="secondary">Журнал</button>

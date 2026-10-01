@@ -135,7 +135,7 @@ class MemoryRecallHit(BaseModel):
 
 class MemoryContextRequest(BaseModel):
     owner_id: str = Field(default="local-user", min_length=1, max_length=200)
-    query: str = Field(min_length=1, max_length=2_000)
+    query: str = Field(min_length=1, max_length=20_000)
     project_id: str | None = Field(default=None, max_length=200)
     include_personal: bool = True
     personal_limit: int = Field(default=8, ge=0, le=50)

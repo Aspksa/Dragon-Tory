@@ -570,3 +570,81 @@ def test_annual_leave_excludes_holiday_but_includes_shifted_day_off(
     assert row["cells"][7]["code"] == "В"
     assert row["cells"][8]["code"] == "ОТ"
     assert row["vacation_days"] == 1
+
+
+
+def test_weekend_timesheet_expands_multiple_work_dates(
+    tmp_path: Path,
+) -> None:
+    store, smart = _stack(tmp_path)
+    memo = _upload(store, "weekend-multi.txt", b"weekend multi")
+    dna = smart.update_dna(
+        memo["id"],
+        {
+            "kind": "служебная записка",
+            "document_subtype": "Работа в выходной день",
+            "employee_name": "Матиенко А.Н.",
+            "work_dates": ["2026-03-21", "2026-03-22"],
+            "work_hours": 8,
+        },
+    )
+
+    assert dna["work_dates"] == ["2026-03-21", "2026-03-22"]
+
+    timesheet = smart.weekend_timesheet(year=2026, month=3)
+    assert timesheet["count"] == 2
+    assert [item["work_date"] for item in timesheet["items"]] == [
+        "2026-03-21",
+        "2026-03-22",
+    ]
+    assert timesheet["total_hours"] == 16
+
+
+def test_intelligence_date_conflict_is_not_added_to_timesheet(
+    tmp_path: Path,
+) -> None:
+    store, smart = _stack(tmp_path)
+    memo = _upload(store, "СЗ раб.вых. день 24-25.01.2026.txt", b"memo")
+
+    result = smart.apply_intelligence_defaults(
+        memo["id"],
+        {
+            "kind": "служебная записка",
+            "confidence": 0.95,
+            "entities": {
+                "references": [],
+                "amounts": [],
+                "counterparties": [],
+                "employees": ["Кихтев Мстислав Юрьевич"],
+                "departments": [],
+                "work_dates": [],
+                "work_hours": [],
+                "weekend_work_detected": True,
+                "work_date_conflict": True,
+                "work_date_source": "conflict",
+                "work_dates_body": ["2025-12-24", "2025-12-25"],
+                "work_dates_filename": ["2026-01-24", "2026-01-25"],
+            },
+            "deadlines": [],
+            "suggested_tags": ["служебная записка"],
+        },
+    )
+
+    assert result["applied"] is True
+    dna = smart.get_dna(memo["id"])
+    assert dna["document_subtype"] == "Работа в выходной день"
+    assert dna["work_date_conflict"] is True
+    assert dna["work_dates"] == []
+
+    timesheet = smart.weekend_timesheet(year=2026, month=1)
+    assert timesheet["items"] == []
+    assert timesheet["date_conflicts"][0]["document_id"] == memo["id"]
+
+    resolved = smart.update_dna(
+        memo["id"],
+        {
+            "work_dates": ["2026-01-24", "2026-01-25"],
+        },
+    )
+    assert resolved["work_date_conflict"] is False
+    assert resolved["work_date_source"] == "manual"

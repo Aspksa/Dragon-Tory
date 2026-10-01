@@ -258,3 +258,67 @@ def test_conversation_extraction_and_consolidation(tmp_path: Path) -> None:
     assert consolidated.memory is not None
     assert consolidated.memory.kind is MemoryKind.SUMMARY
     assert consolidated.source_ids
+
+
+
+def test_long_memory_content_does_not_break_internal_search(tmp_path):
+    engine = make_engine(tmp_path)
+    content = (
+        "Начало документа. "
+        + ("существенный факт " * 220)
+        + "Конец документа."
+    )
+    item = engine.add(
+        MemoryCreate(
+            owner_id="local-user",
+            scope=MemoryScope.PERSONAL,
+            kind=MemoryKind.SUMMARY,
+            content=content,
+            source="test-long-document",
+        )
+    )
+
+    assert item.id
+    assert len(item.content) > 2000
+
+
+def test_bounded_search_query_preserves_head_and_tail(tmp_path):
+    engine = make_engine(tmp_path)
+    value = "HEAD-" + ("x" * 3000) + "-TAIL"
+
+    query = engine._bounded_search_query(value)
+
+    assert len(query) <= 2000
+    assert query.startswith("HEAD-")
+    assert query.endswith("-TAIL")
+
+
+
+def test_long_chat_query_is_bounded_only_for_internal_recall(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PERSONAL,
+            kind=MemoryKind.FACT,
+            content="Land Cruiser 80 используется как пример.",
+        )
+    )
+    long_query = (
+        "HEAD Land Cruiser 80 "
+        + ("длинный пользовательский контекст " * 250)
+        + " TAIL"
+    )
+
+    pack = engine.context_pack(
+        MemoryContextRequest(
+            query=long_query,
+            include_personal=True,
+            personal_limit=4,
+            project_limit=0,
+        )
+    )
+
+    assert pack.query == long_query
+    assert len(pack.query) > 2000
