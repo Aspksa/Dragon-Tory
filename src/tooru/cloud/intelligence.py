@@ -18,6 +18,7 @@ from odf.opendocument import load as load_odf
 from odf.table import Table, TableCell, TableRow
 from odf.text import H, P
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 from pptx import Presentation
 from pypdf import PdfReader
 from pyxlsb import open_workbook as open_xlsb
@@ -29,6 +30,9 @@ class ExtractedChunk:
     label: str
     text: str
     page: int | None = None
+    table: str | None = None
+    cell: str | None = None
+    section: str | None = None
 
 
 class UnsupportedDocumentError(ValueError):
@@ -112,6 +116,9 @@ def _split_text(
     *,
     label: str,
     page: int | None = None,
+    table: str | None = None,
+    cell: str | None = None,
+    section: str | None = None,
     max_chars: int = 3_500,
 ) -> list[ExtractedChunk]:
     cleaned = "\n".join(
@@ -140,6 +147,9 @@ def _split_text(
                     label=label + suffix,
                     text=piece,
                     page=page,
+                    table=table,
+                    cell=cell,
+                    section=section,
                 )
             )
             part += 1
@@ -158,17 +168,45 @@ def _table_text(rows: list[list[object]]) -> str:
 
 def _extract_docx(path: Path) -> list[ExtractedChunk]:
     document = Document(str(path))
-    paragraphs = [
+    chunks: list[ExtractedChunk] = []
+    paragraph_text = "\n".join(
         paragraph.text
         for paragraph in document.paragraphs
         if paragraph.text.strip()
-    ]
-    for table in document.tables:
-        for row in table.rows:
-            paragraphs.append(
-                " | ".join(cell.text for cell in row.cells)
+    )
+    chunks.extend(
+        _split_text(
+            paragraph_text,
+            label="документ DOCX · текст",
+            section="body",
+        )
+    )
+    for table_no, table in enumerate(document.tables, start=1):
+        rows = [
+            [cell.text for cell in row.cells]
+            for row in table.rows
+        ]
+        if not rows:
+            continue
+        width = max((len(row) for row in rows), default=1)
+        batch_size = 20
+        for start in range(0, len(rows), batch_size):
+            batch = rows[start : start + batch_size]
+            row_from = start + 1
+            row_to = start + len(batch)
+            chunks.extend(
+                _split_text(
+                    _table_text(batch),
+                    label=(
+                        f"таблица {table_no} · строки "
+                        f"{row_from}-{row_to}"
+                    ),
+                    table=str(table_no),
+                    cell=f"R{row_from}C1:R{row_to}C{width}",
+                    section="table",
+                )
             )
-    return _split_text("\n".join(paragraphs), label="документ DOCX")
+    return chunks
 
 
 def _extract_xlsx(path: Path) -> list[ExtractedChunk]:
@@ -180,16 +218,52 @@ def _extract_xlsx(path: Path) -> list[ExtractedChunk]:
     chunks: list[ExtractedChunk] = []
     try:
         for sheet in workbook.worksheets:
-            rows = [
-                list(row)
-                for row in sheet.iter_rows(values_only=True)
-            ]
-            chunks.extend(
-                _split_text(
-                    _table_text(rows),
-                    label=f"лист {sheet.title}",
+            batch: list[list[object]] = []
+            batch_start = 1
+            max_width = 1
+            for row_no, row in enumerate(
+                sheet.iter_rows(values_only=True),
+                start=1,
+            ):
+                values = list(row)
+                batch.append(values)
+                max_width = max(max_width, len(values))
+                if len(batch) < 25:
+                    continue
+                chunks.extend(
+                    _split_text(
+                        _table_text(batch),
+                        label=(
+                            f"лист {sheet.title} · строки "
+                            f"{batch_start}-{row_no}"
+                        ),
+                        table=sheet.title,
+                        cell=(
+                            f"A{batch_start}:"
+                            f"{get_column_letter(max_width)}{row_no}"
+                        ),
+                        section="worksheet",
+                    )
                 )
-            )
+                batch = []
+                batch_start = row_no + 1
+            if batch:
+                row_to = batch_start + len(batch) - 1
+                chunks.extend(
+                    _split_text(
+                        _table_text(batch),
+                        label=(
+                            f"лист {sheet.title} · строки "
+                            f"{batch_start}-{row_to}"
+                        ),
+                        table=sheet.title,
+                        cell=(
+                            f"A{batch_start}:"
+                            f"{get_column_letter(max_width)}{row_to}"
+                        ),
+                        section="worksheet",
+                    )
+                )
     finally:
         workbook.close()
     return chunks
