@@ -762,6 +762,35 @@ async function askPassportDocument(){
 function openSmartModal(title,subtitle=""){$("smartTitle").textContent=title;$("smartSubtitle").textContent=subtitle;$("smartBody").innerHTML="";$("smartStatus").textContent="";$("smartModal").hidden=false}
 function closeSmartModal(){$("smartModal").hidden=true}
 function smartLine(title,body,kind=""){const row=document.createElement("div");row.className="smart-line "+kind;const h=document.createElement("strong");h.textContent=title;const p=document.createElement("div");p.className="muted";p.style.whiteSpace="pre-wrap";p.textContent=body;row.append(h,p);return row}
+
+function memoFactBody(fact){
+  if(!fact)return"не указано";
+  const value=typeof fact.value==="string"?fact.value:JSON.stringify(fact.value,null,2);
+  return value+"\nИсточник: "+(fact.source||"не указано")+"\nПодтверждение: "+(fact.snippet||"не указано");
+}
+async function showMemoCard(documentId){
+  openSmartModal("📝 Основные факты служебной записки","Факты, доказательства, сортировка и проверки");
+  try{
+    const d=await api("/v1/cloud/intelligence/files/"+encodeURIComponent(documentId)+"/memo-card");
+    $("smartBody").append(smartLine("Размещение",d.folder_path+"\nГод: "+d.document_year+" · источник года: "+d.year_source+"\nТема: "+d.topic+"\nПричина: "+d.topic_reason,"smart-good"));
+    if(d.is_template)$("smartBody").append(smartLine("Шаблон","Документ распознан как шаблон и хранится отдельно от фактических служебных записок.","smart-good"));
+    const labels={
+      document_date:"Дата записки",document_number:"Номер",organization:"Организация",
+      department:"Подразделение",author:"Автор",addressee:"Адресат",subject:"Тема",
+      summary:"Краткая суть",requested_action:"Что просят сделать",
+      confirmed_result:"Подтверждённый результат",employees_and_roles:"Сотрудники и роли",
+      event_dates_and_periods:"Даты и периоды событий",vehicles:"Техника и номера",
+      counterparties:"Контрагенты",goods_works_services:"Товары, работы и услуги",
+      amounts_and_vat:"Суммы и НДС",related_documents:"Связанные документы"
+    };
+    Object.entries(labels).forEach(([key,label])=>{$("smartBody").append(smartLine(label,memoFactBody(d.facts&&d.facts[key])))});
+    if(d.duplicate_of)$("smartBody").append(smartLine("Полная копия","Совпадает по SHA-256 с "+d.duplicate_of,"smart-good"));
+    if(d.possible_version_of)$("smartBody").append(smartLine("Возможная версия","Похожа на документ "+d.possible_version_of+"; сохранена отдельно."));
+    if(d.discrepancies&&d.discrepancies.length)$("smartBody").append(smartLine("Расхождения",JSON.stringify(d.discrepancies,null,2),"smart-danger"));
+    $("smartBody").append(smartLine("Требует проверки",d.review&&d.review.length?d.review.join("\n• "):"Нет замечаний.",d.review&&d.review.length?"smart-danger":"smart-good"));
+    $("smartBody").append(smartLine("Память проекта","Статус: "+(d.memory_status||"—")+(d.memory_id?"\nMemory ID: "+d.memory_id:"")));
+  }catch(e){$("smartStatus").textContent=e.message}
+}
 async function showKnowledgeCard(){
   if(!activePassportId)return;openSmartModal("💡 Карточка знаний","Целостная картина документа");
   try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/card");const hero=document.createElement("div");hero.className="smart-hero";hero.innerHTML="<h4>"+escapeHtml(d.document.name)+"</h4><div class='muted'>"+escapeHtml(d.document.id)+" · v"+d.document.version+"</div>";$("smartBody").append(hero);$("smartBody").append(smartLine("ДНК",(d.dna.kind||"Тип не задан")+"\nПроисхождение: "+(d.dna.origin||"—")+"\nВажная дата: "+(d.dna.important_date||"—")));$("smartBody").append(smartLine("ИИ-договор","Чтение: "+(d.ai_contract.content_read?"да":"нет")+" · ответы: "+(d.ai_contract.answer?"да":"нет")+" · внешний ИИ: "+(d.ai_contract.external_ai?"да":"нет")+" · чистая комната: "+(d.ai_contract.clean_room?"да":"нет")));$("smartBody").append(smartLine("Структура","Версий: "+d.version_count+" · связей: "+d.relations.length+" · наблюдателей: "+d.watchers.length+" · печать: "+(d.latest_seal?"v"+d.latest_seal.version:"нет")));if(d.relation_suggestions.length)$("smartBody").append(smartLine("Предлагаемые связи",d.relation_suggestions.map(x=>x.name+" · совпадение "+x.score).join("\n")))}catch(e){$("smartStatus").textContent=e.message}
