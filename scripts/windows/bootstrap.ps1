@@ -160,6 +160,88 @@ function Find-Python {
     return $null
 }
 
+function Find-InstalledPython312 {
+    $paths = New-Object System.Collections.Generic.List[string]
+
+    if ($env:LOCALAPPDATA) {
+        $paths.Add((Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"))
+        $paths.Add((Join-Path $env:LOCALAPPDATA "Programs\Python\Python312-64\python.exe"))
+    }
+    if ($env:ProgramFiles) {
+        $paths.Add((Join-Path $env:ProgramFiles "Python312\python.exe"))
+        $paths.Add((Join-Path $env:ProgramFiles "Python 3.12\python.exe"))
+    }
+
+    foreach ($root in @(
+        "HKCU:\Software\Python\PythonCore",
+        "HKLM:\Software\Python\PythonCore",
+        "HKLM:\Software\WOW6432Node\Python\PythonCore"
+    )) {
+        try {
+            if (-not (Test-Path $root)) {
+                continue
+            }
+            foreach ($versionKey in Get-ChildItem $root -ErrorAction SilentlyContinue) {
+                if ($versionKey.PSChildName -notlike "3.12*") {
+                    continue
+                }
+                $installKey = Join-Path $versionKey.PSPath "InstallPath"
+                try {
+                    $installPath = (Get-Item -LiteralPath $installKey -ErrorAction Stop).GetValue("")
+                    if ($installPath) {
+                        $paths.Add((Join-Path ([string]$installPath) "python.exe"))
+                    }
+                } catch {
+                    # Ignore incomplete registry entries.
+                }
+            }
+        } catch {
+            # Registry discovery is best effort.
+        }
+    }
+
+    foreach ($path in $paths | Select-Object -Unique) {
+        $candidate = New-PythonCandidate -Executable $path -PrefixArguments @() -Label "installed Python 3.12"
+        if (Test-PythonCandidate $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+function Copy-PythonRuntimeToProject {
+    param($SourceCandidate)
+
+    $sourcePython = [System.IO.Path]::GetFullPath($SourceCandidate.Executable)
+    $sourceRoot = Split-Path -Parent $sourcePython
+    $targetRoot = [System.IO.Path]::GetFullPath($PythonHome)
+
+    if ($sourceRoot.TrimEnd("\") -ieq $targetRoot.TrimEnd("\")) {
+        return (New-PythonCandidate -Executable $LocalPython -PrefixArguments @() -Label "project-local Python $PythonVersion")
+    }
+
+    Write-LauncherLog "WARN" "Python setup reused another registered installation: $sourceRoot"
+    Write-LauncherLog "INFO" "Mirroring that verified Python runtime into the portable project."
+
+    if (Test-Path -LiteralPath $PythonHome) {
+        Remove-Item -LiteralPath $PythonHome -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Path $PythonHome -Force | Out-Null
+
+    Get-ChildItem -LiteralPath $sourceRoot -Force | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $PythonHome -Recurse -Force
+    }
+
+    $local = New-PythonCandidate -Executable $LocalPython -PrefixArguments @() -Label "mirrored project-local Python $PythonVersion"
+    if (-not (Test-PythonCandidate $local)) {
+        throw "Python was found after setup, but the portable runtime copy failed validation."
+    }
+
+    Write-LauncherLog "OK" "Portable Python runtime was recovered into: $PythonHome"
+    return $local
+}
+
 function Get-PythonInstallerArchitecture {
     $nativeArch = $env:PROCESSOR_ARCHITEW6432
     if ([string]::IsNullOrWhiteSpace($nativeArch)) {
@@ -273,9 +355,13 @@ function Install-LocalPython {
         "/quiet",
         "InstallAllUsers=0",
         "Include_launcher=0",
+        "Include_exe=1",
+        "Include_lib=1",
+        "Include_dev=1",
         "Include_pip=1",
         "Include_test=0",
         "Include_doc=0",
+        "Include_tcltk=0",
         "Shortcuts=0",
         "AssociateFiles=0",
         "PrependPath=0",
@@ -288,12 +374,20 @@ function Install-LocalPython {
     }
 
     $candidate = New-PythonCandidate -Executable $LocalPython -PrefixArguments @() -Label "downloaded local Python $PythonVersion"
-    if (-not (Test-PythonCandidate $candidate)) {
-        throw "Python installation completed but runtime validation failed."
+    if (Test-PythonCandidate $candidate) {
+        Write-LauncherLog "OK" "Local Python $PythonVersion is ready."
+        return $candidate
     }
 
-    Write-LauncherLog "OK" "Local Python $PythonVersion is ready."
-    return $candidate
+    Write-LauncherLog "WARN" "Installer returned success but the requested portable target was not usable."
+    Write-LauncherLog "INFO" "Searching Windows for the Python installation selected by the installer."
+
+    $installed = Find-InstalledPython312
+    if ($null -ne $installed) {
+        return (Copy-PythonRuntimeToProject $installed)
+    }
+
+    throw "Python installation completed but no usable Python 3.12 runtime could be found. Re-run Start.bat or inspect Windows Apps > Installed apps."
 }
 
 function New-ProjectVenv {
