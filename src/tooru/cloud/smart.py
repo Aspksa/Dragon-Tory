@@ -1433,8 +1433,11 @@ class SmartDrive:
                 ORDER BY dna.work_date, dna.employee_name
                 """
             ).fetchall()
+
         items: list[dict[str, Any]] = []
         totals: dict[str, float] = {}
+        conflict_documents: list[dict[str, Any]] = []
+
         for row in rows:
             item = dict(row)
             if str(item.get("kind") or "").strip().casefold() != (
@@ -1445,40 +1448,62 @@ class SmartDrive:
                 "работа в выходной день"
             ):
                 continue
-            work_date = str(item.get("work_date") or "")
-            if year is not None and not work_date.startswith(f"{year:04d}-"):
-                continue
-            if month is not None:
-                prefix = (
-                    f"{year:04d}-{month:02d}-"
-                    if year is not None
-                    else f"-{month:02d}-"
+
+            if bool(item.get("work_date_conflict")):
+                conflict_documents.append(
+                    {
+                        "document_id": item["document_id"],
+                        "document_name": item["document_name"],
+                        "employee_name": item.get("employee_name") or "",
+                        "reason": "Конфликт дат между именем файла и телом документа.",
+                    }
                 )
-                if year is not None and not work_date.startswith(prefix):
+                continue
+
+            try:
+                work_dates = json.loads(
+                    item.get("work_dates_json") or "[]"
+                )
+            except (TypeError, json.JSONDecodeError):
+                work_dates = []
+            if not work_dates and item.get("work_date"):
+                work_dates = [item["work_date"]]
+
+            employee = (
+                str(item.get("employee_name") or "").strip()
+                or "Сотрудник не указан"
+            )
+            hours = float(item.get("work_hours") or 0.0)
+
+            for raw_date in work_dates:
+                work_date = str(raw_date or "")
+                if year is not None and not work_date.startswith(
+                    f"{year:04d}-"
+                ):
                     continue
-                if year is None and len(work_date) >= 7:
+                if month is not None:
+                    if len(work_date) < 7:
+                        continue
                     try:
                         if int(work_date[5:7]) != month:
                             continue
                     except ValueError:
                         continue
-            hours = float(item.get("work_hours") or 0.0)
-            employee = (
-                str(item.get("employee_name") or "").strip()
-                or "Сотрудник не указан"
-            )
-            totals[employee] = totals.get(employee, 0.0) + hours
-            items.append(
-                {
-                    "document_id": item["document_id"],
-                    "document_name": item["document_name"],
-                    "employee_name": employee,
-                    "department": item.get("department") or "",
-                    "work_date": item.get("work_date"),
-                    "work_hours": hours,
-                    "work_reason": item.get("work_reason") or "",
-                }
-            )
+
+                totals[employee] = totals.get(employee, 0.0) + hours
+                items.append(
+                    {
+                        "document_id": item["document_id"],
+                        "document_name": item["document_name"],
+                        "employee_name": employee,
+                        "department": item.get("department") or "",
+                        "work_date": work_date,
+                        "work_hours": hours,
+                        "work_reason": item.get("work_reason") or "",
+                        "work_date_source": item.get("work_date_source") or "",
+                    }
+                )
+
         return {
             "items": items,
             "count": len(items),
@@ -1487,6 +1512,7 @@ class SmartDrive:
                 {"employee_name": name, "hours": hours}
                 for name, hours in sorted(totals.items())
             ],
+            "date_conflicts": conflict_documents,
         }
 
     @staticmethod
@@ -2098,33 +2124,50 @@ class SmartDrive:
             departments = entities.get("departments") or []
             work_dates = entities.get("work_dates") or []
             work_hours = entities.get("work_hours") or []
-            work_signals = bool(
-                employees or departments or work_dates or work_hours
+            weekend_detected = bool(
+                entities.get("weekend_work_detected")
             )
-            if (
-                work_signals
-                and not str(dna.get("document_subtype") or "").strip()
-            ):
-                payload["document_subtype"] = "Работа в выходной день"
-                fields.append("document_subtype")
-            if (
-                not str(dna.get("employee_name") or "").strip()
-                and len(employees) == 1
-            ):
-                payload["employee_name"] = str(employees[0])
-                fields.append("employee_name")
-            if (
-                not str(dna.get("department") or "").strip()
-                and len(departments) == 1
-            ):
-                payload["department"] = str(departments[0])
-                fields.append("department")
-            if not dna.get("work_date") and len(work_dates) == 1:
-                payload["work_date"] = str(work_dates[0])
-                fields.append("work_date")
-            if dna.get("work_hours") is None and len(work_hours) == 1:
-                payload["work_hours"] = float(work_hours[0])
-                fields.append("work_hours")
+            date_conflict = bool(entities.get("work_date_conflict"))
+
+            if weekend_detected:
+                if not str(dna.get("document_subtype") or "").strip():
+                    payload["document_subtype"] = "Работа в выходной день"
+                    fields.append("document_subtype")
+
+                payload["work_date_conflict"] = date_conflict
+                payload["work_date_source"] = str(
+                    entities.get("work_date_source") or ""
+                )
+                fields.extend(["work_date_conflict", "work_date_source"])
+
+                if (
+                    not date_conflict
+                    and not dna.get("work_dates")
+                    and work_dates
+                ):
+                    payload["work_dates"] = [
+                        str(value) for value in work_dates
+                    ]
+                    fields.append("work_dates")
+                    if not dna.get("work_date") and len(work_dates) == 1:
+                        payload["work_date"] = str(work_dates[0])
+                        fields.append("work_date")
+
+                if (
+                    not str(dna.get("employee_name") or "").strip()
+                    and len(employees) == 1
+                ):
+                    payload["employee_name"] = str(employees[0])
+                    fields.append("employee_name")
+                if (
+                    not str(dna.get("department") or "").strip()
+                    and len(departments) == 1
+                ):
+                    payload["department"] = str(departments[0])
+                    fields.append("department")
+                if dna.get("work_hours") is None and len(work_hours) == 1:
+                    payload["work_hours"] = float(work_hours[0])
+                    fields.append("work_hours")
 
         if payload:
             self.update_dna(
