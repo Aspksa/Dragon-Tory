@@ -21,12 +21,12 @@ class ModuleLearningService:
     def __init__(
         self,
         *,
-        memory,
+        memory_intake,
         smart,
         intelligence,
         ai_router,
     ) -> None:
-        self.memory = memory
+        self.memory_intake = memory_intake
         self.smart = smart
         self.intelligence = intelligence
         self.ai_router = ai_router
@@ -113,7 +113,7 @@ class ModuleLearningService:
                 ):
                     knowledge = local_summary
 
-            memory = self.memory.add(
+            intake = self.memory_intake.ingest(
                 MemoryCreate(
                     owner_id="local-user",
                     scope=MemoryScope.PROJECT,
@@ -138,8 +138,23 @@ class ModuleLearningService:
                         "document",
                         str(dna.get("kind") or item["effective_kind"]),
                     ],
-                )
+                ),
+                reason=(
+                    "Document module learning requested durable project memory."
+                ),
             )
+            if intake.memory is None:
+                skipped.append(
+                    {
+                        "id": document_id,
+                        "reason": (
+                            "Memory Guardian: "
+                            + intake.decision.outcome.value
+                        ),
+                    }
+                )
+                continue
+            memory = intake.memory
             memory_ids.append(memory.id)
             self.smart.record_provenance(
                 document_id,
@@ -281,6 +296,7 @@ class ModuleLearningService:
 
     def _study_garage(self) -> dict[str, Any]:
         memory_ids: list[str] = []
+        skipped: list[dict[str, str]] = []
         items = self.smart.list_vehicles(limit=1_000)
         for item in items:
             if not item.get("active", True):
@@ -297,7 +313,7 @@ class ModuleLearningService:
                     f"Примечание: {item.get('notes') or '—'}.",
                 ]
             )
-            memory = self.memory.add(
+            intake = self.memory_intake.ingest(
                 MemoryCreate(
                     owner_id="local-user",
                     scope=MemoryScope.PROJECT,
@@ -310,22 +326,35 @@ class ModuleLearningService:
                     confidence=1.0,
                     importance=0.72,
                     tags=["module-knowledge", "garage", "vehicle"],
-                )
+                ),
+                reason="Garage directory sync requested durable project memory.",
             )
-            memory_ids.append(memory.id)
+            if intake.memory is None:
+                skipped.append(
+                    {
+                        "id": item["id"],
+                        "reason": (
+                            "Memory Guardian: "
+                            + intake.decision.outcome.value
+                        ),
+                    }
+                )
+                continue
+            memory_ids.append(intake.memory.id)
         return {
             "module_id": "garage",
             "studied": len(memory_ids),
-            "skipped": len(items) - len(memory_ids),
+            "skipped": len(skipped),
             "external_ai_summaries": 0,
             "memory_ids": memory_ids,
-            "skipped_items": [],
+            "skipped_items": skipped,
             "scope": "project",
             "project_id": PROJECT_ID,
         }
 
     def _study_timesheet(self) -> dict[str, Any]:
         memory_ids: list[str] = []
+        skipped: list[dict[str, str]] = []
         timesheet = self.smart.weekend_timesheet()
         for item in timesheet["items"]:
             content = "\n".join(
@@ -340,7 +369,7 @@ class ModuleLearningService:
                     f"Основание: {item.get('work_reason') or '—'}.",
                 ]
             )
-            memory = self.memory.add(
+            intake = self.memory_intake.ingest(
                 MemoryCreate(
                     owner_id="local-user",
                     scope=MemoryScope.PROJECT,
@@ -357,16 +386,28 @@ class ModuleLearningService:
                         "timesheet",
                         "weekend-work",
                     ],
-                )
+                ),
+                reason="Timesheet sync requested durable project memory.",
             )
-            memory_ids.append(memory.id)
+            if intake.memory is None:
+                skipped.append(
+                    {
+                        "id": item["document_id"],
+                        "reason": (
+                            "Memory Guardian: "
+                            + intake.decision.outcome.value
+                        ),
+                    }
+                )
+                continue
+            memory_ids.append(intake.memory.id)
         return {
             "module_id": "timesheet",
             "studied": len(memory_ids),
-            "skipped": 0,
+            "skipped": len(skipped),
             "external_ai_summaries": 0,
             "memory_ids": memory_ids,
-            "skipped_items": [],
+            "skipped_items": skipped,
             "scope": "project",
             "project_id": PROJECT_ID,
         }
