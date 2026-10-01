@@ -92,9 +92,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
       - name: Validate portable launcher
         shell: cmd
         run: Start.bat --check
+
+      - name: Validate Windows DPAPI seal-key protection
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = Join-Path $env:GITHUB_WORKSPACE "src"
+          @'
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+
+          from tooru.cloud.key_protection import (
+              load_private_key,
+              private_key_is_os_protected,
+              store_private_key,
+          )
+
+          raw = bytes(range(32))
+          with TemporaryDirectory() as directory:
+              path = Path(directory) / "seal.key"
+              store_private_key(path, raw)
+              assert private_key_is_os_protected(path)
+              assert path.read_bytes() != raw
+              assert load_private_key(path) == raw
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows DPAPI seal-key round trip failed."
+          }
 
       - name: Validate Russian Windows path and OEM code page
         shell: pwsh
