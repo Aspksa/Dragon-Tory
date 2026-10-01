@@ -211,9 +211,14 @@ function uploadCloudFileWithProgress(file,folderId,onProgress){
   });
 }
 async function assignUploadedDocumentModule(document,moduleKind){
-  if(!document||!document.id||!moduleKind)return;
+  if(!document||!document.id||!moduleKind)return null;
   await api("/v1/cloud/smart/files/"+encodeURIComponent(document.id)+"/dna",{method:"PATCH",body:JSON.stringify({kind:moduleKind,origin:"Загружен пользователем через модуль «"+moduleKind+"»"})});
   await api("/v1/cloud/files/"+encodeURIComponent(document.id),{method:"PATCH",body:JSON.stringify({tags:[moduleKind]})});
+  if(moduleKind==="служебная записка"){
+    await api("/v1/cloud/files/"+encodeURIComponent(document.id)+"/passport",{method:"PATCH",body:JSON.stringify({ai_access:"memory",confidentiality:"personal",scope:"project",project_id:"dragon-tory"})});
+    return api("/v1/cloud/intelligence/files/"+encodeURIComponent(document.id)+"/memo-process",{method:"POST"});
+  }
+  return null;
 }
 async function uploadCloudFiles(fileList,moduleKind=null){
   const files=Array.from(fileList||[]);if(!files.length)return;
@@ -226,7 +231,12 @@ async function uploadCloudFiles(fileList,moduleKind=null){
     try{
       const d=await uploadCloudFileWithProgress(file,cloudFolderParam(),p=>{ui.fill.style.width=p+"%";ui.state.textContent=p+"%"});
       ui.fill.style.width="100%";ui.state.textContent="Готово";
-      if(moduleKind)await assignUploadedDocumentModule(d,moduleKind);
+      const processed=moduleKind?await assignUploadedDocumentModule(d,moduleKind):null;
+      if(processed&&processed.card){
+        const card=processed.card;
+        ui.state.textContent=(card.memo_is_template||card.is_template)?"Шаблон":("Изучено · "+card.document_year+" · "+card.topic);
+        statusEl.textContent="Тоору изучил «"+file.name+"» → "+card.folder_path+(card.review&&card.review.length?" · требуется проверка: "+card.review.length:"");
+      }
       completed++;
     }catch(e){ui.state.textContent="Ошибка";ui.row.title=e.message;statusEl.textContent="Ошибка загрузки "+file.name+": "+e.message}
   }
@@ -242,7 +252,7 @@ function openCloudDocument(item){
   if(!opened){openPassport(item.id);$("passportStatus").textContent="Браузер заблокировал новую вкладку. Открыл Центр документа."}
 }
 function moduleLead(moduleId){
-  return{contracts:"Договоры по контрагентам: реквизиты, номер, дата, сумма, срок и условия. Один контрагент может иметь много договоров.",invoice_offers:"Счёт-оферта — самостоятельный мини-договор 2-в-1: контрагент, реквизиты, сумма и короткие договорные условия.",memos:"Служебные записки, включая «Работа в выходной день» с данными для табеля.",orders:"Тоору изучает разрешённые приказы предприятия как образцы структуры и формулировок, чтобы по запросу готовить новый проект приказа.",directives:"Тоору изучает разрешённые распоряжения предприятия как образцы структуры и формулировок, чтобы по запросу готовить новый проект распоряжения."}[moduleId]||"Специализированный рабочий модуль документов Тори.";
+  return{contracts:"Договоры по контрагентам: реквизиты, номер, дата, сумма, срок и условия. Один контрагент может иметь много договоров.",invoice_offers:"Счёт-оферта — самостоятельный мини-договор 2-в-1: контрагент, реквизиты, сумма и короткие договорные условия.",memos:"Тоору читает служебную записку, извлекает подтверждённые факты, отделяет просьбу от результата, сортирует по году и основной теме, связывает копии/версии и сохраняет знания в памяти проекта.",orders:"Тоору изучает разрешённые приказы предприятия как образцы структуры и формулировок, чтобы по запросу готовить новый проект приказа.",directives:"Тоору изучает разрешённые распоряжения предприятия как образцы структуры и формулировок, чтобы по запросу готовить новый проект распоряжения."}[moduleId]||"Специализированный рабочий модуль документов Тори.";
 }
 function formatBusinessAmount(item){
   if(item.amount_value===null||item.amount_value===undefined||item.amount_value==="")return"";
@@ -261,6 +271,12 @@ function createModuleDocumentRow(item){
   if(item.document_subtype){const x=document.createElement("span");x.className="cloud-badge";x.textContent=item.document_subtype;business.append(x)}
   if(item.employee_name){const x=document.createElement("span");x.className="cloud-badge";x.textContent=item.employee_name;business.append(x)}
   if(item.work_date){const x=document.createElement("span");x.className="cloud-badge lock";x.textContent="Работа: "+item.work_date+(item.work_hours?" · "+item.work_hours+" ч":"");business.append(x)}
+  if(item.memo_year){const x=document.createElement("span");x.className="cloud-badge";x.textContent="Год: "+item.memo_year;business.append(x)}
+  if(item.memo_topic){const x=document.createElement("span");x.className="cloud-badge ai";x.textContent=item.memo_topic;business.append(x)}
+  if(item.memo_is_template){const x=document.createElement("span");x.className="cloud-badge";x.textContent="Шаблон";business.append(x)}
+  if(item.memo_duplicate_of){const x=document.createElement("span");x.className="cloud-badge";x.textContent="Копия";business.append(x)}
+  if(item.memo_possible_version_of){const x=document.createElement("span");x.className="cloud-badge lock";x.textContent="Возможная версия";business.append(x)}
+  if(item.memo_review&&item.memo_review.length){const x=document.createElement("span");x.className="cloud-badge lock";x.textContent="Проверить: "+item.memo_review.length;business.append(x)}
   const meta=document.createElement("div");meta.className="module-document-meta";
   const version=document.createElement("span");version.className="cloud-badge";version.textContent="v"+item.version;meta.append(version);
   if(item.deadlines&&item.deadlines.length){const deadline=document.createElement("span");deadline.className="cloud-badge lock";deadline.textContent="📅 "+item.deadlines[0].date;meta.append(deadline)}
@@ -268,7 +284,11 @@ function createModuleDocumentRow(item){
   const actions=document.createElement("div");actions.className="cloud-actions";
   const open=document.createElement("button");open.className="secondary";open.textContent="Открыть";open.onclick=e=>{e.stopPropagation();openCloudDocument(item)};
   const center=document.createElement("button");center.className="primary";center.textContent="Подробнее";center.onclick=e=>{e.stopPropagation();openPassport(item.id)};
-  actions.append(open,center);row.append(left,actions);return row;
+  actions.append(open);
+  if(item.module_id==="memos"){
+    const facts=document.createElement("button");facts.className="secondary";facts.textContent="Основные факты";facts.onclick=e=>{e.stopPropagation();showMemoCard(item.id)};actions.append(facts);
+  }
+  actions.append(center);row.append(left,actions);return row;
 }
 function renderDocumentModuleItems(items){
   const box=$("documentModuleList");box.innerHTML="";
@@ -624,7 +644,7 @@ async function loadDocumentModule(moduleId){
   $("documentModuleCounterparty").hidden=!["contracts","invoice_offers"].includes(activeDocumentModule);
   $("documentModuleTimesheet").hidden=activeDocumentModule!=="memos";
   $("documentModuleDraft").hidden=!["orders","directives"].includes(activeDocumentModule);
-  $("documentModuleStudy").hidden=!["contracts","invoice_offers","garage","timesheet"].includes(activeDocumentModule);
+  $("documentModuleStudy").hidden=!["contracts","invoice_offers","memos","garage","timesheet"].includes(activeDocumentModule);
   $("documentModuleAddRecord").hidden=!["employees","garage","timesheet"].includes(activeDocumentModule);
   $("documentModuleAddRecord").textContent=activeDocumentModule==="employees"
     ?"＋ Сотрудник"
@@ -638,7 +658,7 @@ async function loadDocumentModule(moduleId){
     const d=await api("/v1/cloud/intelligence/modules/"+encodeURIComponent(activeDocumentModule));
     $("documentModuleIcon").textContent=d.icon;$("documentModuleTitle").textContent=d.title;$("documentModuleLead").textContent=moduleLead(activeDocumentModule);
     $("documentModuleCount").textContent=d.count;$("documentModuleAnalyzed").textContent=d.analyzed;$("documentModuleDeadlines").textContent=d.with_deadlines;$("documentModuleNeeds").textContent=d.needs_analysis;
-    $("documentModuleExtra").textContent=activeDocumentModule==="contracts"?"Контрагентов: "+((d.counterparties||[]).length)+" · у каждого контрагента может быть несколько договоров.":(activeDocumentModule==="invoice_offers"?"Счёт-оферта хранится как самостоятельный мини-договор с реквизитами контрагента.":(activeDocumentModule==="memos"?"Подтип «Работа в выходной день» попадает в табель автоматически после заполнения даты и часов.":(["orders","directives"].includes(activeDocumentModule)?"ИИ использует только образцы с явным разрешением content_read + answer + external_ai.":"")));
+    $("documentModuleExtra").textContent=activeDocumentModule==="contracts"?"Контрагентов: "+((d.counterparties||[]).length)+" · у каждого контрагента может быть несколько договоров.":(activeDocumentModule==="invoice_offers"?"Счёт-оферта хранится как самостоятельный мини-договор с реквизитами контрагента.":(activeDocumentModule==="memos"?"Автосортировка: Проект / Документы / Год / Служебные записки / Тема. Шаблоны хранятся отдельно. «Работа в выходной день» дополнительно попадает в табель.":(["orders","directives"].includes(activeDocumentModule)?"ИИ использует только образцы с явным разрешением content_read + answer + external_ai.":"")));
     const focus=$("documentModuleFocus");focus.innerHTML="";d.ai_focus.slice(0,4).forEach(x=>{const s=document.createElement("span");s.textContent=x;focus.append(s)});
     renderDocumentModuleItems(d.items||[]);$("documentModuleStatus").textContent="";
   }catch(e){$("documentModuleStatus").textContent="Ошибка модуля: "+e.message}
