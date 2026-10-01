@@ -1320,6 +1320,10 @@ function renderHomeTasks(){
   const box=$("homeTaskList");if(!box||!homeLastDiag)return;box.innerHTML="";const d=homeLastDiag;const now=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
   box.append(homeTask("Memory Guardian",Number(d.guardian.queued_pending||0)?"Ожидают проверки: "+d.guardian.queued_pending:"Очередь обработана",now,Number(d.guardian.queued_dead||0)>0));
   box.append(homeTask("Memory Automation",d.memory_automation.running?"Идёт обслуживание":"Автоматика активна",now,!d.memory_automation.started));
+  if(d.garage&&Number(d.garage.insurance_alerts||0)>0){
+    const expired=Number(d.garage.insurance_expired||0),upcoming=Number(d.garage.insurance_upcoming||0);
+    box.append(homeTask("Гараж · страховка",(expired?"Просрочено: "+expired+" · ":"")+(upcoming?"Заканчивается ≤15 дней: "+upcoming:""),now,expired>0));
+  }
   if(homeLastUpdate)box.append(homeTask("Центр обновления",(homeLastUpdate.message||homeLastUpdate.phase||"Готово")+" · "+(homeLastUpdate.local_version||""),homeLastUpdate.running?"live":"state",["failed","error"].includes(homeLastUpdate.phase)));
   if(homeRecentChats.length){const chat=homeRecentChats[0];box.append(homeTask("Последний чат",chat.title||"Новый чат",(chat.message_count||0)+" сообщ.",false))}
   else box.append(homeTask("Чат","История пока пуста","—",false));
