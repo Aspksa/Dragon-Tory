@@ -983,15 +983,17 @@ class SQLiteMemoryStore:
         for row in rows:
             source_id = str(row["source_id"])
             target_id = str(row["target_id"])
-            neighbor_id = (
-                target_id if source_id in seeds else source_id
-            )
-            if neighbor_id in seeds:
-                continue
-            weights[neighbor_id] = max(
-                weights.get(neighbor_id, 0.0),
-                float(row["weight"]),
-            )
+            weight = float(row["weight"])
+            if source_id in seeds and target_id != source_id:
+                weights[target_id] = max(
+                    weights.get(target_id, 0.0),
+                    weight,
+                )
+            if target_id in seeds and source_id != target_id:
+                weights[source_id] = max(
+                    weights.get(source_id, 0.0),
+                    weight,
+                )
         if not weights:
             return []
 
