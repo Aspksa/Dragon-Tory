@@ -148,6 +148,7 @@ async def lifespan(app: FastAPI):
         local_version=settings.version,
         repository=settings.update_repository,
         branch=settings.update_branch,
+        github_token=settings.update_github_token,
     )
     app.state.memory = memory
     app.state.chat_store = chat_store
