@@ -30,6 +30,7 @@ from tooru.cloud.smart import SmartDrive
 from tooru.cloud.store import CloudStore
 from tooru.cloud.vault import ToryVault
 from tooru.core.config import get_settings
+from tooru.internet.research import WebResearchService
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import GuardianConfig, MemoryGuardian
@@ -151,6 +152,12 @@ async def lifespan(app: FastAPI):
         branch=settings.update_branch,
         github_token=settings.update_github_token,
     )
+    app.state.internet = WebResearchService(
+        enabled=settings.internet_enabled,
+        timeout_seconds=settings.internet_timeout_seconds,
+        max_results=settings.internet_max_results,
+        fetch_pages=settings.internet_fetch_pages,
+    )
     app.state.memory = memory
     app.state.chat_store = chat_store
     app.state.cloud_store = cloud_store
@@ -184,6 +191,7 @@ async def lifespan(app: FastAPI):
         router=ai_router,
         guardian=guardian,
         cloud_store=cloud_store,
+        internet=app.state.internet,
     )
 
     if settings.memory_automation_enabled:
