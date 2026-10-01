@@ -149,7 +149,7 @@ async def _refresh_chat_working_memory(
     chat = store.get(chat_id)
     total = int(chat.get("message_count") or 0)
     covered = int(chat.get("summary_message_count") or 0)
-    target = max(0, total - 40)
+    target = max(0, total - 20)
     pending = target - covered
     if pending < 20:
         return
