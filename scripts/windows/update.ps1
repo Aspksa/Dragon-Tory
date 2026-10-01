@@ -58,6 +58,28 @@ function Write-UpdateLog {
     Add-Content -LiteralPath $LogFile -Value $line -Encoding UTF8
 }
 
+function Move-AtomicFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TempPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        try {
+            Move-Item -LiteralPath $TempPath -Destination $DestinationPath -Force
+            return
+        } catch {
+            if ($attempt -ge 9) {
+                throw
+            }
+            Start-Sleep -Milliseconds (50 * ($attempt + 1))
+        }
+    }
+}
+
 function Read-State {
     try {
         if (Test-Path -LiteralPath $StateFile -PathType Leaf) {
@@ -102,11 +124,17 @@ function Set-State {
         $state[$key] = $Extra[$key]
     }
 
-    $temp = "$StateFile.tmp"
-    $state |
-        ConvertTo-Json -Depth 12 |
-        Set-Content -LiteralPath $temp -Encoding UTF8
-    Move-Item -LiteralPath $temp -Destination $StateFile -Force
+    $temp = "{0}.{1}.{2}.tmp" -f (
+        $StateFile
+    ), $PID, ([Guid]::NewGuid().ToString("N"))
+    try {
+        $state |
+            ConvertTo-Json -Depth 12 |
+            Set-Content -LiteralPath $temp -Encoding UTF8
+        Move-AtomicFile -TempPath $temp -DestinationPath $StateFile
+    } finally {
+        Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Add-History {
@@ -159,11 +187,17 @@ function Add-History {
         $items = @($items | Select-Object -Last 100)
     }
 
-    $temp = "$HistoryFile.tmp"
-    $items |
-        ConvertTo-Json -Depth 12 |
-        Set-Content -LiteralPath $temp -Encoding UTF8
-    Move-Item -LiteralPath $temp -Destination $HistoryFile -Force
+    $temp = "{0}.{1}.{2}.tmp" -f (
+        $HistoryFile
+    ), $PID, ([Guid]::NewGuid().ToString("N"))
+    try {
+        $items |
+            ConvertTo-Json -Depth 12 |
+            Set-Content -LiteralPath $temp -Encoding UTF8
+        Move-AtomicFile -TempPath $temp -DestinationPath $HistoryFile
+    } finally {
+        Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Invoke-GitHubJson {
@@ -370,7 +404,9 @@ try {
     Remove-Item -LiteralPath $ExtractDir -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $ExtractDir -Force | Out-Null
 
-    Set-State -Phase "checking" -Message "Проверка последнего коммита GitHub…" -Progress 5
+    Set-State -Phase "checking" -Message "Проверка последнего коммита GitHub…" -Progress 5 -Extra @{
+        updater_pid = $PID
+    }
     Write-UpdateLog "INFO" "Проверяется последний коммит GitHub."
 
     $repoApi = "https://api.github.com/repos/$Repository"

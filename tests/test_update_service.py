@@ -83,3 +83,49 @@ def test_history_returns_latest_first(tmp_path: Path) -> None:
         "новое",
         "старое",
     ]
+
+
+def test_atomic_state_writes_use_unique_temp_files(tmp_path: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    service = make_service(tmp_path)
+
+    def write_state(index: int) -> None:
+        service._write_state(
+            {
+                "phase": "checking",
+                "writer": index,
+                "local_version": APP_VERSION,
+            }
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(write_state, range(40)))
+
+    state = json.loads(
+        service.state_path.read_text(encoding="utf-8")
+    )
+    assert 0 <= state["writer"] < 40
+    assert not list(
+        service.state_path.parent.glob("state.json.*.tmp")
+    )
+
+
+def test_atomic_history_write_leaves_no_shared_temp(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    service._write_state(
+        {
+            "phase": "failed",
+            "local_version": APP_VERSION,
+            "remote_version": "00.00.99",
+            "remote_sha": "d" * 40,
+            "update_started_at": "2026-10-01T00:00:00+00:00",
+            "error": "test",
+        }
+    )
+    service._append_history_from_state(service._read_state(), success=False)
+
+    assert service.history()
+    assert not list(
+        service.history_path.parent.glob("history.json.*.tmp")
+    )

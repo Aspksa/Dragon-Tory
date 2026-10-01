@@ -313,15 +313,6 @@ class UpdateService:
 
         updater_pid = int(match.group(1))
         time.sleep(0.5)
-        current_after_launch = self._read_state()
-        if current_after_launch.get("phase") not in self.RUNNING_PHASES:
-            current_after_launch = state
-
-        current_after_launch["updater_pid"] = updater_pid
-        current_after_launch["message"] = current_after_launch.get(
-            "message"
-        ) or "Процесс обновления запущен."
-        self._write_state(current_after_launch)
 
         if not psutil.pid_exists(updater_pid):
             latest = self._read_state()
@@ -468,14 +459,36 @@ class UpdateService:
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return {}
 
-    def _write_state(self, state: dict[str, Any]) -> None:
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        temp = self.state_path.with_suffix(".tmp")
+    @staticmethod
+    def _write_json_atomic(path: Path, payload: Any) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp = path.with_name(
+            f"{path.name}.{os.getpid()}.{time.time_ns()}.tmp"
+        )
         temp.write_text(
-            json.dumps(state, ensure_ascii=False, indent=2),
+            json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        os.replace(temp, self.state_path)
+
+        last_error: PermissionError | None = None
+        try:
+            for attempt in range(10):
+                try:
+                    os.replace(temp, path)
+                    return
+                except PermissionError as exc:
+                    last_error = exc
+                    time.sleep(0.05 * (attempt + 1))
+            if last_error is not None:
+                raise last_error
+        finally:
+            try:
+                temp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _write_state(self, state: dict[str, Any]) -> None:
+        self._write_json_atomic(self.state_path, state)
 
     def _append_history_from_state(
         self,
@@ -517,13 +530,10 @@ class UpdateService:
             "removed_files": state.get("removed_files", []),
         }
         history.append(entry)
-        self.history_path.parent.mkdir(parents=True, exist_ok=True)
-        temp = self.history_path.with_suffix(".tmp")
-        temp.write_text(
-            json.dumps(history[-100:], ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        self._write_json_atomic(
+            self.history_path,
+            history[-100:],
         )
-        os.replace(temp, self.history_path)
 
     def _write_launch_failure(
         self,
