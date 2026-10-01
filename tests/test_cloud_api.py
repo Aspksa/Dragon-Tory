@@ -178,7 +178,7 @@ def test_text_preview_index_and_content_search() -> None:
         document = _upload(
             client,
             "knowledge.txt",
-            "Subaru Forester service interval is 12000 km.".encode(),
+            b"Subaru Forester service interval is 12000 km.",
         )
         document_id = document["id"]
 
