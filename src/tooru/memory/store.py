@@ -2,6 +2,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 from uuid import uuid4
 
 from tooru.memory.models import (
@@ -40,7 +41,7 @@ class MemoryConflictError(RuntimeError):
 
 
 class SQLiteMemoryStore:
-    REQUIRED_TABLES = {
+    REQUIRED_TABLES: ClassVar[set[str]] = {
         "memory_items",
         "memory_vectors",
         "memory_links",
