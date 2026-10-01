@@ -428,10 +428,7 @@ try {
 
     Build-FileManifest $sourceRoot
 
-    $manifestMessage = (
-        "Сверка завершена: файлов {0}, изменено {1}, новых {2}, удалено {3}."
-        -f $DownloadedFiles.Count, $ChangedFiles.Count, $NewFiles.Count, $RemovedFiles.Count
-    )
+    $manifestMessage = "Сверка завершена: файлов {0}, изменено {1}, новых {2}, удалено {3}." -f $DownloadedFiles.Count, $ChangedFiles.Count, $NewFiles.Count, $RemovedFiles.Count
     Set-State -Phase "extracting" -Message $manifestMessage -Progress 40 -Extra @{
         remote_version = $remoteVersion
         downloaded_files = @($DownloadedFiles)
@@ -479,10 +476,7 @@ try {
     $health = Wait-ForHealth 240
 
     $installedVersion = [string]$health.version
-    $description = (
-        "Обновление с {0} до {1} успешно установлено."
-        -f $fromVersion, $installedVersion
-    )
+    $description = "Обновление с {0} до {1} успешно установлено." -f $fromVersion, $installedVersion
 
     Set-State -Phase "success" -Message $description -Progress 100 -Extra @{
         installed_sha = $remoteSha
@@ -522,10 +516,7 @@ try {
             Start-DragonTory
             Wait-ForHealth 240 | Out-Null
 
-            $description = (
-                "Обновление с {0} до {1} не установлено. "
-                + "Предыдущая версия восстановлена автоматически."
-            ) -f $fromVersion, $targetVersion
+            $description = "Обновление с {0} до {1} не установлено. Предыдущая версия восстановлена автоматически." -f $fromVersion, $targetVersion
 
             Set-State -Phase "failed" -Message $description -Progress 0 -ErrorText $errorText -Extra @{
                 backup_path = $backupPath
