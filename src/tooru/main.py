@@ -33,6 +33,7 @@ from tooru.cloud.vault import ToryVault
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
+from tooru.memory.grey_matter import GreyMatterService
 from tooru.memory.guardian import GuardianConfig, MemoryGuardian
 from tooru.memory.guardian_automation import MemoryGuardianAutomation
 from tooru.memory.intake import MemoryIntakeGateway
@@ -125,6 +126,10 @@ async def lifespan(app: FastAPI):
     )
 
     memory_intake = MemoryIntakeGateway(guardian)
+    grey_matter = GreyMatterService(
+        memory=memory,
+        intake=memory_intake,
+    )
     memo_organizer = ServiceMemoOrganizer(
         cloud_store=cloud_store,
         smart=cloud_smart,
@@ -147,6 +152,7 @@ async def lifespan(app: FastAPI):
         archive_max_access_count=settings.memory_archive_max_access_count,
         auto_consolidate_threshold=settings.memory_auto_consolidate_threshold,
         consolidate_cooldown_hours=settings.memory_consolidate_cooldown_hours,
+        grey_matter=grey_matter,
     )
 
     app.state.settings = settings
@@ -178,6 +184,7 @@ async def lifespan(app: FastAPI):
     app.state.memory_intelligence = intelligence
     app.state.memory_guardian = guardian
     app.state.memory_intake = memory_intake
+    app.state.grey_matter = grey_matter
     app.state.memory_guardian_automation = guardian_automation
     app.state.memory_automation = automation
     app.state.chat_document_assistant = ChatDocumentAssistant(
