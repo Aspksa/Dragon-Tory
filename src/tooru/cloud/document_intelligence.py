@@ -948,6 +948,13 @@ class DocumentIntelligence:
                         "extraction_method": method,
                         "ocr_used": bool(ocr_used),
                         "version": item["version"],
+                        "chunk_count": int(
+                            v2["structure"].get("chunk_count") or 0
+                        ),
+                        "warning_count": int(
+                            v2["checks"].get("warning_count") or 0
+                        ),
+                        "evidence_count": len(v2["evidence"]),
                     },
                 )
             return result
