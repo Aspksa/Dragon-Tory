@@ -6,7 +6,7 @@ import re
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from tooru.memory.models import MemoryCreate, MemoryKind, MemoryScope
 
@@ -712,11 +712,14 @@ class ServiceMemoOrganizer:
                 "В записке много разных дат; дата записки и даты событий сохранены отдельно."
             )
 
-        if facts["requested_action"]["value"] != "не указано":
-            if facts["confirmed_result"]["value"] == "не указано":
-                review.append(
-                    "Найдена просьба/предложение, но подтверждённый результат в тексте не найден."
-                )
+        if (
+            facts["requested_action"]["value"] != "не указано"
+            and facts["confirmed_result"]["value"] == "не указано"
+        ):
+            review.append(
+                "Найдена просьба/предложение, но подтверждённый результат "
+                "в тексте не найден."
+            )
 
         if document_year == "Год требует проверки":
             review.append("Не удалось надёжно определить год самой записки.")
@@ -748,11 +751,11 @@ class ServiceMemoOrganizer:
         year_folder = self._ensure_child(year, documents["id"])
         memos = self._ensure_child("Служебные записки", year_folder["id"])
         topic_folder = self._ensure_child(topic, memos["id"])
-        return (
-            topic_folder["id"],
+        folder_path = (
             f"{project_name} / Документы / {year} / "
-            f"Служебные записки / {topic}",
+            f"Служебные записки / {topic}"
         )
+        return topic_folder["id"], folder_path
 
     def _duplicate_and_version(
         self,
