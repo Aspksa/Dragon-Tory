@@ -1,0 +1,131 @@
+name: Dragon Tory Windows Self Update
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/tooru/update/**"
+      - "src/tooru/api/update.py"
+      - "scripts/windows/update.ps1"
+      - "scripts/windows/bootstrap.ps1"
+      - "Start.bat"
+      - "pyproject.toml"
+      - ".github/workflows/windows-update.yml"
+  pull_request:
+    paths:
+      - "src/tooru/update/**"
+      - "src/tooru/api/update.py"
+      - "scripts/windows/update.ps1"
+      - "scripts/windows/bootstrap.ps1"
+      - "Start.bat"
+      - "pyproject.toml"
+      - ".github/workflows/windows-update.yml"
+  workflow_dispatch:
+
+jobs:
+  self-update:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Prepare Cyrillic portable copy
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP "Обновление\Дракончик Тоору"
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $target -Recurse -Force
+          "UPDATE_TEST_ROOT=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          Set-Content -LiteralPath (Join-Path $target ".env") -Value "TOORU_VERSION=00.00.03" -Encoding utf8
+          New-Item -ItemType Directory -Path (Join-Path $target "data") -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $target "data\preserve.txt") -Value "keep-memory-data" -Encoding utf8
+
+      - name: Prepare virtual environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:UPDATE_TEST_ROOT ".venv"
+          python -m venv $venv
+          $python = Join-Path $venv "Scripts\python.exe"
+          & $python -m pip install --disable-pip-version-check --editable $env:UPDATE_TEST_ROOT
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not prepare test .venv."
+          }
+
+      - name: Start old Dragon Tory instance
+        shell: pwsh
+        run: |
+          $python = Join-Path $env:UPDATE_TEST_ROOT ".venv\Scripts\python.exe"
+          $env:PYTHONPATH = Join-Path $env:UPDATE_TEST_ROOT "src"
+          $env:TOORU_DATA_DIR = Join-Path $env:UPDATE_TEST_ROOT "data"
+          $process = Start-Process -FilePath $python -ArgumentList @("-m", "tooru.main") -WorkingDirectory $env:UPDATE_TEST_ROOT -PassThru
+          "OLD_SERVER_PID=$($process.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          $ready = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            try {
+              $health = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
+              if ($health.status -eq "ok") {
+                $ready = $true
+                break
+              }
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          if (-not $ready) {
+            throw "Old Dragon Tory instance did not start."
+          }
+
+      - name: Run real self updater
+        shell: pwsh
+        run: |
+          $script = Join-Path $env:UPDATE_TEST_ROOT "scripts\windows\update.ps1"
+          & $script -ProjectRoot $env:UPDATE_TEST_ROOT -Repository "Aspksa/Dragon-Tory" -Branch "main" -ServerPid ([int]$env:OLD_SERVER_PID)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Self updater returned exit code $LASTEXITCODE."
+          }
+
+      - name: Verify restart and protected local data
+        shell: pwsh
+        run: |
+          $health = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 5
+          if ($health.status -ne "ok") {
+            throw "Updated Dragon Tory is not healthy."
+          }
+
+          $statePath = Join-Path $env:UPDATE_TEST_ROOT "data\update\state.json"
+          $state = Get-Content -LiteralPath $statePath -Raw -Encoding utf8 | ConvertFrom-Json
+          if ($state.phase -ne "success") {
+            throw "Updater state is not success: $($state.phase)"
+          }
+
+          $dataSentinel = Get-Content -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT "data\preserve.txt") -Raw
+          if ($dataSentinel.Trim() -ne "keep-memory-data") {
+            throw "Updater changed protected data."
+          }
+
+          $envSentinel = Get-Content -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT ".env") -Raw
+          if ($envSentinel -notmatch "TOORU_VERSION=00.00.03") {
+            throw "Updater changed protected .env."
+          }
+
+          if (-not (Test-Path -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT "backups"))) {
+            throw "Updater did not create a backup."
+          }
+
+      - name: Cleanup server
+        if: always()
+        shell: pwsh
+        run: |
+          try {
+            Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction Stop |
+              Select-Object -ExpandProperty OwningProcess -Unique |
+              ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+          } catch {}
