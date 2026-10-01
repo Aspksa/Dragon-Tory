@@ -283,9 +283,9 @@ class ObservabilityStore:
             if trace_id:
                 rows = db.execute(
                     """
-                    SELECT * FROM observability_events
+                    SELECT rowid AS sequence, * FROM observability_events
                     WHERE trace_id = ?
-                    ORDER BY started_epoch_ms ASC, id ASC
+                    ORDER BY started_epoch_ms ASC, rowid ASC
                     LIMIT ?
                     """,
                     (trace_id, bounded),
@@ -293,8 +293,8 @@ class ObservabilityStore:
             else:
                 rows = db.execute(
                     """
-                    SELECT * FROM observability_events
-                    ORDER BY started_epoch_ms DESC, id DESC
+                    SELECT rowid AS sequence, * FROM observability_events
+                    ORDER BY started_epoch_ms DESC, rowid DESC
                     LIMIT ?
                     """,
                     (bounded,),
@@ -315,9 +315,9 @@ class ObservabilityStore:
         with self._connect() as db:
             active_rows = db.execute(
                 """
-                SELECT * FROM observability_events
+                SELECT rowid AS sequence, * FROM observability_events
                 WHERE status = 'running'
-                ORDER BY started_epoch_ms DESC
+                ORDER BY started_epoch_ms DESC, rowid DESC
                 LIMIT 20
                 """
             ).fetchall()
@@ -350,9 +350,9 @@ class ObservabilityStore:
             ).fetchone()
             rows = db.execute(
                 """
-                SELECT * FROM observability_events
+                SELECT rowid AS sequence, * FROM observability_events
                 WHERE started_epoch_ms >= ?
-                ORDER BY started_epoch_ms DESC, id DESC
+                ORDER BY started_epoch_ms DESC, rowid DESC
                 LIMIT ?
                 """,
                 (cutoff_ms, bounded * 4),
@@ -372,7 +372,7 @@ class ObservabilityStore:
         for trace in trace_order[:10]:
             items = sorted(
                 grouped[trace],
-                key=lambda item: (item["started_epoch_ms"], item["id"]),
+                key=lambda item: (item["started_epoch_ms"], item["sequence"]),
             )
             if not items:
                 continue
