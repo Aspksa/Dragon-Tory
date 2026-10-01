@@ -49,10 +49,34 @@ jobs:
 
           $versionFile = Join-Path $target "src\tooru\version.py"
           $versionText = Get-Content -LiteralPath $versionFile -Raw -Encoding utf8
-          $versionText = $versionText -replace '__version__ = "0\.0\.9"', '__version__ = "0.0.8"'
+          $versionMatch = [regex]::Match(
+            $versionText,
+            '__version__ = "(\d+)\.(\d+)\.(\d+)"'
+          )
+          if (-not $versionMatch.Success) {
+            throw "Could not read current version from version.py."
+          }
+
+          $major = [int]$versionMatch.Groups[1].Value
+          $minor = [int]$versionMatch.Groups[2].Value
+          $patch = [int]$versionMatch.Groups[3].Value
+          if ($patch -lt 1) {
+            throw "Self-update test requires a patch version greater than zero."
+          }
+
+          $currentSemver = "$major.$minor.$patch"
+          $oldSemver = "$major.$minor.$($patch - 1)"
+          $currentDisplay = "{0:D2}.{1:D2}.{2:D2}" -f $major, $minor, $patch
+          $oldDisplay = "{0:D2}.{1:D2}.{2:D2}" -f $major, $minor, ($patch - 1)
+
+          $versionText = $versionText -replace (
+            '__version__ = "' + [regex]::Escape($currentSemver) + '"'
+          ), ('__version__ = "' + $oldSemver + '"')
           Set-Content -LiteralPath $versionFile -Value $versionText -Encoding utf8
 
           "UPDATE_TEST_ROOT=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "UPDATE_TEST_OLD_VERSION=$oldDisplay" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "UPDATE_TEST_CURRENT_VERSION=$currentDisplay" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
           @(
             "TOORU_TEST_SENTINEL=preserve-me"
@@ -104,8 +128,8 @@ jobs:
         shell: pwsh
         run: |
           $before = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 5
-          if ($before.version -ne "00.00.08") {
-            throw "Expected simulated old version 00.00.08, got $($before.version)."
+          if ($before.version -ne $env:UPDATE_TEST_OLD_VERSION) {
+            throw "Expected simulated old version $env:UPDATE_TEST_OLD_VERSION, got $($before.version)."
           }
 
           try {
@@ -140,7 +164,7 @@ jobs:
           for ($i = 0; $i -lt 300; $i++) {
             try {
               $health = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
-              if ($health.status -eq "ok" -and $health.version -eq "00.00.09") {
+              if ($health.status -eq "ok" -and $health.version -eq $env:UPDATE_TEST_CURRENT_VERSION) {
                 $ready = $true
                 break
               }
@@ -148,7 +172,7 @@ jobs:
             Start-Sleep -Seconds 1
           }
           if (-not $ready) {
-            throw "Dragon Tory did not restart on 00.00.09 after API-triggered update."
+            throw "Dragon Tory did not restart on $env:UPDATE_TEST_CURRENT_VERSION after API-triggered update."
           }
 
       - name: Verify restart and protected local data
