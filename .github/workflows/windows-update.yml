@@ -45,7 +45,11 @@ jobs:
           Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $target -Recurse -Force
           "UPDATE_TEST_ROOT=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-          Set-Content -LiteralPath (Join-Path $target ".env") -Value "TOORU_TEST_SENTINEL=preserve-me" -Encoding utf8
+          @(
+            "TOORU_TEST_SENTINEL=preserve-me"
+            "TOORU_CLAUDE_API_KEY=legacy-secret-must-be-removed"
+            "TOORU_CLAUDE_MODEL=legacy-claude"
+          ) | Set-Content -LiteralPath (Join-Path $target ".env") -Encoding utf8
           New-Item -ItemType Directory -Path (Join-Path $target "data") -Force | Out-Null
           Set-Content -LiteralPath (Join-Path $target "data\preserve.txt") -Value "keep-memory-data" -Encoding utf8
 
@@ -140,6 +144,20 @@ jobs:
           $envSentinel = Get-Content -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT ".env") -Raw
           if ($envSentinel -notmatch "TOORU_TEST_SENTINEL=preserve-me") {
             throw "Updater changed protected .env."
+          }
+          if ($envSentinel -match "TOORU_CLAUDE_") {
+            throw "Legacy Claude settings were not removed from .env."
+          }
+
+          $python = Join-Path $env:UPDATE_TEST_ROOT ".venv\Scripts\python.exe"
+          & $python -m pip show anthropic *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Legacy anthropic package is still installed."
+          }
+
+          $page = (Invoke-WebRequest -Uri "http://127.0.0.1:8787/" -UseBasicParsing -TimeoutSec 5).Content
+          if ($page -match "Клод|Anthropic|chatProject|chatProvider") {
+            throw "Web UI still contains legacy Claude/project/model controls."
           }
 
           if (-not (Test-Path -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT "backups"))) {
