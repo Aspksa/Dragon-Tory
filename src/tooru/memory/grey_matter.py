@@ -449,15 +449,19 @@ class GreyMatterService:
         scope: MemoryScope = MemoryScope.PROJECT,
         project_id: str | None = "dragon-tory",
         source_ref: str | None = None,
+        cause_at: str | None = None,
+        problem_at: str | None = None,
+        action_at: str | None = None,
+        result_at: str | None = None,
     ) -> dict[str, Any]:
         specs = [
-            ("problem", MemoryKind.EVENT, problem, 0.72),
-            ("cause", MemoryKind.FACT, cause, 0.78),
-            ("action", MemoryKind.DECISION, action, 0.74),
-            ("result", MemoryKind.EPISODE, result, 0.70),
+            ("problem", MemoryKind.EVENT, problem, 0.72, problem_at),
+            ("cause", MemoryKind.FACT, cause, 0.78, cause_at),
+            ("action", MemoryKind.DECISION, action, 0.74, action_at),
+            ("result", MemoryKind.EPISODE, result, 0.70, result_at),
         ]
         created: dict[str, Any] = {}
-        for role, kind, content, importance in specs:
+        for role, kind, content, importance, event_at in specs:
             intake = self.intake.ingest(
                 MemoryCreate(
                     owner_id=owner_id,
@@ -469,6 +473,7 @@ class GreyMatterService:
                     source_ref=source_ref,
                     confidence=0.90,
                     importance=importance,
+                    event_at=event_at,
                     tags=["causal", f"causal:{role}"],
                 ),
                 reason=f"Causal memory component: {role}.",
@@ -481,11 +486,11 @@ class GreyMatterService:
             if value.memory is not None
         }
         if {"cause", "problem"} <= ids.keys():
-            self.store.add_link(
+            self.link_cause(
                 ids["cause"],
                 ids["problem"],
-                MemoryLinkType.CAUSES,
-                0.95,
+                owner_id=owner_id,
+                weight=0.95,
             )
         if {"problem", "action"} <= ids.keys():
             self.store.add_link(
@@ -495,11 +500,11 @@ class GreyMatterService:
                 0.90,
             )
         if {"action", "result"} <= ids.keys():
-            self.store.add_link(
+            self.link_cause(
                 ids["action"],
                 ids["result"],
-                MemoryLinkType.CAUSES,
-                0.90,
+                owner_id=owner_id,
+                weight=0.90,
             )
         return {
             role: {
