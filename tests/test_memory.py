@@ -207,6 +207,8 @@ def test_memory_health_report_checks_real_sqlite_structure(
     assert health["orphan_vectors"] == 0
     assert health["orphan_links"] == 0
     assert health["orphan_history"] == 0
+    assert health["fts_available"] is True
+    assert health["fts_entries"] == 0
 
 
 def test_chat_memory_routing_separates_personal_and_project() -> None:
