@@ -958,6 +958,24 @@ class SmartDrive:
     def _clean_vehicle_payload(
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        def optional_rate(value: Any) -> float | None:
+            if value in (None, ""):
+                return None
+            try:
+                parsed = float(str(value).replace(",", "."))
+            except ValueError as exc:
+                raise ValueError("Расход ГСМ должен быть числом.") from exc
+            if parsed < 0 or parsed > 500:
+                raise ValueError("Некорректный расход ГСМ.")
+            return round(parsed, 3)
+
+        insurance_start = _normalize_date(payload.get("insurance_start"))
+        insurance_end = _normalize_date(payload.get("insurance_end"))
+        if insurance_start and insurance_end and insurance_end < insurance_start:
+            raise ValueError(
+                "Дата окончания страховки не может быть раньше даты начала."
+            )
+
         return {
             "garage_number": str(
                 payload.get("garage_number") or ""
@@ -974,9 +992,53 @@ class SmartDrive:
                 if payload.get("driver_employee_id")
                 else None
             ),
+            "fuel_type": str(payload.get("fuel_type") or "").strip()[:100],
+            "fuel_rate_summer": optional_rate(
+                payload.get("fuel_rate_summer")
+            ),
+            "fuel_rate_winter": optional_rate(
+                payload.get("fuel_rate_winter")
+            ),
+            "tire_size_summer": str(
+                payload.get("tire_size_summer") or ""
+            ).strip()[:120],
+            "tire_size_winter": str(
+                payload.get("tire_size_winter") or ""
+            ).strip()[:120],
+            "insurance_type": str(
+                payload.get("insurance_type") or ""
+            ).strip()[:100],
+            "insurance_policy": str(
+                payload.get("insurance_policy") or ""
+            ).strip()[:200],
+            "insurance_company": str(
+                payload.get("insurance_company") or ""
+            ).strip()[:300],
+            "insurance_start": insurance_start,
+            "insurance_end": insurance_end,
             "notes": str(payload.get("notes") or "").strip()[:5_000],
             "active": bool(payload.get("active", True)),
         }
+
+    @staticmethod
+    def _decorate_vehicle(item: dict[str, Any]) -> dict[str, Any]:
+        result = dict(item)
+        result["active"] = bool(result["active"])
+        end_text = str(result.get("insurance_end") or "").strip()
+        result["insurance_days_left"] = None
+        result["insurance_alert"] = False
+        result["insurance_expired"] = False
+        if end_text:
+            try:
+                end_date = date.fromisoformat(end_text)
+                today = datetime.now(UTC).date()
+                days_left = (end_date - today).days
+                result["insurance_days_left"] = days_left
+                result["insurance_expired"] = days_left < 0
+                result["insurance_alert"] = 0 <= days_left <= 15
+            except ValueError:
+                pass
+        return result
 
     def create_vehicle(self, payload: dict[str, Any]) -> dict[str, Any]:
         values = self._clean_vehicle_payload(payload)
@@ -996,10 +1058,15 @@ class SmartDrive:
                 """
                 INSERT INTO garage_vehicles (
                     id, garage_number, plate_number, vin, make_model,
-                    driver_employee_id, notes, active,
+                    driver_employee_id, fuel_type, fuel_rate_summer,
+                    fuel_rate_winter, tire_size_summer, tire_size_winter,
+                    insurance_type, insurance_policy, insurance_company,
+                    insurance_start, insurance_end, notes, active,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
                 """,
                 (
                     vehicle_id,
@@ -1008,6 +1075,16 @@ class SmartDrive:
                     values["vin"],
                     values["make_model"],
                     values["driver_employee_id"],
+                    values["fuel_type"],
+                    values["fuel_rate_summer"],
+                    values["fuel_rate_winter"],
+                    values["tire_size_summer"],
+                    values["tire_size_winter"],
+                    values["insurance_type"],
+                    values["insurance_policy"],
+                    values["insurance_company"],
+                    values["insurance_start"],
+                    values["insurance_end"],
                     values["notes"],
                     int(values["active"]),
                     now,
@@ -1031,7 +1108,12 @@ class SmartDrive:
                 """
                 UPDATE garage_vehicles
                 SET garage_number = ?, plate_number = ?, vin = ?,
-                    make_model = ?, driver_employee_id = ?, notes = ?,
+                    make_model = ?, driver_employee_id = ?,
+                    fuel_type = ?, fuel_rate_summer = ?,
+                    fuel_rate_winter = ?, tire_size_summer = ?,
+                    tire_size_winter = ?, insurance_type = ?,
+                    insurance_policy = ?, insurance_company = ?,
+                    insurance_start = ?, insurance_end = ?, notes = ?,
                     active = ?, updated_at = ?
                 WHERE id = ?
                 """,
@@ -1041,6 +1123,16 @@ class SmartDrive:
                     values["vin"],
                     values["make_model"],
                     values["driver_employee_id"],
+                    values["fuel_type"],
+                    values["fuel_rate_summer"],
+                    values["fuel_rate_winter"],
+                    values["tire_size_summer"],
+                    values["tire_size_winter"],
+                    values["insurance_type"],
+                    values["insurance_policy"],
+                    values["insurance_company"],
+                    values["insurance_start"],
+                    values["insurance_end"],
                     values["notes"],
                     int(values["active"]),
                     utc_now(),
@@ -1064,9 +1156,7 @@ class SmartDrive:
             ).fetchone()
         if row is None:
             raise KeyError(vehicle_id)
-        result = dict(row)
-        result["active"] = bool(result["active"])
-        return result
+        return self._decorate_vehicle(dict(row))
 
     def list_vehicles(
         self,
@@ -1083,7 +1173,9 @@ class SmartDrive:
                 LEFT JOIN employees e ON e.id = v.driver_employee_id
                 WHERE (? = '' OR v.garage_number LIKE ?
                        OR v.plate_number LIKE ? OR v.vin LIKE ?
-                       OR v.make_model LIKE ? OR e.full_name LIKE ?)
+                       OR v.make_model LIKE ? OR e.full_name LIKE ?
+                       OR v.insurance_policy LIKE ?
+                       OR v.insurance_company LIKE ?)
                 ORDER BY v.active DESC, v.garage_number COLLATE NOCASE,
                          v.plate_number COLLATE NOCASE
                 LIMIT ?
@@ -1095,13 +1187,29 @@ class SmartDrive:
                     pattern,
                     pattern,
                     pattern,
+                    pattern,
+                    pattern,
                     max(1, min(limit, 1_000)),
                 ),
             ).fetchall()
-        result = [dict(row) for row in rows]
-        for item in result:
-            item["active"] = bool(item["active"])
-        return result
+        return [self._decorate_vehicle(dict(row)) for row in rows]
+
+    def garage_alerts(self, *, days: int = 15) -> list[dict[str, Any]]:
+        bounded = max(0, min(int(days), 365))
+        items = self.list_vehicles(limit=1_000)
+        alerts = [
+            item
+            for item in items
+            if item.get("insurance_days_left") is not None
+            and int(item["insurance_days_left"]) <= bounded
+        ]
+        alerts.sort(
+            key=lambda item: (
+                int(item.get("insurance_days_left") or 0),
+                str(item.get("garage_number") or ""),
+            )
+        )
+        return alerts
 
     @staticmethod
     def _clean_counterparty_payload(
