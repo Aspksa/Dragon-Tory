@@ -332,7 +332,8 @@ function Test-Venv {
 
 function Test-RuntimeDependencies {
     try {
-        & $VenvPython -c "import fastapi, uvicorn, pydantic_settings" *> $null
+        $probe = "import importlib.util as u; mods=('fastapi','uvicorn','pydantic_settings'); raise SystemExit(0 if all(u.find_spec(m) for m in mods) else 1)"
+        & $VenvPython -c $probe *> $null
         if ($LASTEXITCODE -ne 0) {
             return $false
         }
