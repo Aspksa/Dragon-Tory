@@ -20,62 +20,35 @@ class FakeProvider:
 
 
 @pytest.mark.asyncio
-async def test_router_prefers_deepseek_for_simple_request() -> None:
+async def test_router_generates_with_deepseek() -> None:
     router = AIRouter()
     router.register(FakeProvider("deepseek"))
-    router.register(FakeProvider("claude"))
 
-    result = await router.route(
-        AIRequest(
-            messages=[{"role": "user", "content": "Привет"}],
-        ),
-        preferred="auto",
+    result = await router.generate(
+        "deepseek",
+        AIRequest(messages=[{"role": "user", "content": "Привет"}]),
     )
 
-    assert result.selected_provider == "deepseek"
-    assert result.fallback_used is False
+    assert result.provider == "deepseek"
+    status = router.provider_status("deepseek")
+    assert status["requests"] == 1
+    assert status["successes"] == 1
+    assert status["failures"] == 0
 
 
 @pytest.mark.asyncio
-async def test_router_prefers_claude_for_complex_request() -> None:
-    router = AIRouter()
-    router.register(FakeProvider("deepseek"))
-    router.register(FakeProvider("claude"))
-
-    result = await router.route(
-        AIRequest(
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Проанализируй архитектуру и сделай подробный "
-                        + ("план " * 300)
-                    ),
-                }
-            ],
-        ),
-        preferred="auto",
-    )
-
-    assert result.selected_provider == "claude"
-
-
-@pytest.mark.asyncio
-async def test_router_falls_back_to_second_provider() -> None:
+async def test_router_records_deepseek_failure() -> None:
     router = AIRouter()
     router.register(FakeProvider("deepseek", fail=True))
-    router.register(FakeProvider("claude"))
 
-    result = await router.route(
-        AIRequest(
-            messages=[{"role": "user", "content": "Привет"}],
-        ),
-        preferred="auto",
-    )
+    with pytest.raises(RuntimeError):
+        await router.generate(
+            "deepseek",
+            AIRequest(messages=[{"role": "user", "content": "Привет"}]),
+        )
 
-    assert result.selected_provider == "claude"
-    assert result.fallback_used is True
-    assert result.attempted_providers == ["deepseek", "claude"]
-    status = router.routing_status()
-    assert status["providers"]["deepseek"]["failures"] == 1
-    assert status["providers"]["claude"]["successes"] == 1
+    status = router.provider_status("deepseek")
+    assert status["requests"] == 1
+    assert status["successes"] == 0
+    assert status["failures"] == 1
+    assert "unavailable" in status["last_error"]
