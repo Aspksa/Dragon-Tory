@@ -270,3 +270,24 @@
 @keyframes homeObsPulse{0%,100%{opacity:.72}50%{opacity:1}}
 @media(max-width:980px){.home-observability-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:680px){.home-observability-kpis{grid-template-columns:1fr 1fr}.home-trace-step{min-width:104px}}
+
+
+/* 00.00.27 · Timesheet and garage extensions */
+.timesheet-select{min-height:34px;padding:6px 10px;border:1px solid #dbe4ee;border-radius:9px;background:#fff;color:#40516a}
+.timesheet-scroll{overflow:auto;border:1px solid #dfe7ef;border-radius:12px;background:#fff;max-width:100%}
+.timesheet-table{border-collapse:separate;border-spacing:0;min-width:max-content;width:100%;font-size:9px}
+.timesheet-table th,.timesheet-table td{min-width:38px;padding:5px 4px;text-align:center;border-right:1px solid #e7edf3;border-bottom:1px solid #e7edf3;vertical-align:middle}
+.timesheet-table thead th{position:sticky;top:0;z-index:2;background:#f7f9fc;color:#65768d;font-weight:700}
+.timesheet-table .timesheet-person{position:sticky;left:0;z-index:3;min-width:180px;max-width:220px;text-align:left;background:#fff;color:#35465d}
+.timesheet-table thead .timesheet-person{background:#f7f9fc;z-index:4}
+.timesheet-cell{display:grid;gap:1px;place-items:center;min-height:28px}
+.timesheet-cell b{font-size:9px;color:#35465d}
+.timesheet-cell small,.timesheet-table td small{display:block;color:#8b98a9;font-size:7.5px;line-height:1.25}
+.timesheet-table .day-off{background:#f6f8fa;color:#9aa6b4}
+.timesheet-table .short-day{box-shadow:inset 0 -2px 0 #dfaa55}
+.timesheet-table .timesheet-vacation{background:#fff7e8}
+.timesheet-table .timesheet-sick{background:#fff0f0}
+.timesheet-table .timesheet-weekend-work{background:#eef8f4}
+.timesheet-manual-list{display:grid;gap:7px;margin-top:12px}
+.timesheet-manual-list>.module-document{padding:8px 10px}
+@media(max-width:760px){.timesheet-table .timesheet-person{min-width:140px}.timesheet-table th,.timesheet-table td{min-width:34px}}
