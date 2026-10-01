@@ -92,3 +92,20 @@ def test_release_0034_lists_grey_matter_capabilities() -> None:
         for change in modules["grey_matter"]["changes"]
     )
 
+def test_release_0035_lists_adaptive_grey_matter() -> None:
+    release = release_notes_for("0.0.35")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert {"grey_matter", "memory", "reasoning", "updater"} <= set(modules)
+    assert modules["grey_matter"]["version"] == "02.00.00"
+    assert modules["memory"]["version"] == "03.01.00"
+    assert any(
+        "Adaptive forgetting" in change
+        for change in modules["grey_matter"]["changes"]
+    )
+    assert any(
+        "strategy" in change
+        for change in modules["memory"]["changes"]
+    )
+
