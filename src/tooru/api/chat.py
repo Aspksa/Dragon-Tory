@@ -65,7 +65,15 @@ async def _run_generation(
     message: str,
     remember: bool,
     history: list[ConversationMessage],
+    replace_after_sequence: int | None = None,
 ) -> ChatResponse:
+    existing = request.app.state.chat_tasks.get(request_id)
+    if existing is not None and not existing.done():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Запрос с таким идентификатором уже выполняется.",
+        )
+
     task = asyncio.create_task(
         request.app.state.chat_pipeline.run(
             message=message,
@@ -90,11 +98,18 @@ async def _run_generation(
     finally:
         request.app.state.chat_tasks.pop(request_id, None)
 
-    request.app.state.chat_store.add_message(
-        chat_id,
-        role="assistant",
-        content=result.answer,
-    )
+    if replace_after_sequence is None:
+        request.app.state.chat_store.add_message(
+            chat_id,
+            role="assistant",
+            content=result.answer,
+        )
+    else:
+        request.app.state.chat_store.replace_after(
+            chat_id,
+            sequence=replace_after_sequence,
+            assistant_content=result.answer,
+        )
     chat = request.app.state.chat_store.get(chat_id)
     return ChatResponse(
         chat_id=chat_id,
@@ -166,7 +181,7 @@ async def retry_chat(
         )
 
     try:
-        message, history_items = (
+        message, history_items, user_sequence = (
             request.app.state.chat_store.retry_context(chat_id)
         )
     except ChatNotFoundError as exc:
@@ -188,6 +203,7 @@ async def retry_chat(
         message=message,
         remember=payload.remember,
         history=_history_to_messages(history_items),
+        replace_after_sequence=user_sequence,
     )
 
 
