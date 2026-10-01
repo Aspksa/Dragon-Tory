@@ -7,9 +7,9 @@ from urllib.parse import unquote
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from starlette.background import BackgroundTask
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from tooru.ai.base import AIRequest
 from tooru.cloud.intelligence import (
