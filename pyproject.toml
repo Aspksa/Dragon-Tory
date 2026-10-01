@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Dragon Tory personal AI assistant with isolated personal and project memory."
 readme = "README.md"
 requires-python = ">=3.11"
-# Tory Intelligent Drive, document intelligence and Tory Vault ship with the portable app.
+# Tory Document Intelligence, OCR support and Tory Vault ship with the portable app.
 dependencies = [
   "fastapi>=0.115,<1.0",
   "uvicorn[standard]>=0.32,<1.0",
@@ -16,6 +16,7 @@ dependencies = [
   "openai>=1.60,<3.0",
   "psutil>=6.1,<8.0",
   "pypdf>=5.0,<7.0",
+  "pillow>=10,<13",
   "python-docx>=1.1,<2.0",
   "openpyxl>=3.1,<4.0",
   "cryptography>=43,<49",
