@@ -74,7 +74,7 @@ def test_hybrid_recall_tracks_usage_and_feedback(tmp_path: Path) -> None:
             scope=MemoryScope.PROJECT,
             project_id="dragon-tory",
             kind=MemoryKind.DECISION,
-            content="Для проекта используем Claude и DeepSeek.",
+            content="Для проекта используем DeepSeek V4 Flash.",
             importance=1.0,
         )
     )
@@ -169,7 +169,7 @@ def test_context_pack_keeps_projects_isolated_and_includes_pinned_personal(
             scope=MemoryScope.PROJECT,
             project_id="dragon-tory",
             kind=MemoryKind.DECISION,
-            content="Dragon Tory использует Claude и DeepSeek.",
+            content="Dragon Tory использует DeepSeek V4 Flash.",
             importance=1.0,
         )
     )
