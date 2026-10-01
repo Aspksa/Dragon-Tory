@@ -439,3 +439,22 @@ async def test_pipeline_hybrid_escalates_only_after_bad_verifier() -> None:
         "result_verify",
     ]
 
+@pytest.mark.asyncio
+async def test_simple_chain_uses_single_ai_response() -> None:
+    router = SequenceRouter(["Привет! Чем помочь?"])
+    pipeline = ChatPipeline(
+        memory=ContextMemory(),
+        router=router,
+        guardian=NoopGuardian(),
+    )
+
+    result = await pipeline.run(
+        message="Привет",
+        remember=False,
+        history=[],
+        response_mode="normal",
+    )
+
+    assert result.answer == "Привет! Чем помочь?"
+    assert router.operations == ["chat_response"]
+
