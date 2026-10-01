@@ -117,12 +117,10 @@ class OpenAICompatibleProvider:
                     or self._circuit_open_until > time.monotonic()
                 ):
                     try:
-                        setattr(exc, "retry_count", attempt)
-                        setattr(
-                            exc,
-                            "duration_ms",
-                            (time.perf_counter() - started) * 1000,
-                        )
+                        exc.retry_count = attempt
+                        exc.duration_ms = (
+                            time.perf_counter() - started
+                        ) * 1000
                     except (AttributeError, TypeError):
                         pass
                     raise
