@@ -935,11 +935,23 @@ class DocumentIntelligence:
                        i.confidence AS intelligence_confidence,
                        i.deadlines_json,
                        i.entities_json,
-                       i.analyzed_at
+                       i.analyzed_at,
+                       memo.document_year AS memo_year,
+                       memo.year_source AS memo_year_source,
+                       memo.topic AS memo_topic,
+                       memo.topic_reason AS memo_topic_reason,
+                       memo.folder_path AS memo_folder_path,
+                       memo.is_template AS memo_is_template,
+                       memo.duplicate_of AS memo_duplicate_of,
+                       memo.possible_version_of AS memo_possible_version_of,
+                       memo.review_json AS memo_review_json,
+                       memo.memory_status AS memo_memory_status
                 FROM documents d
                 LEFT JOIN document_dna dna ON dna.document_id = d.id
                 LEFT JOIN document_intelligence i
                   ON i.document_id = d.id AND i.version = d.version
+                LEFT JOIN service_memo_records memo
+                  ON memo.document_id = d.id AND memo.version = d.version
                 WHERE d.trashed = 0
                 ORDER BY d.updated_at DESC
                 """
@@ -988,6 +1000,20 @@ class DocumentIntelligence:
                     "work_date": row["work_date"],
                     "work_hours": row["work_hours"],
                     "work_reason": row["work_reason"] or "",
+                    "memo_year": row["memo_year"],
+                    "memo_year_source": row["memo_year_source"],
+                    "memo_topic": row["memo_topic"],
+                    "memo_topic_reason": row["memo_topic_reason"],
+                    "memo_folder_path": row["memo_folder_path"],
+                    "memo_is_template": bool(row["memo_is_template"] or 0),
+                    "memo_duplicate_of": row["memo_duplicate_of"],
+                    "memo_possible_version_of": row["memo_possible_version_of"],
+                    "memo_review": (
+                        json.loads(row["memo_review_json"])
+                        if row["memo_review_json"]
+                        else []
+                    ),
+                    "memo_memory_status": row["memo_memory_status"] or "",
                 }
             )
             items.append(document)
