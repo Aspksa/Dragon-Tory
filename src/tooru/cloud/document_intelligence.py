@@ -9,7 +9,7 @@ import tempfile
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from pypdf import PdfReader
 
@@ -601,7 +601,7 @@ class DocumentIntelligence:
         result["current_version"] = int(document["version"]) == target
         return result
 
-    DOCUMENT_MODULES = {
+    DOCUMENT_MODULES: ClassVar[dict[str, dict[str, Any]]] = {
         "contracts": {
             "title": "Договоры",
             "icon": "📑",
