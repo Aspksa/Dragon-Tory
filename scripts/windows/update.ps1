@@ -36,7 +36,7 @@ $ProtectedNames = @(
     "backups",
     ".git"
 )
-$ManagedDirs = @("src", "scripts", "docs", "tests", ".github")
+$ManagedDirs = @()
 
 function Write-UpdateLog {
     param([string]$Level, [string]$Message)
@@ -214,6 +214,11 @@ try {
         throw "Could not find project root inside GitHub archive."
     }
     $sourceRoot = $sourceRoot.FullName
+    $ManagedDirs = @(
+        Get-ChildItem -LiteralPath $sourceRoot -Force -Directory |
+            Where-Object { $ProtectedNames -notcontains $_.Name } |
+            ForEach-Object { $_.Name }
+    )
 
     $remotePyProject = Join-Path $sourceRoot "pyproject.toml"
     if (-not (Test-Path -LiteralPath $remotePyProject -PathType Leaf)) {
