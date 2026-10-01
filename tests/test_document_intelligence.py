@@ -257,3 +257,37 @@ def test_orders_directives_and_weekend_work_are_recognized(
     assert weekend_dna["department"] == "ИТ"
     assert weekend_dna["work_date"] == "2026-10-03"
     assert weekend_dna["work_hours"] == 8
+
+
+
+def test_weekend_work_dates_support_multiple_date_formats() -> None:
+    from tooru.cloud.document_intelligence import _weekend_work_dates
+
+    first = _weekend_work_dates(
+        "Прошу объявить 24 и 25 января 2026 года рабочими днями.",
+        "СЗ раб.вых. день 24-25.01.2026.docx",
+    )
+    assert first["work_dates"] == ["2026-01-24", "2026-01-25"]
+    assert first["work_date_conflict"] is False
+
+    second = _weekend_work_dates(
+        "Прошу объявить 31 января и 1 февраля 2026 года рабочими днями.",
+        "СЗ раб.вых. день 31.01 и 01.02.2026.docx",
+    )
+    assert second["work_dates"] == ["2026-01-31", "2026-02-01"]
+    assert second["work_date_conflict"] is False
+
+
+def test_weekend_work_dates_detect_filename_body_conflict() -> None:
+    from tooru.cloud.document_intelligence import _weekend_work_dates
+
+    result = _weekend_work_dates(
+        "Прошу объявить 24 и 25 декабря 2025 года рабочими днями.",
+        "СЗ раб.вых. день 24-25.01.2026.docx",
+    )
+
+    assert result["work_dates"] == []
+    assert result["work_dates_body"] == ["2025-12-24", "2025-12-25"]
+    assert result["work_dates_filename"] == ["2026-01-24", "2026-01-25"]
+    assert result["work_date_conflict"] is True
+    assert result["work_date_source"] == "conflict"
