@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from tooru.ai.router import AIRouter
+from tooru.api.chat import ChatRequest
 from tooru.chat.pipeline import ChatPipeline
 from tooru.chat.reasoning import (
     CognitiveReasoning,
@@ -457,4 +458,8 @@ async def test_simple_chain_uses_single_ai_response() -> None:
 
     assert result.answer == "Привет! Чем помочь?"
     assert router.operations == ["chat_response"]
+
+def test_chat_api_has_no_manual_reasoning_mode_switch() -> None:
+    assert "reasoning_mode" not in ChatRequest.model_fields
+    assert "reasoning_tree" not in ChatRequest.model_fields
 
