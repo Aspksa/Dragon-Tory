@@ -17,8 +17,14 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="chatSearch"' in response.text
     assert 'id="renameChat"' in response.text
     assert 'id="deleteChat"' in response.text
-    assert 'id="stopChat"' in response.text
-    assert 'id="retryChat"' in response.text
+    assert 'id="composerAction"' in response.text
+    assert 'id="chatMode"' in response.text
+    assert 'id="stopChat"' not in response.text
+    assert 'id="retryChat"' not in response.text
+    assert 'id="sendChat"' not in response.text
+    assert "Кратко" in response.text
+    assert "Подробно" in response.text
+    assert "Анализ" in response.text
     assert 'id="chatProject"' not in response.text
     assert 'id="chatProvider"' not in response.text
     assert "Клод" not in response.text
@@ -75,3 +81,17 @@ def test_update_history_endpoint_is_available() -> None:
     payload = response.json()
     assert "items" in payload
     assert "count" in payload
+
+
+
+def test_chat_rejects_unknown_response_mode() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/chat",
+            json={
+                "message": "Привет",
+                "response_mode": "unknown",
+            },
+        )
+
+    assert response.status_code == 422
