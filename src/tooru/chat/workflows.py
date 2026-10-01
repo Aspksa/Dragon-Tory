@@ -236,6 +236,10 @@ async def create_weekend_work_document(
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2_200,
             ),
+            module="memos",
+            operation="weekend_work_draft",
+            source_type="workflow",
+            source_id="weekend-work",
         )
         draft = response.text.strip()
         provider = response.provider
