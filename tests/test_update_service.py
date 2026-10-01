@@ -220,3 +220,45 @@ def test_remote_version_is_read_from_exact_remote_commit(
         f"version.py?ref={remote_sha}" in url
         for url in calls
     )
+
+
+
+def test_github_token_is_sent_only_as_request_header(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    service = UpdateService(
+        project_root=tmp_path,
+        local_version=APP_VERSION,
+        repository="Aspksa/Dragon-Tory",
+        branch="main",
+        github_token="test-secret-token",
+    )
+    captured: dict[str, str | None] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b'{"ok": true}'
+
+    def fake_urlopen(request, timeout=0):
+        captured["authorization"] = request.get_header("Authorization")
+        captured["url"] = request.full_url
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "tooru.update.service.urllib.request.urlopen",
+        fake_urlopen,
+    )
+
+    payload = service._get_json("https://api.github.com/test")
+
+    assert payload == {"ok": True}
+    assert captured["authorization"] == "Bearer test-secret-token"
+    assert captured["url"] == "https://api.github.com/test"
+    assert "test-secret-token" not in captured["url"]

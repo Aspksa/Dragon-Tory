@@ -678,6 +678,11 @@ async def clean_room(
                 ],
                 max_tokens=1_800,
             ),
+            module="drive",
+            operation="clean_room_answer",
+            source_type="document",
+            source_id=document_id,
+            document_id=document_id,
         )
         smart.record_provenance(
             document_id,
@@ -804,6 +809,11 @@ async def compare_documents(
                 ],
                 max_tokens=2_200,
             ),
+            module="drive",
+            operation="document_compare",
+            source_type="document-pair",
+            source_id=f"{document_id}:{other_id}",
+            document_id=document_id,
         )
         for candidate in (document_id, other_id):
             smart.record_provenance(

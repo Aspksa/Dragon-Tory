@@ -26,6 +26,8 @@ def test_dashboard_navigation_and_update_button_recovers() -> None:
 
         page.goto("http://127.0.0.1:8787/", wait_until="networkidle")
         expect(page.locator("#home")).to_have_class(re.compile(r"\bactive\b"))
+        expect(page.locator("#homeObsState")).to_be_visible()
+        expect(page.locator("#homeTraceList")).to_be_visible()
 
         page.get_by_role(
             "button",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from tooru.memory.models import MemoryCreate, MemoryKind, MemoryScope
+from tooru.observability.context import observation_context
 
 PROJECT_ID = "dragon-tory"
 
@@ -84,17 +85,57 @@ def weekend_work_memory(dna: dict[str, Any]) -> MemoryCreate | None:
 
 
 def sync_vehicle(memory_intake, item: dict[str, Any]):
-    return memory_intake.ingest(
-        vehicle_memory(item),
-        reason="Garage record changed; refresh durable project context.",
-    )
+    source_id = str(item["id"])
+    with observation_context(
+        module="garage",
+        source_type="garage",
+        source_id=source_id,
+        new_trace=True,
+    ):
+        observability = getattr(memory_intake.guardian, "observability", None)
+        if observability is not None:
+            observability.event(
+                category="source",
+                stage="source",
+                operation="garage_record_changed",
+                status="success",
+                module="garage",
+                source_type="garage",
+                source_id=source_id,
+                message="Изменение гаража передано в проектную память.",
+            )
+        return memory_intake.ingest(
+            vehicle_memory(item),
+            reason="Garage record changed; refresh durable project context.",
+        )
 
 
 def sync_weekend_work(memory_intake, dna: dict[str, Any]):
     memory = weekend_work_memory(dna)
     if memory is None:
         return None
-    return memory_intake.ingest(
-        memory,
-        reason="Weekend-work DNA changed; refresh durable timesheet context.",
-    )
+    document_id = str(memory.source_ref or "")
+    with observation_context(
+        module="timesheet",
+        source_type="document",
+        source_id=document_id,
+        document_id=document_id,
+        new_trace=True,
+    ):
+        observability = getattr(memory_intake.guardian, "observability", None)
+        if observability is not None:
+            observability.event(
+                category="source",
+                stage="source",
+                operation="weekend_work_changed",
+                status="success",
+                module="timesheet",
+                source_type="document",
+                source_id=document_id,
+                document_id=document_id,
+                message="Запись работы в выходной передана в память табеля.",
+            )
+        return memory_intake.ingest(
+            memory,
+            reason="Weekend-work DNA changed; refresh durable timesheet context.",
+        )

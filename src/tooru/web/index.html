@@ -44,7 +44,7 @@
         <div class="home-bento">
           <div class="home-glass home-brain">
             <div class="brain-toolbar">
-              <div class="brain-title"><strong>Мозг системы</strong><span>перетаскивание · колесо = масштаб · клик = детали</span></div>
+              <div class="brain-title"><strong>Мозг системы</strong><span id="homeBrainActivity">перетаскивание · колесо = масштаб · клик = детали</span></div>
               <div class="brain-actions"><button id="homeBrainReset" class="brain-action">Сброс</button></div>
             </div>
             <div id="homeBrainCy" aria-label="Интерактивная архитектура модулей Dragon Tory"></div>
@@ -91,8 +91,33 @@
             <div style="display:none"><span id="homeBackend">—</span><span id="homeAI">—</span><span id="homeGuardian">—</span></div>
           </div>
 
+          <div class="home-glass home-observability">
+            <div class="home-card-head">
+              <div>
+                <div class="home-card-title">Наблюдаемость · поток Тоору</div>
+                <div id="homeObsState" class="home-card-meta">Подключение к журналу событий…</div>
+              </div>
+              <div id="homeObsStamp" class="home-card-meta">live</div>
+            </div>
+            <div class="home-observability-kpis">
+              <div class="home-obs-kpi"><b id="homeObsActive">0</b><span>сейчас выполняется</span></div>
+              <div class="home-obs-kpi"><b id="homeObsLatency">—</b><span>средняя AI задержка</span></div>
+              <div class="home-obs-kpi"><b id="homeObsRetries">0</b><span>AI retry · 24ч</span></div>
+              <div class="home-obs-kpi"><b id="homeObsBlocked">0</b><span>Guardian блокировки</span></div>
+              <div class="home-obs-kpi"><b id="homeObsMemory">0</b><span>записей в память</span></div>
+            </div>
+            <div id="homeObsCurrent" class="home-obs-current">
+              <span class="home-obs-live-dot"></span>
+              <div><b>Тоору ожидает задачу</b><span>Активных анализов сейчас нет.</span></div>
+            </div>
+            <div class="home-obs-section-head"><span>Источник → анализ → решение → память</span><span>последние цепочки</span></div>
+            <div id="homeTraceList" class="home-trace-list">
+              <div class="home-trace-empty">События появятся после работы чата, документов, Guardian или памяти.</div>
+            </div>
+          </div>
+
           <div class="home-glass home-tasks">
-            <div class="home-card-head"><div class="home-card-title">Активные процессы и события</div><div class="home-card-meta">последнее состояние</div></div>
+            <div class="home-card-head"><div class="home-card-title">Системные процессы</div><div class="home-card-meta">последнее состояние</div></div>
             <div id="homeTaskList" class="home-task-list"><div class="home-task"><span class="home-task-dot"></span><div class="home-task-main"><div class="home-task-title">Загрузка состояния…</div><div class="home-task-sub">Dragon Tory</div></div><span class="home-task-time">live</span></div></div>
           </div>
         </div>

@@ -8,6 +8,7 @@ from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.cloud.document_intelligence import OCRUnavailableError
 from tooru.cloud.intelligence import UnsupportedDocumentError
 from tooru.memory.models import MemoryCreate, MemoryKind, MemoryScope
+from tooru.observability.context import observation_context
 
 PROJECT_ID = "dragon-tory"
 
@@ -31,6 +32,11 @@ class ModuleLearningService:
         self.smart = smart
         self.intelligence = intelligence
         self.ai_router = ai_router
+        self.observability = getattr(
+            memory_intake.guardian,
+            "observability",
+            None,
+        )
 
     async def study(self, module_id: str) -> dict[str, Any]:
         if module_id not in self.SUPPORTED_MODULES:
@@ -48,42 +54,134 @@ class ModuleLearningService:
         external_ai_count = 0
 
         for item in profile["items"]:
-            document_id = item["id"]
+            result = await self._study_document_item(module_id, item)
+            if result["memory_id"]:
+                memory_ids.append(result["memory_id"])
+            else:
+                skipped.append(
+                    {
+                        "id": item["id"],
+                        "reason": result["reason"],
+                    }
+                )
+            if result["external_ai_used"]:
+                external_ai_count += 1
+
+        return {
+            "module_id": module_id,
+            "studied": len(memory_ids),
+            "skipped": len(skipped),
+            "external_ai_summaries": external_ai_count,
+            "memory_ids": memory_ids,
+            "skipped_items": skipped[:100],
+            "scope": "project",
+            "project_id": PROJECT_ID,
+        }
+
+    async def _study_document_item(
+        self,
+        module_id: str,
+        item: dict[str, Any],
+    ) -> dict[str, Any]:
+        document_id = item["id"]
+        with observation_context(
+            module=module_id,
+            source_type="document",
+            source_id=document_id,
+            document_id=document_id,
+            new_trace=True,
+        ):
+            if self.observability is not None:
+                self.observability.event(
+                    category="source",
+                    stage="source",
+                    operation="module_document_selected",
+                    status="success",
+                    module=module_id,
+                    source_type="document",
+                    source_id=document_id,
+                    document_id=document_id,
+                    message="Документ выбран модулем для изучения.",
+                    details={"version": item["version"]},
+                )
+
             try:
                 contract = self.smart.get_contract(document_id)
             except KeyError:
-                skipped.append(
-                    {"id": document_id, "reason": "ИИ-договор не найден"}
+                self._observe_policy_block(
+                    module_id,
+                    document_id,
+                    "ИИ-договор не найден",
                 )
-                continue
+                return {
+                    "memory_id": None,
+                    "reason": "ИИ-договор не найден",
+                    "external_ai_used": False,
+                }
 
             if contract["expired"]:
-                skipped.append(
-                    {"id": document_id, "reason": "ИИ-договор истёк"}
+                self._observe_policy_block(
+                    module_id,
+                    document_id,
+                    "ИИ-договор истёк",
                 )
-                continue
+                return {
+                    "memory_id": None,
+                    "reason": "ИИ-договор истёк",
+                    "external_ai_used": False,
+                }
             if not (contract["content_read"] and contract["memory"]):
-                skipped.append(
-                    {
-                        "id": document_id,
-                        "reason": (
-                            "Для изучения нужны разрешения "
-                            "content_read + memory"
-                        ),
-                    }
-                )
-                continue
+                reason = "Для изучения нужны разрешения content_read + memory"
+                self._observe_policy_block(module_id, document_id, reason)
+                return {
+                    "memory_id": None,
+                    "reason": reason,
+                    "external_ai_used": False,
+                }
 
-            analysis = self._analysis_for(document_id)
-            dna = self.smart.get_dna(document_id)
-            local_summary = self._document_local_summary(
-                module_id=module_id,
-                item=item,
-                dna=dna,
-                analysis=analysis,
-            )
+            analysis_span = None
+            if self.observability is not None:
+                analysis_span = self.observability.start_span(
+                    category="analysis",
+                    stage="analysis",
+                    operation="module_document_analysis",
+                    module=module_id,
+                    source_type="document",
+                    source_id=document_id,
+                    document_id=document_id,
+                    message="Модуль анализирует документ.",
+                )
+            try:
+                analysis = self._analysis_for(document_id)
+                dna = self.smart.get_dna(document_id)
+                local_summary = self._document_local_summary(
+                    module_id=module_id,
+                    item=item,
+                    dna=dna,
+                    analysis=analysis,
+                )
+            except Exception as exc:
+                if analysis_span is not None:
+                    self.observability.finish_span(
+                        analysis_span,
+                        status="error",
+                        message=f"{type(exc).__name__}: {str(exc)[:300]}",
+                    )
+                raise
+            if analysis_span is not None:
+                self.observability.finish_span(
+                    analysis_span,
+                    status="success",
+                    message="Структурный анализ документа завершён.",
+                    details={
+                        "kind": analysis.get("kind"),
+                        "confidence": analysis.get("confidence"),
+                    },
+                )
+
             knowledge = local_summary
             mode = "local-structured"
+            external_ai_used = False
 
             if (
                 contract["answer"]
@@ -100,7 +198,7 @@ class ModuleLearningService:
                         local_summary=local_summary,
                         source_text=source["text"][:45_000],
                     )
-                    external_ai_count += 1
+                    external_ai_used = True
                     mode = "deepseek"
                 except (
                     KeyError,
@@ -145,18 +243,16 @@ class ModuleLearningService:
                 ),
             )
             if intake.memory is None:
-                skipped.append(
-                    {
-                        "id": document_id,
-                        "reason": (
-                            "Memory Guardian: "
-                            + intake.decision.outcome.value
-                        ),
-                    }
-                )
-                continue
+                return {
+                    "memory_id": None,
+                    "reason": (
+                        "Memory Guardian: "
+                        + intake.decision.outcome.value
+                    ),
+                    "external_ai_used": external_ai_used,
+                }
+
             memory = intake.memory
-            memory_ids.append(memory.id)
             self.smart.record_provenance(
                 document_id,
                 "module_memory_studied",
@@ -166,20 +262,34 @@ class ModuleLearningService:
                     "document_version": item["version"],
                     "memory_id": memory.id,
                     "mode": mode,
-                    "external_ai_used": mode == "deepseek",
+                    "external_ai_used": external_ai_used,
                 },
             )
+            return {
+                "memory_id": memory.id,
+                "reason": "",
+                "external_ai_used": external_ai_used,
+            }
 
-        return {
-            "module_id": module_id,
-            "studied": len(memory_ids),
-            "skipped": len(skipped),
-            "external_ai_summaries": external_ai_count,
-            "memory_ids": memory_ids,
-            "skipped_items": skipped[:100],
-            "scope": "project",
-            "project_id": PROJECT_ID,
-        }
+    def _observe_policy_block(
+        self,
+        module_id: str,
+        document_id: str,
+        reason: str,
+    ) -> None:
+        if self.observability is None:
+            return
+        self.observability.event(
+            category="policy",
+            stage="decision",
+            operation="ai_contract",
+            status="blocked",
+            module=module_id,
+            source_type="document",
+            source_id=document_id,
+            document_id=document_id,
+            message=reason,
+        )
 
     def _analysis_for(self, document_id: str) -> dict[str, Any]:
         try:
@@ -238,6 +348,7 @@ class ModuleLearningService:
                 ],
                 max_tokens=2_400,
             ),
+            operation="document_deep_summary",
         )
         return response.text.strip() or local_summary
 

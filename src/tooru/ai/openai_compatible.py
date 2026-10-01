@@ -92,6 +92,7 @@ class OpenAICompatibleProvider:
         )
 
     async def generate(self, request: AIRequest) -> AIResponse:
+        started = time.perf_counter()
         self._ensure_circuit_available()
 
         messages: list[dict[str, str]] = []
@@ -115,6 +116,13 @@ class OpenAICompatibleProvider:
                     attempt + 1 >= self.max_attempts
                     or self._circuit_open_until > time.monotonic()
                 ):
+                    try:
+                        exc.retry_count = attempt
+                        exc.duration_ms = (
+                            time.perf_counter() - started
+                        ) * 1000
+                    except (AttributeError, TypeError):
+                        pass
                     raise
                 delay = min(
                     self.retry_max_seconds,
@@ -130,6 +138,8 @@ class OpenAICompatibleProvider:
                 text=content,
                 provider=self.name,
                 model=self.model,
+                retry_count=attempt,
+                duration_ms=(time.perf_counter() - started) * 1000,
             )
 
         if last_error is not None:

@@ -19,6 +19,7 @@ from tooru.cloud.intelligence import (
     extract_document,
 )
 from tooru.cloud.store import CloudStore
+from tooru.observability.context import current_observation, observation_context
 
 _DATE_PATTERNS = (
     re.compile(r"\b(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])[./-](?:19|20)\d{2}\b"),
@@ -187,9 +188,10 @@ def _amount_value(raw: str) -> float | None:
 
 
 class DocumentIntelligence:
-    def __init__(self, cloud_store: CloudStore) -> None:
+    def __init__(self, cloud_store: CloudStore, *, observability=None) -> None:
         self.cloud_store = cloud_store
         self.db_path = cloud_store.db_path
+        self.observability = observability
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(
@@ -580,63 +582,121 @@ class DocumentIntelligence:
         return suggestions[:limit]
 
     def analyze(self, document_id: str) -> dict[str, Any]:
-        item = self.cloud_store.get(document_id)
-        path, cleanup = self.cloud_store.materialize_plaintext(document_id)
-        try:
-            chunks, method, ocr_used = self.extract(
-                path,
-                name=item["name"],
-                content_type=item["content_type"],
-            )
-        finally:
-            if cleanup is not None:
-                cleanup.unlink(missing_ok=True)
-
-        text = "\n\n".join(chunk.text for chunk in chunks)
-        analysis_text = text[:250_000]
-        kind, confidence = self._classify(item["name"], analysis_text)
-        entities = self._entities(analysis_text)
-        deadlines = self._deadlines(analysis_text)
-        tags = self._suggested_tags(kind, entities, analysis_text)
-        relations = self._relation_suggestions(
-            document_id,
-            entities,
-            tags,
-        )
-        summary_local = " ".join(
-            line.strip()
-            for line in analysis_text.splitlines()
-            if line.strip()
-        )[:900]
-        analyzed_at = utc_now()
-
-        with self._connect() as db:
-            db.execute(
-                """
-                INSERT OR REPLACE INTO document_intelligence (
-                    document_id, version, kind, confidence, summary_local,
-                    entities_json, deadlines_json, suggested_tags_json,
-                    suggested_relations_json, extraction_method, ocr_used,
-                    analyzed_at
+        context = current_observation()
+        module = context.module or "drive"
+        with observation_context(
+            trace_id=context.trace_id,
+            module=module,
+            source_type="document",
+            source_id=document_id,
+            document_id=document_id,
+        ):
+            span_id = None
+            if self.observability is not None and context.trace_id is None:
+                self.observability.event(
+                    category="source",
+                    stage="source",
+                    operation="document_selected",
+                    status="success",
+                    module=module,
+                    source_type="document",
+                    source_id=document_id,
+                    document_id=document_id,
+                    message="Документ передан в локальный анализ.",
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
+            if self.observability is not None:
+                span_id = self.observability.start_span(
+                    category="analysis",
+                    stage="analysis",
+                    operation="local_document_analysis",
+                    module=module,
+                    source_type="document",
+                    source_id=document_id,
+                    document_id=document_id,
+                    message="Локальный анализ документа.",
+                )
+
+            try:
+                item = self.cloud_store.get(document_id)
+                path, cleanup = self.cloud_store.materialize_plaintext(document_id)
+                try:
+                    chunks, method, ocr_used = self.extract(
+                        path,
+                        name=item["name"],
+                        content_type=item["content_type"],
+                    )
+                finally:
+                    if cleanup is not None:
+                        cleanup.unlink(missing_ok=True)
+
+                text = "\n\n".join(chunk.text for chunk in chunks)
+                analysis_text = text[:250_000]
+                kind, confidence = self._classify(item["name"], analysis_text)
+                entities = self._entities(analysis_text)
+                deadlines = self._deadlines(analysis_text)
+                tags = self._suggested_tags(kind, entities, analysis_text)
+                relations = self._relation_suggestions(
                     document_id,
-                    item["version"],
-                    kind,
-                    confidence,
-                    summary_local,
-                    json.dumps(entities, ensure_ascii=False),
-                    json.dumps(deadlines, ensure_ascii=False),
-                    json.dumps(tags, ensure_ascii=False),
-                    json.dumps(relations, ensure_ascii=False),
-                    method,
-                    int(ocr_used),
-                    analyzed_at,
-                ),
-            )
-        return self.get(document_id)
+                    entities,
+                    tags,
+                )
+                summary_local = " ".join(
+                    line.strip()
+                    for line in analysis_text.splitlines()
+                    if line.strip()
+                )[:900]
+                analyzed_at = utc_now()
+
+                with self._connect() as db:
+                    db.execute(
+                        """
+                        INSERT OR REPLACE INTO document_intelligence (
+                            document_id, version, kind, confidence, summary_local,
+                            entities_json, deadlines_json, suggested_tags_json,
+                            suggested_relations_json, extraction_method, ocr_used,
+                            analyzed_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            document_id,
+                            item["version"],
+                            kind,
+                            confidence,
+                            summary_local,
+                            json.dumps(entities, ensure_ascii=False),
+                            json.dumps(deadlines, ensure_ascii=False),
+                            json.dumps(tags, ensure_ascii=False),
+                            json.dumps(relations, ensure_ascii=False),
+                            method,
+                            int(ocr_used),
+                            analyzed_at,
+                        ),
+                    )
+                result = self.get(document_id)
+            except Exception as exc:
+                if span_id is not None:
+                    self.observability.finish_span(
+                        span_id,
+                        status="error",
+                        message=f"{type(exc).__name__}: {str(exc)[:300]}",
+                    )
+                raise
+
+            if span_id is not None:
+                self.observability.finish_span(
+                    span_id,
+                    status="success",
+                    message=f"Локальный анализ: {kind}.",
+                    details={
+                        "kind": kind,
+                        "confidence": confidence,
+                        "extraction_method": method,
+                        "ocr_used": bool(ocr_used),
+                        "version": item["version"],
+                    },
+                )
+            return result
 
     @staticmethod
     def _decode_row(row: sqlite3.Row) -> dict[str, Any]:

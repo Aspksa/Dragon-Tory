@@ -44,11 +44,13 @@ class UpdateService:
         local_version: str,
         repository: str,
         branch: str,
+        github_token: str | None = None,
     ) -> None:
         self.project_root = project_root.resolve()
         self.local_version = local_version
         self.repository = repository
         self.branch = branch
+        self.github_token = (github_token or "").strip() or None
         self.state_path = self.project_root / "data" / "update" / "state.json"
         self.history_path = (
             self.project_root / "data" / "update" / "history.json"
@@ -294,6 +296,9 @@ class UpdateService:
             str(self.updater_script),
         ]
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        child_env = os.environ.copy()
+        if self.github_token:
+            child_env["TOORU_UPDATE_GITHUB_TOKEN"] = self.github_token
 
         self.launch_log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -306,6 +311,7 @@ class UpdateService:
                 timeout=15,
                 creationflags=flags,
                 check=False,
+                env=child_env,
             )
         except (OSError, subprocess.SubprocessError) as exc:
             self._write_launch_failure(state, exc)
@@ -482,15 +488,17 @@ class UpdateService:
             "version": self._display_version(match.group(1)),
         }
 
-    @staticmethod
-    def _get_json(url: str) -> dict[str, Any]:
+    def _get_json(self, url: str) -> dict[str, Any]:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "Dragon-Tory-Updater",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        if self.github_token:
+            headers["Authorization"] = f"Bearer {self.github_token}"
         request = urllib.request.Request(
             url,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "Dragon-Tory-Updater",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers=headers,
         )
         try:
             with urllib.request.urlopen(request, timeout=15) as response:

@@ -9,6 +9,8 @@ on:
       - "src/tooru/core/**"
       - "src/tooru/main.py"
       - "src/tooru/cloud/**"
+      - "src/tooru/observability/**"
+      - "src/tooru/api/observability.py"
       - "src/tooru/web/**"
       - "src/tooru/version.py"
       - "src/tooru/api/update.py"
@@ -40,6 +42,8 @@ on:
       - "src/tooru/core/**"
       - "src/tooru/main.py"
       - "src/tooru/cloud/**"
+      - "src/tooru/observability/**"
+      - "src/tooru/api/observability.py"
       - "src/tooru/web/**"
       - "src/tooru/api/update.py"
       - "src/tooru/api/cloud_smart.py"
@@ -69,6 +73,8 @@ jobs:
   self-update:
     runs-on: windows-latest
     timeout-minutes: 15
+    env:
+      TOORU_UPDATE_GITHUB_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout

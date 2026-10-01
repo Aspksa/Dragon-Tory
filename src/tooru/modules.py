@@ -6,19 +6,19 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "dashboard",
         "title": "Главная / Системный мозг",
-        "version": "01.02.00",
+        "version": "01.03.00",
         "area": "system",
         "description": "Real-time дашборд состояния, архитектуры, памяти, нагрузки и активных процессов.",
-        "last_update": "UI разделён на HTML/CSS/JS, добавлена защита от повторных действий и browser E2E-проверка.",
+        "last_update": "Добавлен live observability: текущая работа Тоору, AI latency/retry, Guardian и цепочки источник → память.",
         "depends_on": ["memory", "drive", "updater"],
     },
     {
         "id": "drive",
         "title": "Мой диск",
-        "version": "01.05.00",
+        "version": "01.06.00",
         "area": "documents",
         "description": "Единое файловое пространство, папки, паспорта, ДНК, версии, поиск и связи.",
-        "last_update": "SQLite WAL/busy-timeout, компенсация файловых операций и защищённое хранение ключа локальной печати.",
+        "last_update": "Локальный анализ документов теперь формирует технические observability-события без сохранения текста документов.",
         "depends_on": [],
     },
     {
@@ -96,10 +96,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "memory",
         "title": "Память Тоору",
-        "version": "01.04.00",
+        "version": "01.05.00",
         "area": "system",
         "description": "Раздельная личная и проектная долговременная память, Guardian, поиск и обслуживание.",
-        "last_update": "Добавлен единый Memory Intake Gateway, provenance и изоляция памяти как недоверенного AI-контекста.",
+        "last_update": "Guardian и Memory Intake публикуют решения, блокировки и Memory ID в единую трассу наблюдаемости.",
         "depends_on": [],
     },
     {

@@ -182,6 +182,10 @@ async def test_deepseek(request: Request) -> AITestResult:
                 ],
                 max_tokens=32,
             ),
+            module="settings",
+            operation="deepseek_connection_test",
+            source_type="settings",
+            source_id="deepseek",
         )
     except Exception as exc:
         raise HTTPException(
