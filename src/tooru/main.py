@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
@@ -12,6 +13,7 @@ from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
 from tooru.api.memory import router as memory_router
 from tooru.api.settings import router as settings_router
+from tooru.api.update import router as update_router
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
@@ -20,6 +22,7 @@ from tooru.memory.guardian_automation import MemoryGuardianAutomation
 from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.maintenance import MemoryAutomation
 from tooru.memory.store import SQLiteMemoryStore
+from tooru.update.service import UpdateService
 
 
 @asynccontextmanager
@@ -86,6 +89,12 @@ async def lifespan(app: FastAPI):
 
     app.state.settings = settings
     app.state.started_at = datetime.now(UTC)
+    app.state.update_service = UpdateService(
+        project_root=Path.cwd(),
+        local_version=settings.version,
+        repository=settings.update_repository,
+        branch=settings.update_branch,
+    )
     app.state.memory = memory
     app.state.ai_router = ai_router
     app.state.deepseek_config = {
@@ -122,6 +131,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(diagnostics_router)
     app.include_router(settings_router)
+    app.include_router(update_router)
     app.include_router(memory_router)
     return app
 
