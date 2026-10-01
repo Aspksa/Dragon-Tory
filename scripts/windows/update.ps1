@@ -200,13 +200,22 @@ function Add-History {
     }
 }
 
-function Invoke-GitHubJson {
-    param([string]$Uri)
-    return Invoke-RestMethod -Uri $Uri -Headers @{
+function Get-GitHubHeaders {
+    $headers = @{
         "Accept" = "application/vnd.github+json"
         "User-Agent" = "Dragon-Tory-Updater"
         "X-GitHub-Api-Version" = "2022-11-28"
-    } -TimeoutSec 30
+    }
+    $token = [string]$env:TOORU_UPDATE_GITHUB_TOKEN
+    if (-not [string]::IsNullOrWhiteSpace($token)) {
+        $headers["Authorization"] = "Bearer $token"
+    }
+    return $headers
+}
+
+function Invoke-GitHubJson {
+    param([string]$Uri)
+    return Invoke-RestMethod -Uri $Uri -Headers (Get-GitHubHeaders) -TimeoutSec 30
 }
 
 function Get-Sha256Hex {
@@ -422,10 +431,7 @@ try {
     # installing different bytes if the branch moves between the metadata
     # request and the archive download.
     $zipUrl = "$repoApi/zipball/$remoteSha"
-    Invoke-WebRequest -Uri $zipUrl -OutFile $ZipFile -Headers @{
-        "Accept" = "application/vnd.github+json"
-        "User-Agent" = "Dragon-Tory-Updater"
-    } -TimeoutSec 120
+    Invoke-WebRequest -Uri $zipUrl -OutFile $ZipFile -Headers (Get-GitHubHeaders) -TimeoutSec 120
 
     if ((Get-Item -LiteralPath $ZipFile).Length -lt 1000) {
         throw "Скачанный архив GitHub имеет недопустимо маленький размер."
