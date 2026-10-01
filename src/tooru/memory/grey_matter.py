@@ -563,6 +563,7 @@ class GreyMatterService:
         scope: MemoryScope = MemoryScope.PROJECT,
         project_id: str | None = "dragon-tory",
         limit: int = 500,
+        create_summary: bool = True,
     ) -> GreyMatterReport:
         items = self.store.scope_items(
             owner_id=owner_id,
@@ -571,23 +572,44 @@ class GreyMatterService:
             limit=limit,
         )
         entity_links = self._consolidate_entities(items)
-        summary = self.memory.consolidate(
-            MemoryConsolidateRequest(
-                owner_id=owner_id,
-                scope=scope,
-                project_id=project_id,
-                limit=min(max(2, len(items)), 500),
-                min_importance=0.20,
+        summary = None
+        hierarchy_memory = None
+        source_ids: list[str] = []
+        if create_summary and len(items) >= 2:
+            summary = self.memory.consolidate(
+                MemoryConsolidateRequest(
+                    owner_id=owner_id,
+                    scope=scope,
+                    project_id=project_id,
+                    limit=min(max(2, len(items)), 500),
+                    min_importance=0.20,
+                )
             )
-        )
+            hierarchy_memory = summary.memory
+            source_ids = summary.source_ids
+        else:
+            summaries = [
+                item
+                for item in items
+                if item.kind is MemoryKind.SUMMARY
+            ]
+            if summaries:
+                hierarchy_memory = summaries[0]
+                source_ids = [
+                    item.id
+                    for item in items
+                    if item.id != hierarchy_memory.id
+                    and item.kind is not MemoryKind.SUMMARY
+                ][:250]
+
         hierarchy_links = 0
-        if summary.memory is not None:
-            for source_id in summary.source_ids:
-                if source_id == summary.memory.id:
+        if hierarchy_memory is not None:
+            for source_id in source_ids:
+                if source_id == hierarchy_memory.id:
                     continue
                 self.store.add_link(
                     source_id,
-                    summary.memory.id,
+                    hierarchy_memory.id,
                     MemoryLinkType.PART_OF,
                     1.0,
                 )
@@ -616,7 +638,11 @@ class GreyMatterService:
                 )
                 if link.source_id == item.id
             ),
-            summaries_created=1 if summary.memory is not None else 0,
+            summaries_created=(
+                1
+                if summary is not None and summary.memory is not None
+                else 0
+            ),
             skills_found=sum(
                 item.kind is MemoryKind.SKILL
                 for item in items
