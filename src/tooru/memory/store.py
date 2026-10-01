@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -243,6 +244,84 @@ class SQLiteMemoryStore:
                 WHERE client_mutation_id IS NOT NULL
                 """
             )
+            self._initialize_fts(conn)
+
+    def _initialize_fts(self, conn: sqlite3.Connection) -> None:
+        """Create and backfill the optional FTS5 lexical index.
+
+        FTS5 is available in normal CPython builds used by Dragon Tory. The
+        fallback keeps the memory database usable on unusual SQLite builds
+        where the extension is unavailable.
+        """
+        try:
+            conn.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts
+                USING fts5(
+                    memory_key,
+                    content,
+                    tags,
+                    tokenize='unicode61 remove_diacritics 2'
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS memory_fts_ai
+                AFTER INSERT ON memory_items
+                BEGIN
+                    INSERT INTO memory_fts(rowid, memory_key, content, tags)
+                    VALUES (
+                        new.rowid,
+                        COALESCE(new.memory_key, ''),
+                        new.content,
+                        new.tags_json
+                    );
+                END
+                """
+            )
+            conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS memory_fts_ad
+                AFTER DELETE ON memory_items
+                BEGIN
+                    DELETE FROM memory_fts WHERE rowid = old.rowid;
+                END
+                """
+            )
+            conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS memory_fts_au
+                AFTER UPDATE OF memory_key, content, tags_json ON memory_items
+                BEGIN
+                    DELETE FROM memory_fts WHERE rowid = old.rowid;
+                    INSERT INTO memory_fts(rowid, memory_key, content, tags)
+                    VALUES (
+                        new.rowid,
+                        COALESCE(new.memory_key, ''),
+                        new.content,
+                        new.tags_json
+                    );
+                END
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO memory_fts(rowid, memory_key, content, tags)
+                SELECT
+                    m.rowid,
+                    COALESCE(m.memory_key, ''),
+                    m.content,
+                    m.tags_json
+                FROM memory_items AS m
+                LEFT JOIN memory_fts AS f ON f.rowid = m.rowid
+                WHERE f.rowid IS NULL
+                """
+            )
+        except sqlite3.OperationalError as exc:
+            if "fts5" not in str(exc).casefold():
+                raise
+
 
     def add(self, memory: MemoryCreate) -> MemoryItem:
         if memory.client_mutation_id:
@@ -492,6 +571,92 @@ class SQLiteMemoryStore:
                 """,
                 params,
             ).fetchall()
+        return [self._row_to_item(row) for row in rows]
+
+    @staticmethod
+    def _fts_query(value: str) -> str:
+        terms: list[str] = []
+        seen: set[str] = set()
+        for term in re.findall(r"[\w-]+", value.casefold(), flags=re.UNICODE):
+            if len(term) < 2 or term in seen:
+                continue
+            seen.add(term)
+            terms.append(term)
+            if len(terms) >= 20:
+                break
+        return " OR ".join(f'"{term}"' for term in terms)
+
+    def lexical_candidates(
+        self,
+        request: MemorySearch,
+        *,
+        limit: int = 200,
+    ) -> list[MemoryItem]:
+        """Retrieve query-matching memories through SQLite FTS5.
+
+        This channel is intentionally independent from the normal importance /
+        recency candidate window so an older low-importance but textually
+        relevant memory can still reach the hybrid reranker.
+        """
+        fts_query = self._fts_query(request.query)
+        if not fts_query:
+            return []
+
+        params: list[object] = [fts_query, request.owner_id, request.scope.value]
+        clauses = [
+            "memory_fts MATCH ?",
+            "m.owner_id = ?",
+            "m.scope = ?",
+            "m.deleted_at IS NULL",
+        ]
+
+        if request.scope is MemoryScope.PROJECT:
+            clauses.append("m.project_id = ?")
+            params.append(request.project_id)
+        else:
+            clauses.append("m.project_id IS NULL")
+
+        if not request.include_archived:
+            clauses.append("m.status = 'active'")
+            clauses.append("(m.expires_at IS NULL OR m.expires_at > ?)")
+            params.append(self._now())
+
+        if request.kind is not None:
+            clauses.append("m.kind = ?")
+            params.append(request.kind.value)
+
+        clauses.append("m.importance >= ?")
+        params.append(request.min_importance)
+
+        for tag in request.tags:
+            clauses.append("m.tags_json LIKE ?")
+            params.append(f'%"{tag}"%')
+
+        params.append(max(1, min(1000, limit)))
+        select_columns = ", ".join(
+            f"m.{column.strip()}"
+            for column in self.SELECT_COLUMNS.split(",")
+        )
+        try:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    f"""
+                    SELECT {select_columns}
+                    FROM memory_fts
+                    JOIN memory_items AS m ON m.rowid = memory_fts.rowid
+                    WHERE {" AND ".join(clauses)}
+                    ORDER BY bm25(memory_fts),
+                             m.pinned DESC,
+                             m.importance DESC,
+                             m.updated_at DESC
+                    LIMIT ?
+                    """,
+                    params,
+                ).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "memory_fts" in str(exc).casefold() or "fts5" in str(exc).casefold():
+                return []
+            raise
         return [self._row_to_item(row) for row in rows]
 
     def pinned_items(
@@ -1331,6 +1496,8 @@ class SQLiteMemoryStore:
             "project_memories": 0,
             "active_vectors": 0,
             "vector_coverage_percent": 0.0,
+            "fts_available": False,
+            "fts_entries": 0,
             "guardian_pending": 0,
             "guardian_dead": 0,
             "journal_mode": None,
@@ -1432,6 +1599,15 @@ class SQLiteMemoryStore:
                             LEFT JOIN memory_items m ON m.id = h.memory_id
                             WHERE m.id IS NULL
                             """
+                        ).fetchone()[0]
+                        or 0
+                    )
+
+                if "memory_fts" in tables:
+                    report["fts_available"] = True
+                    report["fts_entries"] = int(
+                        conn.execute(
+                            "SELECT COUNT(*) FROM memory_fts"
                         ).fetchone()[0]
                         or 0
                     )
