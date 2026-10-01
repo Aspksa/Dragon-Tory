@@ -252,14 +252,27 @@ async def process_memo(
             ai_router=request.app.state.ai_router,
         )
         ai_study: dict[str, Any] | None = None
-        try:
-            ai_study = await learning.study_document("memos", document_id)
-        except Exception as exc:  # noqa: BLE001 - local memo processing must survive AI
+        if card.get("duplicate_of"):
             ai_study = {
                 "memory_id": None,
-                "reason": f"{type(exc).__name__}: {str(exc)[:500]}",
+                "reason": "Полная копия: повторное AI-запоминание не выполняется.",
                 "external_ai_used": False,
             }
+        elif card.get("is_template"):
+            ai_study = {
+                "memory_id": None,
+                "reason": "Шаблон хранится отдельно и не создаёт факты проекта.",
+                "external_ai_used": False,
+            }
+        else:
+            try:
+                ai_study = await learning.study_document("memos", document_id)
+            except Exception as exc:  # noqa: BLE001 - local memo processing must survive AI
+                ai_study = {
+                    "memory_id": None,
+                    "reason": f"{type(exc).__name__}: {str(exc)[:500]}",
+                    "external_ai_used": False,
+                }
         return {
             "ok": True,
             "document_id": document_id,
