@@ -7,7 +7,12 @@ from tooru.ai.base import AIRequest
 from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.cloud.document_intelligence import OCRUnavailableError
 from tooru.cloud.intelligence import UnsupportedDocumentError
-from tooru.memory.models import MemoryCreate, MemoryKind, MemoryScope
+from tooru.memory.models import (
+    MemoryCreate,
+    MemoryEvidenceCreate,
+    MemoryKind,
+    MemoryScope,
+)
 from tooru.observability.context import observation_context
 
 PROJECT_ID = "dragon-tory"
@@ -277,6 +282,47 @@ class ModuleLearningService:
                 }
 
             memory = intake.memory
+            precise_evidence = 0
+            engine = self.memory_intake.guardian.intelligence.engine
+            for item_evidence in (analysis.get("evidence") or [])[:24]:
+                evidence_type = str(item_evidence.get("type") or "")
+                if evidence_type not in {
+                    "vin",
+                    "reference",
+                    "deadline",
+                    "date",
+                    "amount",
+                    "document_total",
+                    "vat",
+                }:
+                    continue
+                engine.add_evidence(
+                    memory.id,
+                    MemoryEvidenceCreate(
+                        source_type="document",
+                        source_ref=(
+                            f"{document_id}:v{item['version']}:"
+                            f"chunk:{item_evidence.get('chunk_no') or 0}"
+                        ),
+                        document_id=document_id,
+                        page=item_evidence.get("page"),
+                        table_ref=item_evidence.get("table"),
+                        cell_ref=item_evidence.get("cell"),
+                        chunk_no=item_evidence.get("chunk_no"),
+                        evidence_hash=item_evidence.get("evidence_hash"),
+                        excerpt=str(
+                            item_evidence.get("excerpt")
+                            or item_evidence.get("raw")
+                            or ""
+                        )[:4_000],
+                        extraction_method="document-intelligence-v2",
+                        confidence=float(
+                            item_evidence.get("confidence") or 0.8
+                        ),
+                    ),
+                    owner_id=memory.owner_id,
+                )
+                precise_evidence += 1
             self.smart.record_provenance(
                 document_id,
                 "module_memory_studied",
@@ -287,12 +333,14 @@ class ModuleLearningService:
                     "memory_id": memory.id,
                     "mode": mode,
                     "external_ai_used": external_ai_used,
+                    "precise_evidence": precise_evidence,
                 },
             )
             return {
                 "memory_id": memory.id,
                 "reason": "",
                 "external_ai_used": external_ai_used,
+                "precise_evidence": precise_evidence,
             }
 
     def _observe_policy_block(
