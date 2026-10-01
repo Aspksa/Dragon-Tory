@@ -680,7 +680,6 @@ class GreyMatterService:
             owner_id=owner_id,
             scope=scope,
             project_id=project_id,
-            include_archived=True,
             limit=limit,
         )
         if not events:
@@ -747,6 +746,7 @@ class GreyMatterService:
             owner_id=owner_id,
             scope=scope,
             project_id=project_id,
+            include_archived=True,
             limit=limit,
         )
         by_id = {item.id: item for item in items}
