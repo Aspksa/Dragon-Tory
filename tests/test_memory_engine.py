@@ -262,7 +262,7 @@ def test_conversation_extraction_and_consolidation(tmp_path: Path) -> None:
 
 
 def test_long_memory_content_does_not_break_internal_search(tmp_path):
-    engine = _engine(tmp_path)
+    engine = make_engine(tmp_path)
     content = (
         "Начало документа. "
         + ("существенный факт " * 220)
@@ -283,7 +283,7 @@ def test_long_memory_content_does_not_break_internal_search(tmp_path):
 
 
 def test_bounded_search_query_preserves_head_and_tail(tmp_path):
-    engine = _engine(tmp_path)
+    engine = make_engine(tmp_path)
     value = "HEAD-" + ("x" * 3000) + "-TAIL"
 
     query = engine._bounded_search_query(value)
