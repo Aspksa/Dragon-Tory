@@ -97,10 +97,12 @@ class ChatPipeline:
         memory: MemoryEngine,
         router: AIRouter,
         guardian: MemoryGuardian,
+        cloud_store=None,
     ) -> None:
         self.memory = memory
         self.router = router
         self.guardian = guardian
+        self.cloud_store = cloud_store
 
     async def run(
         self,
@@ -121,6 +123,35 @@ class ChatPipeline:
                 max_chars=12_000,
             )
         )
+
+        document_context = ""
+        if self.cloud_store is not None:
+            try:
+                matches = self.cloud_store.search_chunks(
+                    message,
+                    limit=8,
+                )
+            except Exception:  # noqa: BLE001 - chat must survive local index issues
+                matches = []
+            if matches:
+                references: list[str] = []
+                for item in matches:
+                    source = (
+                        f"document:{item['document_id']}:"
+                        f"v{item['version']}:chunk:{item['chunk_no']}"
+                    )
+                    references.append(
+                        f"[Tory Document {item['document_id']} · "
+                        f"{item['name']} · {item['label']}]\n"
+                        + wrap_untrusted_text(
+                            item["snippet"],
+                            source=source,
+                        )
+                    )
+                document_context = (
+                    "\n\nРелевантные фрагменты личных документов:\n"
+                    + "\n\n".join(references)
+                )
 
         messages = [
             {"role": item.role, "content": item.content}
@@ -147,6 +178,7 @@ class ChatPipeline:
                 context.rendered_context,
                 source="long-term-memory",
             )
+            + document_context
         )
 
         with observation_context(
