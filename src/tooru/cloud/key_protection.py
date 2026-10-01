@@ -28,13 +28,13 @@ def _blob(data: bytes) -> tuple[_DataBlob, object]:
 
 def _dpapi_protect(data: bytes) -> bytes:
     source, source_buffer = _blob(data)
-    del source_buffer  # lifetime is retained by ctypes until call returns
+    _ = source_buffer  # keep the ctypes buffer alive for the native call
     output = _DataBlob()
     crypt32 = ctypes.windll.crypt32
     kernel32 = ctypes.windll.kernel32
     if not crypt32.CryptProtectData(
         ctypes.byref(source),
-        _DPAPI_DESCRIPTION,
+        ctypes.c_wchar_p(_DPAPI_DESCRIPTION),
         None,
         None,
         None,
@@ -52,7 +52,7 @@ def _dpapi_protect(data: bytes) -> bytes:
 def _dpapi_unprotect(payload: bytes) -> bytes:
     encrypted = payload[len(_DPAPI_MAGIC) :]
     source, source_buffer = _blob(encrypted)
-    del source_buffer
+    _ = source_buffer  # keep the ctypes buffer alive for the native call
     output = _DataBlob()
     crypt32 = ctypes.windll.crypt32
     kernel32 = ctypes.windll.kernel32
