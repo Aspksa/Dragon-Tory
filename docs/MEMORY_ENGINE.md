@@ -1,7 +1,7 @@
-# Memory Engine v4
+# Memory Engine v5
 
-Dragon Tory owns its memory. Claude and DeepSeek are replaceable reasoning
-providers that consume selected context; they do not own long-term memory.
+Dragon Tory owns its memory. DeepSeek is the configured reasoning provider,
+but it does not own long-term memory.
 
 ## Memory lifecycle
 
@@ -27,8 +27,15 @@ Pinned memory receives an explicit ranking boost.
 
 ## Hybrid recall
 
-Ranking combines semantic similarity, lexical overlap, importance, confidence,
-recency, usage feedback and pinning.
+Retrieval now has independent candidate channels. SQLite FTS5 retrieves textual
+matches without first requiring them to appear in the importance/recency window.
+Those candidates are merged with the broader semantic candidate set and then
+ranked by semantic similarity, lexical overlap, importance, confidence, recency,
+usage feedback and pinning.
+
+The default hash embedding remains an offline deterministic fallback. A real
+OpenAI-compatible embedding endpoint can be configured when stronger semantic
+similarity is required.
 
 ## History and provenance
 
@@ -66,7 +73,7 @@ entity, note, instruction, relationship and summary.
 
 ## AI Context Builder
 
-POST /v1/memory/context builds a bounded context pack for Claude or DeepSeek.
+POST /v1/memory/context builds a bounded context pack for DeepSeek.
 
 The builder:
 - recalls personal memory separately from project memory;

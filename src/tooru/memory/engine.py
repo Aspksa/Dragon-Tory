@@ -104,10 +104,23 @@ class MemoryEngine:
         *,
         track_usage: bool = True,
     ) -> list[MemoryRecallHit]:
-        candidates = self.store.candidates(
+        primary_candidates = self.store.candidates(
+            request,
+            limit=max(500, request.limit * 50),
+        )
+        lexical_candidates = self.store.lexical_candidates(
             request,
             limit=max(200, request.limit * 20),
         )
+        lexical_rank = {
+            item.id: 1.0 / rank
+            for rank, item in enumerate(lexical_candidates, start=1)
+        }
+        candidates_by_id = {
+            item.id: item
+            for item in [*primary_candidates, *lexical_candidates]
+        }
+        candidates = list(candidates_by_id.values())
         if not candidates:
             return []
 
@@ -134,6 +147,7 @@ class MemoryEngine:
                 request.query,
                 item,
                 cosine_similarity(query_vector, vectors.get(item.id, [])),
+                retrieval_score=lexical_rank.get(item.id, 0.0),
             )
             for item in candidates
         ]

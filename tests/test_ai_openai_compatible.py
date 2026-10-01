@@ -132,3 +132,44 @@ async def test_provider_circuit_breaker_stops_repeat_failures() -> None:
         )
 
     assert client.completions.calls == 1
+
+class PermanentHTTPError(RuntimeError):
+    status_code = 401
+
+
+class PermanentFailureCompletions:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def create(self, **kwargs):
+        self.calls += 1
+        raise PermanentHTTPError("invalid api key")
+
+
+class PermanentFailureClient:
+    def __init__(self) -> None:
+        self.completions = PermanentFailureCompletions()
+        self.chat = SimpleNamespace(completions=self.completions)
+
+
+@pytest.mark.asyncio
+async def test_provider_does_not_retry_permanent_http_error() -> None:
+    client = PermanentFailureClient()
+    provider = OpenAICompatibleProvider(
+        name="deepseek",
+        api_key="bad-key",
+        base_url="https://example.invalid/v1",
+        model="deepseek-test",
+        client=client,
+        max_attempts=3,
+        retry_base_seconds=0,
+        circuit_breaker_failures=5,
+    )
+
+    with pytest.raises(PermanentHTTPError):
+        await provider.generate(
+            AIRequest(messages=[{"role": "user", "content": "test"}])
+        )
+
+    assert client.completions.calls == 1
+

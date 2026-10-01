@@ -46,6 +46,7 @@ class HybridReranker:
         query: str,
         memory: MemoryItem,
         semantic_score: float,
+        retrieval_score: float = 0.0,
     ) -> MemoryRecallHit:
         lexical = lexical_similarity(
             query,
@@ -61,20 +62,23 @@ class HybridReranker:
         usage = usage_score(memory)
         pin = 1.0 if memory.pinned else 0.0
 
+        retrieval = max(0.0, min(1.0, retrieval_score))
         total = (
-            0.44 * semantic
-            + 0.18 * lexical
-            + 0.12 * memory.importance
-            + 0.08 * memory.confidence
-            + 0.08 * recency
-            + 0.05 * usage
-            + 0.05 * pin
+            0.40 * semantic
+            + 0.16 * lexical
+            + 0.12 * retrieval
+            + 0.10 * memory.importance
+            + 0.07 * memory.confidence
+            + 0.07 * recency
+            + 0.04 * usage
+            + 0.04 * pin
         )
         return MemoryRecallHit(
             memory=memory,
             score=round(total, 6),
             semantic_score=round(semantic, 6),
             lexical_score=round(lexical, 6),
+            retrieval_score=round(retrieval, 6),
             importance_score=memory.importance,
             confidence_score=memory.confidence,
             recency_score=round(recency, 6),

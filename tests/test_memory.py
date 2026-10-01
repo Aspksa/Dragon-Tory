@@ -60,6 +60,65 @@ def test_personal_and_project_memory_are_isolated(tmp_path: Path) -> None:
     assert project[0].kind is MemoryKind.DECISION
 
 
+def test_fts_lexical_search_is_scope_isolated_and_tracks_updates(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    item = store.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.NOTE,
+            content="Уникальная диагностическая метка альбатрос.",
+            importance=0.2,
+        )
+    )
+    store.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="other-project",
+            kind=MemoryKind.NOTE,
+            content="Альбатрос относится к другому проекту.",
+            importance=1.0,
+        )
+    )
+
+    found = store.lexical_candidates(
+        MemorySearch(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            query="альбатрос",
+        ),
+        limit=20,
+    )
+    assert [memory.id for memory in found] == [item.id]
+
+    store.update(
+        item.id,
+        item.owner_id,
+        MemoryUpdate(
+            content="Уникальная диагностическая метка феникс.",
+            expected_revision=item.revision,
+        ),
+    )
+    assert store.lexical_candidates(
+        MemorySearch(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            query="альбатрос",
+        )
+    ) == []
+    updated = store.lexical_candidates(
+        MemorySearch(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            query="феникс",
+        )
+    )
+    assert len(updated) == 1
+    assert updated[0].id == item.id
+
+
 def test_mobile_retry_is_idempotent(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     payload = MemoryCreate(
@@ -148,6 +207,8 @@ def test_memory_health_report_checks_real_sqlite_structure(
     assert health["orphan_vectors"] == 0
     assert health["orphan_links"] == 0
     assert health["orphan_history"] == 0
+    assert health["fts_available"] is True
+    assert health["fts_entries"] == 0
 
 
 def test_chat_memory_routing_separates_personal_and_project() -> None:
