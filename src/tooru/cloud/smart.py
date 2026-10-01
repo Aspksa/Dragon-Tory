@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 
 from tooru.cloud.key_protection import load_private_key, store_private_key
 from tooru.cloud.store import CloudStore
+from tooru.timesheet.calendar_ru import production_calendar
 
 _RELATION_TYPES = {
     "related",
@@ -314,6 +315,47 @@ class SmartDrive:
                 """
                 CREATE INDEX IF NOT EXISTS idx_garage_vin
                 ON garage_vehicles(vin COLLATE NOCASE)
+                """
+            )
+            for column, definition in (
+                ("fuel_type", "TEXT NOT NULL DEFAULT ''"),
+                ("fuel_rate_summer", "REAL"),
+                ("fuel_rate_winter", "REAL"),
+                ("tire_size_summer", "TEXT NOT NULL DEFAULT ''"),
+                ("tire_size_winter", "TEXT NOT NULL DEFAULT ''"),
+                ("insurance_type", "TEXT NOT NULL DEFAULT ''"),
+                ("insurance_policy", "TEXT NOT NULL DEFAULT ''"),
+                ("insurance_company", "TEXT NOT NULL DEFAULT ''"),
+                ("insurance_start", "TEXT"),
+                ("insurance_end", "TEXT"),
+            ):
+                self._ensure_column(
+                    db,
+                    "garage_vehicles",
+                    column,
+                    definition,
+                )
+
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS timesheet_manual_entries (
+                    id TEXT PRIMARY KEY,
+                    employee_id TEXT,
+                    employee_name TEXT NOT NULL DEFAULT '',
+                    date_from TEXT NOT NULL,
+                    date_to TEXT NOT NULL,
+                    code TEXT NOT NULL,
+                    hours REAL,
+                    note TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_timesheet_manual_dates
+                ON timesheet_manual_entries(date_from, date_to)
                 """
             )
 
