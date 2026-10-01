@@ -29,6 +29,7 @@ from tooru.memory.models import (
     MemorySyncRequest,
     MemorySyncResponse,
     MemoryTruthAssessment,
+    MemoryTruthStatus,
     MemoryUpdate,
 )
 from tooru.memory.reranker import HybridReranker, lexical_similarity
@@ -239,11 +240,15 @@ class MemoryEngine:
 
         shortlist = hits[: max(100, request.limit * 10)]
         rescored: list[MemoryRecallHit] = []
+        temporal_priority: dict[str, int] = {}
         as_of = self._parse_as_of(request.as_of)
         for hit in shortlist:
             assessment = self.truth_engine.assess(
                 hit.memory,
                 at=as_of,
+            )
+            temporal_priority[hit.memory.id] = self._temporal_priority(
+                assessment.temporal_status
             )
             rescored.append(
                 self.reranker.score(
@@ -256,7 +261,16 @@ class MemoryEngine:
                     strategy=strategy,
                 )
             )
-        rescored.sort(key=lambda hit: hit.score, reverse=True)
+        if as_of is not None:
+            rescored.sort(
+                key=lambda hit: (
+                    temporal_priority.get(hit.memory.id, 0),
+                    hit.score,
+                ),
+                reverse=True,
+            )
+        else:
+            rescored.sort(key=lambda hit: hit.score, reverse=True)
         selected = rescored[: request.limit]
         if track_usage:
             self.store.touch_recall([hit.memory.id for hit in selected])
@@ -668,6 +682,16 @@ class MemoryEngine:
             rendered = rendered[: request.max_chars].rsplit("\n", 1)[0]
             rendered += "\n</tooru_memory>"
         return rendered, total
+
+    @staticmethod
+    def _temporal_priority(status: MemoryTruthStatus) -> int:
+        return {
+            MemoryTruthStatus.CURRENT: 4,
+            MemoryTruthStatus.UNDATED: 3,
+            MemoryTruthStatus.HISTORICAL: 2,
+            MemoryTruthStatus.FUTURE: 1,
+            MemoryTruthStatus.SUPERSEDED: 0,
+        }[status]
 
     @staticmethod
     def _graph_relations(
