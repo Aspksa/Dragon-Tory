@@ -126,6 +126,7 @@ class MemoryRecallHit(BaseModel):
     score: float
     semantic_score: float
     lexical_score: float
+    retrieval_score: float = 0.0
     importance_score: float
     confidence_score: float
     recency_score: float
