@@ -151,6 +151,43 @@ def test_expired_memory_is_archived_by_maintenance(tmp_path: Path) -> None:
     assert archived.status is MemoryStatus.ARCHIVED
 
 
+def test_recall_recovers_old_low_priority_lexical_memory(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    target = engine.store.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.NOTE,
+            content="Редкая метка северный-альбатрос относится к старому решению.",
+            importance=0.05,
+            confidence=0.5,
+        )
+    )
+    for index in range(520):
+        engine.store.add(
+            MemoryCreate(
+                scope=MemoryScope.PROJECT,
+                project_id="dragon-tory",
+                kind=MemoryKind.NOTE,
+                content=f"Свежая высокоприоритетная запись номер {index}.",
+                importance=1.0,
+                confidence=1.0,
+            )
+        )
+
+    hits = engine.recall(
+        MemorySearch(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            query="северный альбатрос",
+            limit=5,
+        ),
+        track_usage=False,
+    )
+
+    assert target.id in {hit.memory.id for hit in hits}
+
+
 def test_context_pack_keeps_projects_isolated_and_includes_pinned_personal(
     tmp_path: Path,
 ) -> None:
