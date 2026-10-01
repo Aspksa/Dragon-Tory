@@ -592,7 +592,7 @@ class DocumentIntelligence:
             document_id=document_id,
         ):
             span_id = None
-            if self.observability is not None:
+            if self.observability is not None and context.trace_id is None:
                 self.observability.event(
                     category="source",
                     stage="source",
@@ -604,6 +604,7 @@ class DocumentIntelligence:
                     document_id=document_id,
                     message="Документ передан в локальный анализ.",
                 )
+            if self.observability is not None:
                 span_id = self.observability.start_span(
                     category="analysis",
                     stage="analysis",
