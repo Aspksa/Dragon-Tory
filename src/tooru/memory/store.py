@@ -168,6 +168,10 @@ class SQLiteMemoryStore:
                     source_ref TEXT,
                     document_id TEXT,
                     page INTEGER,
+                    table_ref TEXT,
+                    cell_ref TEXT,
+                    chunk_no INTEGER,
+                    evidence_hash TEXT,
                     excerpt TEXT,
                     extraction_method TEXT,
                     confidence REAL NOT NULL DEFAULT 1.0,
@@ -182,6 +186,7 @@ class SQLiteMemoryStore:
                 ON memory_evidence(memory_id, created_at DESC)
                 """
             )
+            self._migrate_evidence_schema(conn)
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory_maintenance_runs (
@@ -1067,12 +1072,14 @@ class SQLiteMemoryStore:
                 """
                 INSERT INTO memory_evidence (
                     id, memory_id, source_type, source_ref, document_id,
-                    page, excerpt, extraction_method, confidence, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    page, table_ref, cell_ref, chunk_no, evidence_hash,
+                    excerpt, extraction_method, confidence, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     item.id, item.memory_id, item.source_type, item.source_ref,
-                    item.document_id, item.page, item.excerpt,
+                    item.document_id, item.page, item.table_ref, item.cell_ref,
+                    item.chunk_no, item.evidence_hash, item.excerpt,
                     item.extraction_method, item.confidence, item.created_at,
                 ),
             )
@@ -1090,7 +1097,8 @@ class SQLiteMemoryStore:
             rows = conn.execute(
                 """
                 SELECT id, memory_id, source_type, source_ref, document_id,
-                       page, excerpt, extraction_method, confidence, created_at
+                       page, table_ref, cell_ref, chunk_no, evidence_hash,
+                       excerpt, extraction_method, confidence, created_at
                 FROM memory_evidence
                 WHERE memory_id = ?
                 ORDER BY created_at DESC
@@ -1106,6 +1114,10 @@ class SQLiteMemoryStore:
                 source_ref=row["source_ref"],
                 document_id=row["document_id"],
                 page=row["page"],
+                table_ref=row["table_ref"],
+                cell_ref=row["cell_ref"],
+                chunk_no=row["chunk_no"],
+                evidence_hash=row["evidence_hash"],
                 excerpt=row["excerpt"],
                 extraction_method=row["extraction_method"],
                 confidence=row["confidence"],
@@ -1667,6 +1679,27 @@ class SQLiteMemoryStore:
                 self._now(),
             ),
         )
+
+    @staticmethod
+    def _migrate_evidence_schema(conn: sqlite3.Connection) -> None:
+        existing = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(memory_evidence)"
+            ).fetchall()
+        }
+        migrations = {
+            "table_ref": "TEXT",
+            "cell_ref": "TEXT",
+            "chunk_no": "INTEGER",
+            "evidence_hash": "TEXT",
+        }
+        for column, definition in migrations.items():
+            if column not in existing:
+                conn.execute(
+                    f"ALTER TABLE memory_evidence "
+                    f"ADD COLUMN {column} {definition}"
+                )
 
     def _migrate_legacy_schema(self, conn: sqlite3.Connection) -> None:
         existing = {

@@ -89,6 +89,12 @@ def intelligence_status(request: Request) -> dict[str, Any]:
             "local_first": True,
             "external_ai_required": False,
             "stores_full_raw_text": False,
+            "engine": "document-intelligence-v2",
+            "chunk_first": True,
+            "structured_provenance": True,
+            "financial_checks": True,
+            "prompt_injection_scan": True,
+            "whole_document_sampling": True,
         },
         "supported_native": sorted(
             suffix.removeprefix(".").upper()
@@ -609,8 +615,12 @@ async def semantic_version_compare(
             payload.second_version,
         )
 
-        first_text = first["text"][:28_000]
-        second_text = second["text"][:28_000]
+        first_text = str(
+            first.get("representative_text") or first["text"]
+        )[:28_000]
+        second_text = str(
+            second.get("representative_text") or second["text"]
+        )[:28_000]
         response = await request.app.state.ai_router.generate(
             "deepseek",
             AIRequest(
@@ -683,6 +693,10 @@ async def semantic_version_compare(
             "sha256_a": first["sha256"],
             "sha256_b": second["sha256"],
             "local_diff": local_diff,
+            "structure_a": first.get("structure") or {},
+            "structure_b": second.get("structure") or {},
+            "checks_a": first.get("checks") or {},
+            "checks_b": second.get("checks") or {},
             "provider": response.provider,
             "model": response.model,
             "memory_written": False,

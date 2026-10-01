@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 
 import pymupdf
 
+from tooru.cloud.document_analysis_v2 import analyze_chunks
 from tooru.cloud.intelligence import (
     LEGACY_CONVERTIBLE_SUFFIXES,
     ExtractedChunk,
@@ -222,6 +223,9 @@ class DocumentIntelligence:
                     deadlines_json TEXT NOT NULL,
                     suggested_tags_json TEXT NOT NULL,
                     suggested_relations_json TEXT NOT NULL,
+                    structure_json TEXT NOT NULL DEFAULT '{}',
+                    checks_json TEXT NOT NULL DEFAULT '{}',
+                    evidence_json TEXT NOT NULL DEFAULT '[]',
                     extraction_method TEXT NOT NULL,
                     ocr_used INTEGER NOT NULL DEFAULT 0,
                     analyzed_at TEXT NOT NULL,
@@ -235,7 +239,85 @@ class DocumentIntelligence:
                 ON document_intelligence(kind, analyzed_at DESC)
                 """
             )
+            self._migrate_v2_schema(db)
             ensure_service_memo_schema(db)
+
+    @staticmethod
+    def _migrate_v2_schema(db: sqlite3.Connection) -> None:
+        existing = {
+            row["name"]
+            for row in db.execute(
+                "PRAGMA table_info(document_intelligence)"
+            ).fetchall()
+        }
+        migrations = {
+            "structure_json": "TEXT NOT NULL DEFAULT '{}'",
+            "checks_json": "TEXT NOT NULL DEFAULT '{}'",
+            "evidence_json": "TEXT NOT NULL DEFAULT '[]'",
+        }
+        for column, definition in migrations.items():
+            if column not in existing:
+                db.execute(
+                    f"ALTER TABLE document_intelligence "
+                    f"ADD COLUMN {column} {definition}"
+                )
+
+    @classmethod
+    def _aggregate_entities(
+        cls,
+        chunks: list[ExtractedChunk],
+    ) -> dict[str, Any]:
+        merged: dict[str, list[Any]] = {}
+        seen: dict[str, set[str]] = {}
+        for chunk in chunks:
+            local = cls._entities(chunk.text)
+            for key, values in local.items():
+                bucket = merged.setdefault(key, [])
+                keys = seen.setdefault(key, set())
+                for value in values:
+                    marker = json.dumps(
+                        value,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                    if marker in keys:
+                        continue
+                    keys.add(marker)
+                    bucket.append(value)
+                    if len(bucket) >= 200:
+                        break
+        return merged
+
+    @classmethod
+    def _aggregate_deadlines(
+        cls,
+        chunks: list[ExtractedChunk],
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for chunk_no, chunk in enumerate(chunks, start=1):
+            for item in cls._deadlines(chunk.text):
+                key = (
+                    str(item.get("date") or "")
+                    + "|"
+                    + str(item.get("context") or "").casefold()
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                result.append(
+                    {
+                        **item,
+                        "chunk_no": chunk_no,
+                        "label": chunk.label,
+                        "page": chunk.page,
+                        "table": chunk.table,
+                        "cell": chunk.cell,
+                    }
+                )
+                if len(result) >= 200:
+                    return result
+        return result
 
     @staticmethod
     def _find_libreoffice() -> str | None:
@@ -674,6 +756,76 @@ class DocumentIntelligence:
         suggestions.sort(key=lambda item: item["score"], reverse=True)
         return suggestions[:limit]
 
+    @staticmethod
+    def _kind_checks(
+        kind: str,
+        entities: dict[str, Any],
+        deadlines: list[dict[str, Any]],
+        checks: dict[str, Any],
+    ) -> dict[str, Any]:
+        result = json.loads(json.dumps(checks, ensure_ascii=False))
+        warnings = list(result.get("warnings") or [])
+        missing: list[str] = []
+
+        if kind in {"договор", "счёт-оферта"}:
+            if not entities.get("counterparties"):
+                missing.append("counterparty")
+            if not entities.get("references"):
+                missing.append("document_number")
+        if kind == "счёт-оферта":
+            if not entities.get("amounts"):
+                missing.append("amount")
+            vat_candidates = (
+                result.get("financial", {}).get("vat_candidates", [])
+            )
+            if not vat_candidates:
+                warnings.append(
+                    {
+                        "code": "vat_not_found",
+                        "severity": "info",
+                        "message": (
+                            "В счёте-оферте не найдено явного указания НДС; "
+                            "проверьте документ вручную."
+                        ),
+                    }
+                )
+        if kind == "договор" and not deadlines and not entities.get("dates"):
+            warnings.append(
+                {
+                    "code": "contract_dates_not_found",
+                    "severity": "info",
+                    "message": (
+                        "В договоре не найдены явные даты или срок действия."
+                    ),
+                }
+            )
+        if missing:
+            warnings.append(
+                {
+                    "code": "missing_core_requisites",
+                    "severity": "warning",
+                    "message": (
+                        "Не найдены основные реквизиты: "
+                        + ", ".join(missing)
+                    ),
+                    "fields": missing,
+                }
+            )
+
+        result["warnings"] = warnings
+        result["warning_count"] = len(warnings)
+        result["requisites"] = {
+            "missing": missing,
+            "counterparties": len(entities.get("counterparties") or []),
+            "references": len(entities.get("references") or []),
+            "ibans": len(entities.get("iban") or []),
+            "emails": len(entities.get("emails") or []),
+            "dates": len(entities.get("dates") or []),
+            "deadlines": len(deadlines),
+            "amounts": len(entities.get("amounts") or []),
+        }
+        return result
+
     def analyze(self, document_id: str) -> dict[str, Any]:
         context = current_observation()
         module = context.module or "drive"
@@ -722,12 +874,18 @@ class DocumentIntelligence:
                     if cleanup is not None:
                         cleanup.unlink(missing_ok=True)
 
-                text = "\n\n".join(chunk.text for chunk in chunks)
-                analysis_text = text[:250_000]
+                v2 = analyze_chunks(chunks)
+                analysis_text = str(v2["representative_text"])
                 kind, confidence = self._classify(item["name"], analysis_text)
-                entities = self._entities(analysis_text)
-                deadlines = self._deadlines(analysis_text)
+                entities = self._aggregate_entities(chunks)
+                deadlines = self._aggregate_deadlines(chunks)
                 tags = self._suggested_tags(kind, entities, analysis_text)
+                v2["checks"] = self._kind_checks(
+                    kind,
+                    entities,
+                    deadlines,
+                    v2["checks"],
+                )
                 relations = self._relation_suggestions(
                     document_id,
                     entities,
@@ -746,10 +904,10 @@ class DocumentIntelligence:
                         INSERT OR REPLACE INTO document_intelligence (
                             document_id, version, kind, confidence, summary_local,
                             entities_json, deadlines_json, suggested_tags_json,
-                            suggested_relations_json, extraction_method, ocr_used,
-                            analyzed_at
+                            suggested_relations_json, structure_json, checks_json,
+                            evidence_json, extraction_method, ocr_used, analyzed_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             document_id,
@@ -761,6 +919,9 @@ class DocumentIntelligence:
                             json.dumps(deadlines, ensure_ascii=False),
                             json.dumps(tags, ensure_ascii=False),
                             json.dumps(relations, ensure_ascii=False),
+                            json.dumps(v2["structure"], ensure_ascii=False),
+                            json.dumps(v2["checks"], ensure_ascii=False),
+                            json.dumps(v2["evidence"], ensure_ascii=False),
                             method,
                             int(ocr_used),
                             analyzed_at,
@@ -787,6 +948,13 @@ class DocumentIntelligence:
                         "extraction_method": method,
                         "ocr_used": bool(ocr_used),
                         "version": item["version"],
+                        "chunk_count": int(
+                            v2["structure"].get("chunk_count") or 0
+                        ),
+                        "warning_count": int(
+                            v2["checks"].get("warning_count") or 0
+                        ),
+                        "evidence_count": len(v2["evidence"]),
                     },
                 )
             return result
@@ -800,6 +968,9 @@ class DocumentIntelligence:
             "deadlines_json",
             "suggested_tags_json",
             "suggested_relations_json",
+            "structure_json",
+            "checks_json",
+            "evidence_json",
         ):
             item[key.removesuffix("_json")] = json.loads(item.pop(key))
         return item
@@ -1458,6 +1629,7 @@ class DocumentIntelligence:
         finally:
             if cleanup is not None:
                 cleanup.unlink(missing_ok=True)
+        v2 = analyze_chunks(chunks)
         text = "\n\n".join(chunk.text for chunk in chunks)
         return {
             "document_id": document_id,
@@ -1468,7 +1640,71 @@ class DocumentIntelligence:
             "extraction_method": method,
             "ocr_used": ocr_used,
             "text": text[:120_000],
+            "structure": v2["structure"],
+            "checks": v2["checks"],
+            "evidence": v2["evidence"],
+            "representative_text": v2["representative_text"][:120_000],
         }
+
+    @staticmethod
+    def _evidence_diff(
+        base: list[dict[str, Any]],
+        changed: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        useful = {
+            "vin",
+            "reference",
+            "deadline",
+            "date",
+            "amount",
+            "document_total",
+            "vat",
+        }
+
+        def signature(item: dict[str, Any]) -> tuple[str, str, str, str]:
+            return (
+                str(item.get("type") or ""),
+                str(item.get("value") or ""),
+                str(item.get("currency") or ""),
+                str(item.get("rate") or ""),
+            )
+
+        base_signatures = {
+            signature(item)
+            for item in base
+            if str(item.get("type") or "") in useful
+        }
+        result: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for item in changed:
+            if str(item.get("type") or "") not in useful:
+                continue
+            key = signature(item)
+            if key in base_signatures or key in seen:
+                continue
+            seen.add(key)
+            result.append(
+                {
+                    key_name: item.get(key_name)
+                    for key_name in (
+                        "type",
+                        "value",
+                        "currency",
+                        "rate",
+                        "raw",
+                        "page",
+                        "table",
+                        "cell",
+                        "chunk_no",
+                        "excerpt",
+                        "evidence_hash",
+                    )
+                    if item.get(key_name) is not None
+                }
+            )
+            if len(result) >= 100:
+                break
+        return result
 
     def local_version_diff(
         self,
@@ -1480,13 +1716,33 @@ class DocumentIntelligence:
         b = self.version_text(document_id, second)
         a_entities = self._entities(a["text"])
         b_entities = self._entities(b["text"])
-        a_dates = set(a_entities["dates"])
-        b_dates = set(b_entities["dates"])
+        a_dates = {
+            str(item.get("value"))
+            for item in (a.get("evidence") or [])
+            if item.get("type") in {"date", "deadline"} and item.get("value")
+        } or set(a_entities["dates"])
+        b_dates = {
+            str(item.get("value"))
+            for item in (b.get("evidence") or [])
+            if item.get("type") in {"date", "deadline"} and item.get("value")
+        } or set(b_entities["dates"])
         a_amounts = {
+            (str(item.get("currency")), float(item.get("value")))
+            for item in (a.get("evidence") or [])
+            if item.get("type") == "amount"
+            and item.get("currency")
+            and isinstance(item.get("value"), (int, float))
+        } or {
             (item["currency"], item["value"])
             for item in a_entities["amounts"]
         }
         b_amounts = {
+            (str(item.get("currency")), float(item.get("value")))
+            for item in (b.get("evidence") or [])
+            if item.get("type") == "amount"
+            and item.get("currency")
+            and isinstance(item.get("value"), (int, float))
+        } or {
             (item["currency"], item["value"])
             for item in b_entities["amounts"]
         }
@@ -1518,4 +1774,16 @@ class DocumentIntelligence:
             "text_removed": sorted(a_lines - b_lines)[:30],
             "sha256_a": a["sha256"],
             "sha256_b": b["sha256"],
+            "facts_added": self._evidence_diff(
+                a.get("evidence") or [],
+                b.get("evidence") or [],
+            ),
+            "facts_removed": self._evidence_diff(
+                b.get("evidence") or [],
+                a.get("evidence") or [],
+            ),
+            "structure_a": a.get("structure") or {},
+            "structure_b": b.get("structure") or {},
+            "checks_a": a.get("checks") or {},
+            "checks_b": b.get("checks") or {},
         }

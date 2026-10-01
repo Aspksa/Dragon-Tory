@@ -259,6 +259,10 @@ def test_temporal_memory_and_evidence_persist(tmp_path: Path) -> None:
             source_ref="document:memo-1",
             document_id="memo-1",
             page=2,
+            table_ref="Таблица 1",
+            cell_ref="B4:D4",
+            chunk_no=7,
+            evidence_hash="abc123",
             excerpt="Назначить Петрова водителем.",
             extraction_method="service-memo-parser",
             confidence=0.98,
@@ -276,6 +280,10 @@ def test_temporal_memory_and_evidence_persist(tmp_path: Path) -> None:
     assert proof[0].id == evidence.id
     assert proof[0].document_id == "memo-1"
     assert proof[0].page == 2
+    assert proof[0].table_ref == "Таблица 1"
+    assert proof[0].cell_ref == "B4:D4"
+    assert proof[0].chunk_no == 7
+    assert proof[0].evidence_hash == "abc123"
     assert reopened.health_report(deep=True)["orphan_evidence"] == 0
 
 

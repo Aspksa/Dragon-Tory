@@ -65,3 +65,16 @@ def test_release_0032_lists_reasoning_engine_changes() -> None:
         for change in modules["reasoning"]["changes"]
     )
 
+def test_release_0033_lists_document_intelligence_v2() -> None:
+    release = release_notes_for("0.0.33")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert {"drive", "contracts", "invoice_offers", "memos", "memory", "updater"} <= set(modules)
+    assert modules["drive"]["version"] == "01.09.00"
+    assert modules["memory"]["version"] == "02.03.00"
+    assert any(
+        "chunk-first" in change
+        for change in modules["drive"]["changes"]
+    )
+

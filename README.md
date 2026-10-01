@@ -50,6 +50,19 @@
 - Experience Learning только по повторяемому проверенному опыту;
 - новые рабочие правила проходят Guardian и не становятся инструкциями автоматически.
 
+## Document Intelligence v2
+
+Версия 00.00.33 усиливает локальное понимание документов:
+
+- chunk-first анализ больших файлов по всему документу;
+- structural provenance: page / table / cell / chunk;
+- доказательства с evidence hash;
+- проверки итоговых сумм, НДС и ключевых реквизитов;
+- обнаружение indirect prompt injection внутри документов;
+- representative sampling для AI-сводки и сравнения больших версий;
+- структурированный version diff;
+- подтверждённые документные evidence передаются в проектную память через Guardian.
+
 Авторизация и центральная мобильная синхронизация намеренно пока не добавлены.
 
 См. docs/MEMORY_ENGINE.md и docs/MEMORY_INTELLIGENCE.md.
