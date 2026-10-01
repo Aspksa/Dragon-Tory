@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 
 from tooru.ai.base import AIRequest
+from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.ai.router import AIRouter
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import MemoryGuardian
@@ -138,8 +139,13 @@ class ChatPipeline:
             "выдумывай отсутствующие факты. Если память конфликтует с "
             "текущим сообщением пользователя, уточни это. "
             + mode_instruction
-            + "\n\n"
-            + context.rendered_context
+            + " "
+            + UNTRUSTED_CONTENT_POLICY
+            + "\n\nПамять для справки:\n"
+            + wrap_untrusted_text(
+                context.rendered_context,
+                source="long-term-memory",
+            )
         )
 
         response = await self.router.generate(
