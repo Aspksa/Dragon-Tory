@@ -26,7 +26,7 @@ _DATE_PATTERNS = (
 )
 _VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b", re.IGNORECASE)
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
-_URL_RE = re.compile(r"https?://[^\s<>"]+", re.IGNORECASE)
+_URL_RE = re.compile(r'https?://[^\s<>"]+', re.IGNORECASE)
 _IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b", re.IGNORECASE)
 _AMOUNT_RE = re.compile(
     r"(?:(?P<currency1>€|EUR|USD|\$|GBP|£|RUB|₽)\s*)?"
