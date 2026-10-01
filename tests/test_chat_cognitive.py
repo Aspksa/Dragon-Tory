@@ -107,3 +107,30 @@ async def test_conversation_summary_uses_previous_summary_and_new_batch() -> Non
     payload = router.request.messages[0]["content"]
     assert "Решили усилить память." in payload
     assert "Добавь временные факты." in payload
+
+class FailingGuardian(FakeGuardian):
+    async def process(self, request):
+        raise RuntimeError("memory analyzer unavailable")
+
+
+@pytest.mark.asyncio
+async def test_episode_survives_memory_analyzer_failure() -> None:
+    memory = FakeMemory()
+    guardian = FailingGuardian()
+    pipeline = ChatPipeline(
+        memory=memory,
+        router=object(),
+        guardian=guardian,
+    )
+
+    status = await pipeline._remember(
+        user_message="В проект Тоору запомни результат.",
+        assistant_answer="Результат успешно выполнен.",
+        remember=True,
+        session_id="chat-fallback",
+    )
+
+    assert "memory-error:RuntimeError" in status
+    assert "episode:applied=1" in status
+    assert guardian.episode is not None
+
