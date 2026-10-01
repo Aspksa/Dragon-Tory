@@ -275,7 +275,7 @@ async def study_module(
     request: Request,
 ) -> dict[str, Any]:
     service = ModuleLearningService(
-        memory=request.app.state.memory,
+        memory_intake=request.app.state.memory_intake,
         smart=request.app.state.cloud_smart,
         intelligence=request.app.state.document_intelligence,
         ai_router=request.app.state.ai_router,
