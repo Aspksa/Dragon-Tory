@@ -303,7 +303,7 @@ async def create_weekend_work_document(
         memory_written = bool(
             memory_result is not None and memory_result.memory is not None
         )
-    except Exception as sync_exc:
+    except Exception as sync_exc:  # noqa: BLE001 - document creation must survive
         logger.warning("Weekend-work memory auto-sync failed: %s", sync_exc)
 
     smart.record_provenance(
