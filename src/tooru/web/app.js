@@ -34,6 +34,9 @@ let cloudFavoritesOnly=false;
 let cloudTrashMode=false;
 let draggedCloudDocument=null;
 let activeDocumentModule="contracts";
+const nowForTimesheet=new Date();
+let timesheetYear=Math.max(2026,Math.min(2027,nowForTimesheet.getFullYear()));
+let timesheetMonth=nowForTimesheet.getMonth()+1;
 let counterpartiesCache=[];
 let activeCounterpartyId=null;
 let counterpartyPickForPassport=false;
@@ -429,7 +432,31 @@ function renderDirectoryRows(items,type){
       [item.personnel_number&&"Таб. № "+item.personnel_number,item.position,item.department,item.driver_license&&"В/У "+item.driver_license].filter(Boolean).forEach(value=>{const x=document.createElement("span");x.className="cloud-badge";x.textContent=value;meta.append(x)});
     }else{
       title.textContent=item.garage_number?("Гараж № "+item.garage_number):(item.plate_number||item.make_model||"Автомобиль");
-      [item.plate_number,item.make_model,item.vin&&"VIN "+item.vin,item.driver_name&&"Водитель: "+item.driver_name].filter(Boolean).forEach(value=>{const x=document.createElement("span");x.className="cloud-badge";x.textContent=value;meta.append(x)});
+      const badges=[
+        item.plate_number,
+        item.make_model,
+        item.vin&&"VIN "+item.vin,
+        item.driver_name&&"Водитель: "+item.driver_name,
+        item.fuel_type&&"ГСМ: "+item.fuel_type,
+        item.fuel_rate_summer!=null&&"Лето "+item.fuel_rate_summer+" л/100 км",
+        item.fuel_rate_winter!=null&&"Зима "+item.fuel_rate_winter+" л/100 км",
+        item.tire_size_summer&&"Шины лето: "+item.tire_size_summer,
+        item.tire_size_winter&&"Шины зима: "+item.tire_size_winter
+      ].filter(Boolean);
+      badges.forEach(value=>{const x=document.createElement("span");x.className="cloud-badge";x.textContent=value;meta.append(x)});
+      if(item.insurance_end){
+        const x=document.createElement("span");
+        x.className="cloud-badge "+(item.insurance_expired?"lock":item.insurance_alert?"ai":"");
+        x.textContent=item.insurance_expired
+          ?"⚠ Страховка истекла "+item.insurance_end
+          :(item.insurance_alert
+            ?"⚠ Страховка: "+item.insurance_days_left+" дн. · до "+item.insurance_end
+            :"Страховка до "+item.insurance_end);
+        meta.append(x);
+      }
+      row.style.cursor="pointer";
+      row.title="Открыть карточку автомобиля";
+      row.onclick=()=>openVehicleEditor(item);
     }
     left.append(title,meta);row.append(left);box.append(row);
   });
@@ -440,22 +467,71 @@ async function loadDirectoryModule(moduleId){
   const d=await api(endpoint);const items=d.items||[];
   $("documentModuleIcon").textContent=employeeMode?"👥":"🚗";
   $("documentModuleTitle").textContent=employeeMode?"Сотрудники":"Гараж";
-  $("documentModuleLead").textContent=employeeMode?"Справочник сотрудников для приказов, служебных записок, гаража и табеля.":"Автопарк: гаражные номера, госномера, VIN и закреплённые водители.";
-  $("documentModuleCount").textContent=items.length;$("documentModuleAnalyzed").textContent=0;$("documentModuleDeadlines").textContent="—";$("documentModuleNeeds").textContent="—";
-  $("documentModuleExtra").textContent=employeeMode?"Тоору использует этот справочник как структурированный контекст, а не как замену кадровой системе.":"Связь водитель ↔ автомобиль используется в служебных записках и документах.";
-  const focus=$("documentModuleFocus");focus.innerHTML="";(employeeMode?["ФИО и табельный номер","должность и подразделение","водительское удостоверение"]:["гаражный номер","госномер и VIN","закреплённый водитель"]).forEach(v=>{const x=document.createElement("span");x.textContent=v;focus.append(x)});
+  $("documentModuleLead").textContent=employeeMode
+    ?"Справочник сотрудников для приказов, служебных записок, гаража и табеля."
+    :"Автопарк: номера, VIN, водители, ГСМ, шины и страхование.";
+  const insuranceAttention=employeeMode?0:items.filter(x=>x.insurance_alert||x.insurance_expired).length;
+  const insuranceExpired=employeeMode?0:items.filter(x=>x.insurance_expired).length;
+  $("documentModuleCount").textContent=items.length;
+  $("documentModuleAnalyzed").textContent=0;
+  $("documentModuleDeadlines").textContent=employeeMode?"—":insuranceAttention;
+  $("documentModuleNeeds").textContent=employeeMode?"—":insuranceExpired;
+  $("documentModuleExtra").textContent=employeeMode
+    ?"Тоору использует этот справочник как структурированный контекст, а не как замену кадровой системе."
+    :(insuranceAttention
+      ?"⚠ Страхование требует внимания: "+insuranceAttention+". Предупреждение появляется за 15 дней до окончания."
+      :"ГСМ хранится отдельно для летней и зимней нормы. Страховка контролируется автоматически за 15 дней.");
+  const focus=$("documentModuleFocus");focus.innerHTML="";
+  (employeeMode
+    ?["ФИО и табельный номер","должность и подразделение","водительское удостоверение"]
+    :["гаражный номер / госномер / VIN","ГСМ: лето и зима","автошины: лето и зима","страховка с / по"]).forEach(v=>{const x=document.createElement("span");x.textContent=v;focus.append(x)});
   renderDirectoryRows(items,moduleId);
 }
-async function loadTimesheetModule(){
-  const d=await api("/v1/cloud/smart/timesheet/weekend-work");
-  $("documentModuleIcon").textContent="📊";$("documentModuleTitle").textContent="Табель";$("documentModuleLead").textContent="Свод часов из документов «Работа в выходной день».";
-  $("documentModuleCount").textContent=d.count;$("documentModuleAnalyzed").textContent=0;$("documentModuleDeadlines").textContent=d.total_hours+" ч";$("documentModuleNeeds").textContent=d.items.filter(x=>!x.work_hours).length;
-  $("documentModuleExtra").textContent="Записи поступают автоматически из служебных записок. Если часы не указаны, запись требует заполнения.";
-  const focus=$("documentModuleFocus");focus.innerHTML="";["сотрудник","подразделение","дата работы","часы"].forEach(v=>{const x=document.createElement("span");x.textContent=v;focus.append(x)});
-  const box=$("documentModuleList");box.innerHTML="";
-  if(!d.items.length){box.innerHTML='<div class="cloud-empty">В табеле пока нет записей.</div>';return}
-  d.items.forEach(item=>{const row=document.createElement("div");row.className="module-document";const left=document.createElement("div");const title=document.createElement("div");title.className="cloud-name";title.textContent=item.employee_name;const meta=document.createElement("div");meta.className="business-summary";[item.department,item.work_date,(item.work_hours||0)+" ч"].filter(Boolean).forEach(v=>{const x=document.createElement("span");x.className="cloud-badge";x.textContent=v;meta.append(x)});left.append(title,meta);const open=document.createElement("button");open.className="secondary";open.textContent="Открыть записку";open.onclick=()=>openPassport(item.document_id);row.append(left,open);box.append(row)});
+const timesheetMonthNames=["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+function timesheetCellContent(cell){
+  const wrap=document.createElement("div");wrap.className="timesheet-cell";
+  const code=document.createElement("b");code.textContent=cell.code||"";
+  const hours=document.createElement("small");hours.textContent=cell.hours==null?"":String(cell.hours);
+  wrap.append(code,hours);return wrap;
 }
+function renderTimesheetGrid(d){
+  const box=$("documentModuleList");box.innerHTML="";
+  const scroll=document.createElement("div");scroll.className="timesheet-scroll";
+  const table=document.createElement("table");table.className="timesheet-table";
+  const thead=document.createElement("thead");
+  const dayRow=document.createElement("tr");const personHead=document.createElement("th");personHead.rowSpan=2;personHead.textContent="Сотрудник";personHead.className="timesheet-person";dayRow.append(personHead);
+  (d.calendar.days||[]).forEach(day=>{const th=document.createElement("th");th.textContent=day.day;th.className=(day.is_workday?"":"day-off")+(day.is_short_day?" short-day":"");th.title=day.reason||"";dayRow.append(th)});
+  const total=document.createElement("th");total.rowSpan=2;total.textContent="Итого";dayRow.append(total);
+  const weekdayRow=document.createElement("tr");
+  (d.calendar.days||[]).forEach(day=>{const th=document.createElement("th");th.textContent=day.weekday_name;th.className=day.is_workday?"":"day-off";weekdayRow.append(th)});
+  thead.append(dayRow,weekdayRow);table.append(thead);
+  const tbody=document.createElement("tbody");
+  const calendarRow=document.createElement("tr");const calendarName=document.createElement("th");calendarName.textContent="Производственный календарь";calendarName.className="timesheet-person";calendarRow.append(calendarName);
+  (d.calendar.days||[]).forEach(day=>{const td=document.createElement("td");if(!day.is_workday)td.className="day-off";if(day.is_short_day)td.classList.add("short-day");td.append(timesheetCellContent({code:day.planned_code,hours:day.planned_hours}));td.title=day.reason||"";calendarRow.append(td)});
+  const calendarTotal=document.createElement("td");calendarTotal.innerHTML="<b>"+d.calendar.summary.norm_hours+" ч</b><small>"+d.calendar.summary.workdays+" раб. дн.</small>";calendarRow.append(calendarTotal);tbody.append(calendarRow);
+  (d.rows||[]).forEach(row=>{const tr=document.createElement("tr");const name=document.createElement("th");name.className="timesheet-person";name.textContent=row.employee_name;tr.append(name);(row.cells||[]).forEach(cell=>{const td=document.createElement("td");if(cell.code==="В")td.className="day-off";if(cell.code==="ОТ")td.className="timesheet-vacation";if(cell.code==="Б")td.className="timesheet-sick";if(cell.code==="РВ")td.className="timesheet-weekend-work";td.append(timesheetCellContent(cell));td.title=(cell.reason||"")+" · "+(cell.source||"");tr.append(td)});const summary=document.createElement("td");summary.innerHTML="<b>"+row.worked_hours+" ч</b><small>ОТ "+row.vacation_days+" · Б "+row.sick_days+" · РВ "+row.weekend_work_hours+" ч</small>";tr.append(summary);tbody.append(tr)});
+  table.append(tbody);scroll.append(table);box.append(scroll);
+  if(!(d.rows||[]).length){const hint=document.createElement("div");hint.className="home-trace-empty";hint.textContent="Форма табеля готова без сотрудников. Добавьте вручную отпуск/больничный или создайте служебную записку «Работа в выходной день».";box.append(hint)}
+  if((d.manual_entries||[]).length){const manual=document.createElement("div");manual.className="timesheet-manual-list";const title=document.createElement("b");title.textContent="Ручные отметки";manual.append(title);d.manual_entries.forEach(entry=>{const row=document.createElement("div");row.className="module-document";const text=document.createElement("div");text.textContent=entry.employee_name+" · "+entry.code+" · "+entry.date_from+(entry.date_to!==entry.date_from?" — "+entry.date_to:"")+(entry.note?" · "+entry.note:"");const del=document.createElement("button");del.className="secondary";del.textContent="Удалить";del.onclick=async()=>{if(!confirm("Удалить ручную отметку из табеля?"))return;await api("/v1/cloud/smart/timesheet/manual/"+encodeURIComponent(entry.id),{method:"DELETE"});await loadTimesheetModule()};row.append(text,del);manual.append(row)});box.append(manual)}
+  if((d.conflicts||[]).length){const warn=document.createElement("div");warn.className="statusbar bad";warn.textContent="Конфликты табеля: "+d.conflicts.map(x=>x.employee_name+" "+x.date+" ("+x.manual_code+" ↔ РВ)").join("; ");box.append(warn)}
+}
+async function loadTimesheetModule(){
+  const d=await api("/v1/cloud/smart/timesheet/month?year="+timesheetYear+"&month="+timesheetMonth);
+  $("documentModuleIcon").textContent="📊";$("documentModuleTitle").textContent="Табель";
+  $("documentModuleLead").textContent="Табель учета рабочего времени: производственный календарь РФ + ручные ОТ/Б + работа в выходной из документов.";
+  $("documentModuleCount").textContent=d.row_count;
+  $("documentModuleAnalyzed").textContent=0;
+  $("documentModuleDeadlines").textContent=d.calendar.summary.norm_hours+" ч";
+  $("documentModuleNeeds").textContent=d.conflicts.length;
+  $("documentModuleExtra").textContent=d.calendar.regulation+" · Норма 40 ч/нед: "+d.calendar.summary.norm_hours+" ч. Коды: Я, В, РВ, ОТ, Б.";
+  const focus=$("documentModuleFocus");focus.innerHTML="";
+  const year=document.createElement("select");year.className="timesheet-select";[2026,2027].forEach(value=>{const o=document.createElement("option");o.value=value;o.textContent=value+" год";o.selected=value===timesheetYear;year.append(o)});year.onchange=()=>{timesheetYear=Number(year.value);loadTimesheetModule()};
+  const month=document.createElement("select");month.className="timesheet-select";timesheetMonthNames.forEach((name,index)=>{const o=document.createElement("option");o.value=index+1;o.textContent=name;o.selected=index+1===timesheetMonth;month.append(o)});month.onchange=()=>{timesheetMonth=Number(month.value);loadTimesheetModule()};
+  focus.append(year,month);
+  ["Я — явка","В — выходной","РВ — работа в выходной","ОТ — отпуск","Б — больничный"].forEach(v=>{const x=document.createElement("span");x.textContent=v;focus.append(x)});
+  renderTimesheetGrid(d);
+}
+
 function formField(label,id,placeholder="",type="text"){
   const wrap=document.createElement("div");wrap.className="field";const l=document.createElement("label");l.textContent=label;const input=document.createElement("input");input.id=id;input.type=type;input.placeholder=placeholder;wrap.append(l,input);return wrap;
 }
