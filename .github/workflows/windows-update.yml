@@ -43,6 +43,12 @@ jobs:
           $target = Join-Path $env:RUNNER_TEMP "Обновление\Дракончик Тоору"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
           Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $target -Recurse -Force
+
+          $versionFile = Join-Path $target "src\tooru\version.py"
+          $versionText = Get-Content -LiteralPath $versionFile -Raw -Encoding utf8
+          $versionText = $versionText -replace '__version__ = "0\.0\.8"', '__version__ = "0.0.7"'
+          Set-Content -LiteralPath $versionFile -Value $versionText -Encoding utf8
+
           "UPDATE_TEST_ROOT=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
           @(
@@ -91,13 +97,36 @@ jobs:
           $chat = Invoke-RestMethod -Uri "http://127.0.0.1:8787/v1/chats" -Method Post -ContentType "application/json" -Body '{"title":"Чат до обновления"}' -TimeoutSec 5
           "PRESERVED_CHAT_ID=$($chat.id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Run real self updater
+      - name: Run real self updater through web API
         shell: pwsh
         run: |
-          $script = Join-Path $env:UPDATE_TEST_ROOT "scripts\windows\update.ps1"
-          & $script -ProjectRoot $env:UPDATE_TEST_ROOT -Repository "Aspksa/Dragon-Tory" -Branch "main" -ServerPid ([int]$env:OLD_SERVER_PID)
-          if ($LASTEXITCODE -ne 0) {
-            throw "Self updater returned exit code $LASTEXITCODE."
+          $before = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 5
+          if ($before.version -ne "00.00.07") {
+            throw "Expected simulated old version 00.00.07, got $($before.version)."
+          }
+
+          try {
+            $started = Invoke-RestMethod -Uri "http://127.0.0.1:8787/v1/update/install" -Method Post -ContentType "application/json" -Body '{"force":false}' -TimeoutSec 15
+            if (-not $started.running) {
+              throw "Update API did not report a running updater."
+            }
+          } catch {
+            throw "Update API failed to launch updater: $($_.Exception.Message)"
+          }
+
+          $ready = $false
+          for ($i = 0; $i -lt 300; $i++) {
+            try {
+              $health = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
+              if ($health.status -eq "ok" -and $health.version -eq "00.00.08") {
+                $ready = $true
+                break
+              }
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          if (-not $ready) {
+            throw "Dragon Tory did not restart on 00.00.08 after API-triggered update."
           }
 
       - name: Verify restart and protected local data
