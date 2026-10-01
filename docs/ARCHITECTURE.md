@@ -60,6 +60,14 @@ Additional cognitive layers:
 - Correction Learning — LESSON memory from user corrections.
 - Counterfactual Verification — alternative explanations and assumption checks.
 - Skill Memory — reviewed reusable procedures learned from verified outcomes.
+- Adaptive Retrieval — auto-selects lexical/semantic/graph/temporal/causal profiles.
+- Historical Recall — evaluates truth at an optional as_of timestamp.
+- Confidence Calibration — stores truth-feedback and reports Brier/ECE metrics.
+- Contradiction Clusters — connected competing facts with lifecycle-aware resolution state.
+- Temporal Causality — prevents CAUSES edges from pointing backward in known event time.
+- Guardian Entity Merge — entity identity changes require reviewed proposal + finalize.
+- Adaptive Forgetting — conservative reinforcement, decay and audited archive for safe memory kinds.
+- Scale Benchmark — manual 1k/10k/100k retrieval benchmark with Hit@K and MRR.
 
 See docs/MEMORY_ENGINE.md.
 
