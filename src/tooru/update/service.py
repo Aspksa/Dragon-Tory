@@ -458,8 +458,12 @@ class UpdateService:
     def _remote_info(self) -> dict[str, str]:
         repo_api = f"https://api.github.com/repos/{self.repository}"
         commit = self._get_json(f"{repo_api}/commits/{self.branch}")
+        sha = str(commit.get("sha") or "")
+        if not sha:
+            raise UpdateError("GitHub не вернул SHA последнего коммита.")
+
         contents = self._get_json(
-            f"{repo_api}/contents/src/tooru/version.py?ref={self.branch}"
+            f"{repo_api}/contents/src/tooru/version.py?ref={sha}"
         )
         encoded = contents.get("content")
         if not encoded:
@@ -472,10 +476,6 @@ class UpdateService:
         )
         if not match:
             raise UpdateError("Не удалось определить удалённую версию.")
-
-        sha = str(commit.get("sha") or "")
-        if not sha:
-            raise UpdateError("GitHub не вернул SHA последнего коммита.")
 
         return {
             "sha": sha,
