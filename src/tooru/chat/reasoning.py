@@ -239,3 +239,108 @@ class CognitiveReasoning:
                 revised_answer=None,
                 used_fallback=True,
             )
+
+
+    async def learn_from_experience(
+        self,
+        *,
+        task: str,
+        answer: str,
+        verification: ResultVerification,
+        episode_id: str,
+        session_id: str | None,
+    ) -> str:
+        if (
+            not verification.passed
+            or verification.score < self.config.verification_learning_threshold
+        ):
+            return "learning:skipped-unverified"
+
+        try:
+            episodes = self.memory.recall(
+                MemorySearch(
+                    owner_id="local-user",
+                    scope=MemoryScope.PROJECT,
+                    project_id=PROJECT_ID,
+                    query=task,
+                    kind=MemoryKind.EPISODE,
+                    tags=["verified-outcome"],
+                    limit=8,
+                ),
+                track_usage=False,
+            )
+            similar = [
+                hit
+                for hit in episodes
+                if hit.score >= self.config.similar_episode_score
+            ]
+            if len(similar) < self.config.min_verified_episodes:
+                return "learning:need-more=" + str(len(similar))
+
+            existing_rules = self.memory.recall(
+                MemorySearch(
+                    owner_id="local-user",
+                    scope=MemoryScope.PROJECT,
+                    project_id=PROJECT_ID,
+                    query=task,
+                    kind=MemoryKind.INSTRUCTION,
+                    tags=["experience-rule"],
+                    limit=5,
+                ),
+                track_usage=False,
+            )
+            if any(
+                hit.score >= self.config.existing_rule_score
+                for hit in existing_rules
+            ):
+                return "learning:rule-exists"
+
+            examples = [
+                {
+                    "content": hit.memory.content[-4_000:],
+                    "truth_score": hit.truth_score,
+                    "score": hit.score,
+                }
+                for hit in similar[:5]
+            ]
+            candidate = await self._propose_rule(
+                task=task,
+                answer=answer,
+                examples=examples,
+            )
+            if (
+                not candidate.should_create
+                or candidate.confidence < 0.80
+                or len(candidate.content.strip()) < 20
+            ):
+                return "learning:no-rule"
+
+            memory = MemoryCreate(
+                owner_id="local-user",
+                scope=MemoryScope.PROJECT,
+                project_id=PROJECT_ID,
+                kind=MemoryKind.INSTRUCTION,
+                key=self._rule_key(candidate.key),
+                content=candidate.content.strip(),
+                source="experience-learning",
+                source_ref="episode:" + episode_id,
+                confidence=candidate.confidence,
+                importance=0.82,
+                tags=["experience-rule", "learned-candidate"],
+                session_id=session_id,
+            )
+            guarded = self.guardian.ingest_structured(
+                memory,
+                reason=(
+                    "Candidate working rule inferred from at least three "
+                    "verified task/result episodes. Requires Guardian review."
+                ),
+                auto_apply=True,
+            )
+            if guarded.memory_id:
+                return "learning:rule-applied=1"
+            if guarded.queue_id:
+                return "learning:rule-pending=1"
+            return "learning:rule-blocked=1"
+        except Exception as exc:
+            return "learning:error=" + type(exc).__name__
