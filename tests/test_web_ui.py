@@ -305,7 +305,7 @@ def test_every_static_button_has_a_javascript_handler() -> None:
 
     missing = []
     for button_id in sorted(button_ids):
-        token = f'$("' + button_id + '")'
+        token = '$("' + button_id + '")'
         if token not in javascript:
             missing.append(button_id)
 
