@@ -29,6 +29,24 @@ def test_dashboard_navigation_and_update_button_recovers() -> None:
         expect(page.locator("#homeObsState")).to_be_visible()
         expect(page.locator("#homeTraceList")).to_be_visible()
 
+        page.get_by_role("button", name=re.compile("Чат")).click()
+        expect(page.locator("#chat")).to_have_class(re.compile(r"\bactive\b"))
+        page.locator("#chatFileInput").set_input_files(
+            {
+                "name": "assistant-document.txt",
+                "mimeType": "text/plain",
+                "buffer": b"Dragon Tory assistant document contains service interval 12000 km.",
+            }
+        )
+        expect(page.locator("#chatStatus")).to_contain_text(
+            "Изучено:",
+            timeout=20_000,
+        )
+        expect(page.locator("#chatBox")).to_contain_text(
+            "assistant-document.txt",
+            timeout=20_000,
+        )
+
         page.get_by_role(
             "button",
             name=re.compile("Центр диагностики"),
