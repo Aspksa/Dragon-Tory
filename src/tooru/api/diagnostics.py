@@ -123,6 +123,36 @@ def diagnostics_status(request: Request) -> dict:
         request.app.state.memory_guardian_automation.status()
     )
 
+    try:
+        insurance_items = request.app.state.cloud_smart.garage_alerts(
+            days=15
+        )
+    except Exception:  # noqa: BLE001 - diagnostics must stay available
+        insurance_items = []
+    garage_status = {
+        "insurance_alerts": len(insurance_items),
+        "insurance_expired": sum(
+            1 for item in insurance_items
+            if item.get("insurance_expired")
+        ),
+        "insurance_upcoming": sum(
+            1 for item in insurance_items
+            if item.get("insurance_alert")
+        ),
+        "items": [
+            {
+                "id": item.get("id"),
+                "garage_number": item.get("garage_number"),
+                "plate_number": item.get("plate_number"),
+                "make_model": item.get("make_model"),
+                "insurance_end": item.get("insurance_end"),
+                "insurance_days_left": item.get("insurance_days_left"),
+                "insurance_expired": item.get("insurance_expired"),
+            }
+            for item in insurance_items[:20]
+        ],
+    }
+
     started_at = request.app.state.started_at
     uptime_seconds = max(
         0,
@@ -182,6 +212,7 @@ def diagnostics_status(request: Request) -> dict:
             **request.app.state.chat_store.counts(),
             "database_bytes": _path_size(settings.chat_db_path),
         },
+        "garage": garage_status,
         "guardian": guardian.model_dump(mode="json"),
         "memory_automation": memory_automation.model_dump(mode="json"),
         "guardian_automation": guardian_automation.model_dump(

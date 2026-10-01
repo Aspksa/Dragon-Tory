@@ -13,6 +13,7 @@ from tooru.cloud.intelligence import (
     extract_document,
 )
 from tooru.cloud.memory_sync import sync_vehicle, sync_weekend_work
+from tooru.timesheet.calendar_ru import production_calendar, supported_years
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/cloud/smart", tags=["cloud-smart"])
@@ -93,8 +94,27 @@ class VehicleUpsert(BaseModel):
     vin: str = Field(default="", max_length=64)
     make_model: str = Field(default="", max_length=300)
     driver_employee_id: str | None = Field(default=None, max_length=128)
+    fuel_type: str = Field(default="", max_length=100)
+    fuel_rate_summer: float | None = Field(default=None, ge=0, le=500)
+    fuel_rate_winter: float | None = Field(default=None, ge=0, le=500)
+    tire_size_summer: str = Field(default="", max_length=120)
+    tire_size_winter: str = Field(default="", max_length=120)
+    insurance_type: str = Field(default="", max_length=100)
+    insurance_policy: str = Field(default="", max_length=200)
+    insurance_company: str = Field(default="", max_length=300)
+    insurance_start: str | None = Field(default=None, max_length=80)
+    insurance_end: str | None = Field(default=None, max_length=80)
     notes: str = Field(default="", max_length=5_000)
     active: bool = True
+
+
+class TimesheetManualUpsert(BaseModel):
+    employee_id: str | None = Field(default=None, max_length=128)
+    employee_name: str = Field(default="", max_length=300)
+    date_from: str = Field(min_length=8, max_length=80)
+    date_to: str = Field(min_length=8, max_length=80)
+    code: Literal["ОТ", "Б"]
+    note: str = Field(default="", max_length=2_000)
 
 
 class AIContractUpdate(BaseModel):
@@ -296,6 +316,19 @@ def update_vehicle(
         raise _http_error(exc) from exc
 
 
+@router.get("/garage/alerts")
+def garage_alerts(
+    request: Request,
+    days: int = Query(default=15, ge=0, le=365),
+) -> dict[str, Any]:
+    items = _smart(request).garage_alerts(days=days)
+    return {
+        "days": days,
+        "items": items,
+        "count": len(items),
+    }
+
+
 @router.get("/counterparties")
 def list_counterparties(
     request: Request,
@@ -346,6 +379,64 @@ def update_counterparty(
             counterparty_id,
             payload.model_dump(),
         )
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.get("/timesheet/calendar")
+def timesheet_calendar(
+    year: int = Query(ge=2026, le=2027),
+    month: int | None = Query(default=None, ge=1, le=12),
+) -> dict[str, Any]:
+    return production_calendar(year, month=month)
+
+
+@router.get("/timesheet/calendar/years")
+def timesheet_calendar_years() -> dict[str, Any]:
+    return {"items": supported_years()}
+
+
+@router.get("/timesheet/month")
+def timesheet_month(
+    request: Request,
+    year: int = Query(ge=2026, le=2027),
+    month: int = Query(ge=1, le=12),
+) -> dict[str, Any]:
+    try:
+        return _smart(request).monthly_timesheet(
+            year=year,
+            month=month,
+        )
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post(
+    "/timesheet/manual",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_timesheet_manual(
+    payload: TimesheetManualUpsert,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        return _smart(request).create_timesheet_manual_entry(
+            payload.model_dump()
+        )
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.delete(
+    "/timesheet/manual/{entry_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_timesheet_manual(
+    entry_id: str,
+    request: Request,
+):
+    try:
+        _smart(request).delete_timesheet_manual_entry(entry_id)
     except Exception as exc:
         raise _http_error(exc) from exc
 

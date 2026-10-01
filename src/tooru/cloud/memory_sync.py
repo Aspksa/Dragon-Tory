@@ -18,6 +18,24 @@ def vehicle_memory(item: dict[str, Any]) -> MemoryCreate:
             f"VIN: {item.get('vin') or '—'}.",
             f"Марка/модель: {item.get('make_model') or '—'}.",
             f"Закреплённый водитель: {item.get('driver_name') or '—'}.",
+            f"Топливо: {item.get('fuel_type') or '—'}.",
+            (
+                "Расход ГСМ лето: "
+                f"{item.get('fuel_rate_summer') if item.get('fuel_rate_summer') is not None else '—'} л/100 км."
+            ),
+            (
+                "Расход ГСМ зима: "
+                f"{item.get('fuel_rate_winter') if item.get('fuel_rate_winter') is not None else '—'} л/100 км."
+            ),
+            f"Шины лето: {item.get('tire_size_summer') or '—'}.",
+            f"Шины зима: {item.get('tire_size_winter') or '—'}.",
+            (
+                "Страховка: "
+                f"{item.get('insurance_type') or '—'}; "
+                f"полис {item.get('insurance_policy') or '—'}; "
+                f"с {item.get('insurance_start') or '—'} "
+                f"по {item.get('insurance_end') or '—'}."
+            ),
             f"Примечание: {item.get('notes') or '—'}.",
         ]
     )

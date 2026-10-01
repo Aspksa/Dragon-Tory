@@ -141,6 +141,8 @@ def test_diagnostics_status_is_available() -> None:
     assert "chat_history" in payload
     assert "chats" in payload["chat_history"]
     assert "messages" in payload["chat_history"]
+    assert "garage" in payload
+    assert "insurance_alerts" in payload["garage"]
 
 
 def test_chat_requires_configured_provider() -> None:
@@ -300,6 +302,10 @@ def test_dashboard_assets_are_served_separately() -> None:
     assert "refreshHomeObservability" in javascript.text
     assert "renderHomeObservability" in javascript.text
     assert "uploadChatDocuments" in javascript.text
+    assert "renderTimesheetGrid" in javascript.text
+    assert "openTimesheetEntryEditor" in javascript.text
+    assert "carFuelSummer" in javascript.text
+    assert "insurance_alerts" in javascript.text
     assert "javascript" in javascript.headers["content-type"]
 
 
