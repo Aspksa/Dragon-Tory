@@ -755,7 +755,13 @@ class SQLiteMemoryStore:
             limit=100,
         )
         for item in self.candidates(request, limit=200):
-            if " ".join(item.content.lower().split()) == normalized:
+            if " ".join(item.content.lower().split()) != normalized:
+                continue
+            if (
+                item.valid_from == memory.valid_from
+                and item.valid_to == memory.valid_to
+                and item.event_at == memory.event_at
+            ):
                 return item
         return None
 
