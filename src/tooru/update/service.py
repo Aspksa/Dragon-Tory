@@ -160,6 +160,20 @@ class UpdateService:
             self._write_state(state)
             raise UpdateError(state["error"]) from exc
 
+    def _powershell_executable(self) -> str:
+        system_root = os.environ.get("SystemRoot")
+        if system_root:
+            candidate = (
+                Path(system_root)
+                / "System32"
+                / "WindowsPowerShell"
+                / "v1.0"
+                / "powershell.exe"
+            )
+            if candidate.is_file():
+                return str(candidate)
+        return "powershell.exe"
+
     def start_install(self, *, force: bool = False) -> dict[str, Any]:
         if platform.system() != "Windows":
             raise UpdateError(
@@ -194,9 +208,10 @@ class UpdateService:
         self._write_state(state)
 
         args = [
-            "powershell.exe",
+            self._powershell_executable(),
             "-NoLogo",
             "-NoProfile",
+            "-NonInteractive",
             "-ExecutionPolicy",
             "Bypass",
             "-File",
@@ -212,11 +227,14 @@ class UpdateService:
         ]
         flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
 
         self.launch_log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with self.launch_log_path.open("a", encoding="utf-8") as log:
+            with self.launch_log_path.open("w", encoding="utf-8") as log:
+                log.write(
+                    "Dragon Tory: запуск системного Windows PowerShell updater.\n"
+                )
+                log.flush()
                 process = subprocess.Popen(
                     args,
                     cwd=self.project_root,
@@ -226,19 +244,25 @@ class UpdateService:
                     creationflags=flags,
                     close_fds=True,
                 )
-                time.sleep(0.6)
+                time.sleep(1.0)
                 exit_code = process.poll()
         except OSError as exc:
             self._write_launch_failure(state, exc)
             raise UpdateError(str(exc)) from exc
 
         if exit_code is not None:
+            current_after_exit = self._read_state()
+            phase = current_after_exit.get("phase")
+            if phase == "success":
+                return self.status()
+
             error = (
-                "Процесс обновления завершился сразу после запуска "
+                "PowerShell updater завершился до начала установки "
                 f"(код {exit_code}). {self._launch_log_tail()}"
             )
             failed = {
                 **state,
+                **current_after_exit,
                 "phase": "failed",
                 "message": "Не удалось запустить процесс обновления.",
                 "error": error[:2000],
