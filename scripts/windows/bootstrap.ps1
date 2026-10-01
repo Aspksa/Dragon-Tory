@@ -18,6 +18,8 @@ try {
 
 $ProjectRoot = [System.IO.Path]::GetFullPath($ProjectRoot)
 $PyProject = Join-Path $ProjectRoot "pyproject.toml"
+$EnvFile = Join-Path $ProjectRoot ".env"
+$EnvExample = Join-Path $ProjectRoot ".env.example"
 $MainFile = Join-Path $ProjectRoot "src\tooru\main.py"
 $VenvDir = Join-Path $ProjectRoot ".venv"
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
@@ -522,6 +524,12 @@ try {
     }
 
     Set-Location -LiteralPath $ProjectRoot
+
+    if (-not (Test-Path -LiteralPath $EnvFile -PathType Leaf) -and (Test-Path -LiteralPath $EnvExample -PathType Leaf)) {
+        Copy-Item -LiteralPath $EnvExample -Destination $EnvFile
+        Write-LauncherLog "INFO" "Created .env from .env.example. Add API secrets to .env; it is ignored by Git."
+    }
+
     $env:PYTHONPATH = Join-Path $ProjectRoot "src"
     $env:TOORU_DATA_DIR = Join-Path $ProjectRoot "data"
 
