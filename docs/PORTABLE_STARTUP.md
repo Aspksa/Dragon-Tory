@@ -97,6 +97,9 @@ the install step.
 8. Start the FastAPI backend.
 9. Poll `/health` until the server is ready.
 10. Open `http://127.0.0.1:8787/` in the default browser.
+11. Only after the backend is ready, check/install optional Tesseract OCR and LibreOffice document engines.
+
+Optional document-engine setup can keep the launcher window busy on first run, but it no longer delays backend availability or browser opening. Set `TOORU_SKIP_DOCUMENT_ENGINES=1` before `Start.bat` to skip this optional system-engine setup entirely.
 
 Launcher activity and errors are written to:
 
