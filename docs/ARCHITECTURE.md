@@ -18,7 +18,7 @@ and isolated when providers change.
 7. Web UI — desktop/browser interface.
 8. Mobile clients — planned clients using the same backend contracts.
 
-## Memory Engine v6 / Cognitive Core V
+## Memory Engine v6 / Cognitive Core VII
 
 Capabilities:
 - hybrid semantic and lexical recall;
