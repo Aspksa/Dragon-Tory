@@ -264,8 +264,26 @@ class MemoryIntelligenceDecision(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=30)
     source: str | None = Field(default=None, max_length=100)
     source_ref: str | None = Field(default=None, max_length=500)
+    observed_at: str | None = None
+    event_at: str | None = None
+    valid_from: str | None = None
+    valid_to: str | None = None
     target_memory_id: str | None = Field(default=None, max_length=200)
     reason: str = Field(default="", max_length=2_000)
+
+    @model_validator(mode="after")
+    def validate_temporal_interval(self):
+        if self.valid_from and self.valid_to:
+            try:
+                start = datetime.fromisoformat(self.valid_from)
+                end = datetime.fromisoformat(self.valid_to)
+            except ValueError as exc:
+                raise ValueError(
+                    "valid_from and valid_to must be ISO-8601 timestamps"
+                ) from exc
+            if end < start:
+                raise ValueError("valid_to cannot be earlier than valid_from")
+        return self
 
 
 class MemoryIntelligenceResult(BaseModel):
