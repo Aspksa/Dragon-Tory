@@ -220,3 +220,52 @@ async def test_garage_and_timesheet_sync_to_project_memory(
     assert "Subaru Forester" in vehicle_hits[0].content
     assert work_hits
     assert "8" in work_hits[0].content
+
+
+
+@pytest.mark.asyncio
+async def test_service_memo_module_studies_into_project_memory(
+    tmp_path: Path,
+) -> None:
+    cloud, smart, intelligence, memory, learning = _stack(tmp_path)
+    document = _upload(
+        cloud,
+        "memo-learning.txt",
+        (
+            "Служебная записка № 41 от 01.10.2026\n"
+            "Подразделение: Гараж\n"
+            "Прошу выполнить ремонт автомобиля А123АА77."
+        ).encode(),
+    )
+    cloud.update_passport(
+        document["id"],
+        ai_access="memory",
+        confidentiality="personal",
+        scope="project",
+        project_id="dragon-tory",
+    )
+    smart.reconcile_contract(document["id"])
+    smart.update_dna(
+        document["id"],
+        {
+            "kind": "служебная записка",
+            "document_number": "41",
+            "department": "Гараж",
+        },
+    )
+    analysis = intelligence.analyze(document["id"])
+    smart.apply_intelligence_defaults(document["id"], analysis)
+
+    result = await learning.study("memos")
+
+    assert result["studied"] == 1
+    hits = memory.search(
+        MemorySearch(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            query="А123АА77 ремонт",
+            limit=10,
+        )
+    )
+    assert hits
+    assert document["id"] in hits[0].content

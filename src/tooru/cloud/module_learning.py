@@ -14,7 +14,11 @@ PROJECT_ID = "dragon-tory"
 
 
 class ModuleLearningService:
-    DOCUMENT_MODULES: ClassVar[set[str]] = {"contracts", "invoice_offers"}
+    DOCUMENT_MODULES: ClassVar[set[str]] = {
+        "contracts",
+        "invoice_offers",
+        "memos",
+    }
     STRUCTURED_MODULES: ClassVar[set[str]] = {"garage", "timesheet"}
     SUPPORTED_MODULES: ClassVar[set[str]] = (
         DOCUMENT_MODULES | STRUCTURED_MODULES
@@ -46,6 +50,26 @@ class ModuleLearningService:
         if module_id == "garage":
             return self._study_garage()
         return self._study_timesheet()
+
+    async def study_document(
+        self,
+        module_id: str,
+        document_id: str,
+    ) -> dict[str, Any]:
+        if module_id not in self.DOCUMENT_MODULES:
+            raise KeyError(module_id)
+        profile = self.intelligence.module_profile(module_id)
+        item = next(
+            (
+                candidate
+                for candidate in profile["items"]
+                if candidate["id"] == document_id
+            ),
+            None,
+        )
+        if item is None:
+            raise KeyError(document_id)
+        return await self._study_document_item(module_id, item)
 
     async def _study_documents(self, module_id: str) -> dict[str, Any]:
         profile = self.intelligence.module_profile(module_id)
@@ -309,11 +333,11 @@ class ModuleLearningService:
         local_summary: str,
         source_text: str,
     ) -> str:
-        type_name = (
-            "договора"
-            if module_id == "contracts"
-            else "счёта-оферты"
-        )
+        type_name = {
+            "contracts": "договора",
+            "invoice_offers": "счёта-оферты",
+            "memos": "служебной записки",
+        }.get(module_id, "документа")
         response = await self.ai_router.generate(
             "deepseek",
             AIRequest(
@@ -322,10 +346,12 @@ class ModuleLearningService:
                     "сформируй долговременное проектное знание. "
                     "Пиши только факты из документа, не делай юридических "
                     "выводов и не придумывай отсутствующие условия. "
-                    f"Для {type_name} выдели: стороны, предмет, номер/дату, "
-                    "суммы и валюту, сроки, оплату, поставку, обязательства, "
-                    "ответственность, прекращение/продление, важные условия "
-                    "и ссылки на связанные документы. Формат — компактные "
+                    f"Для {type_name} выдели: номер и дату, автора, адресата, "
+                    "подразделение, основную цель, просьбу отдельно от факта "
+                    "исполнения, сотрудников и роли, технику, контрагентов, "
+                    "товары/работы/услуги, суммы/НДС, даты событий и ссылки "
+                    "на связанные документы. Не считай формулировку «прошу» "
+                    "подтверждением результата. Формат — компактные "
                     "структурированные пункты, пригодные для памяти. "
                     + UNTRUSTED_CONTENT_POLICY
                 ),

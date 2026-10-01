@@ -26,6 +26,7 @@ from tooru.chat.documents import ChatDocumentAssistant
 from tooru.chat.pipeline import ChatPipeline
 from tooru.chat.store import ChatStore
 from tooru.cloud.document_intelligence import DocumentIntelligence
+from tooru.cloud.memo_organizer import ServiceMemoOrganizer
 from tooru.cloud.smart import SmartDrive
 from tooru.cloud.store import CloudStore
 from tooru.cloud.vault import ToryVault
@@ -124,6 +125,13 @@ async def lifespan(app: FastAPI):
     )
 
     memory_intake = MemoryIntakeGateway(guardian)
+    memo_organizer = ServiceMemoOrganizer(
+        cloud_store=cloud_store,
+        smart=cloud_smart,
+        intelligence=document_intelligence,
+        memory_intake=memory_intake,
+    )
+    memo_organizer.initialize()
 
     guardian_automation = MemoryGuardianAutomation(
         guardian,
@@ -157,6 +165,7 @@ async def lifespan(app: FastAPI):
     app.state.cloud_vault = cloud_vault
     app.state.cloud_smart = cloud_smart
     app.state.document_intelligence = document_intelligence
+    app.state.memo_organizer = memo_organizer
     app.state.chat_tasks = {}
     app.state.ai_router = ai_router
     app.state.deepseek_config = {

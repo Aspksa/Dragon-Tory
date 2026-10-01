@@ -211,9 +211,14 @@ function uploadCloudFileWithProgress(file,folderId,onProgress){
   });
 }
 async function assignUploadedDocumentModule(document,moduleKind){
-  if(!document||!document.id||!moduleKind)return;
+  if(!document||!document.id||!moduleKind)return null;
   await api("/v1/cloud/smart/files/"+encodeURIComponent(document.id)+"/dna",{method:"PATCH",body:JSON.stringify({kind:moduleKind,origin:"Загружен пользователем через модуль «"+moduleKind+"»"})});
   await api("/v1/cloud/files/"+encodeURIComponent(document.id),{method:"PATCH",body:JSON.stringify({tags:[moduleKind]})});
+  if(moduleKind==="служебная записка"){
+    await api("/v1/cloud/files/"+encodeURIComponent(document.id)+"/passport",{method:"PATCH",body:JSON.stringify({ai_access:"memory",confidentiality:"personal",scope:"project",project_id:"dragon-tory"})});
+    return api("/v1/cloud/intelligence/files/"+encodeURIComponent(document.id)+"/memo-process",{method:"POST"});
+  }
+  return null;
 }
 async function uploadCloudFiles(fileList,moduleKind=null){
   const files=Array.from(fileList||[]);if(!files.length)return;
@@ -226,7 +231,12 @@ async function uploadCloudFiles(fileList,moduleKind=null){
     try{
       const d=await uploadCloudFileWithProgress(file,cloudFolderParam(),p=>{ui.fill.style.width=p+"%";ui.state.textContent=p+"%"});
       ui.fill.style.width="100%";ui.state.textContent="Готово";
-      if(moduleKind)await assignUploadedDocumentModule(d,moduleKind);
+      const processed=moduleKind?await assignUploadedDocumentModule(d,moduleKind):null;
+      if(processed&&processed.card){
+        const card=processed.card;
+        ui.state.textContent=(card.memo_is_template||card.is_template)?"Шаблон":("Изучено · "+card.document_year+" · "+card.topic);
+        statusEl.textContent="Тоору изучил «"+file.name+"» → "+card.folder_path+(card.review&&card.review.length?" · требуется проверка: "+card.review.length:"");
+      }
       completed++;
     }catch(e){ui.state.textContent="Ошибка";ui.row.title=e.message;statusEl.textContent="Ошибка загрузки "+file.name+": "+e.message}
   }
@@ -242,7 +252,7 @@ function openCloudDocument(item){
   if(!opened){openPassport(item.id);$("passportStatus").textContent="Браузер заблокировал новую вкладку. Открыл Центр документа."}
 }
 function moduleLead(moduleId){
-  return{contracts:"Договоры по контрагентам: реквизиты, номер, дата, сумма, срок и условия. Один контрагент может иметь много договоров.",invoice_offers:"Счёт-оферта — самостоятельный мини-договор 2-в-1: контрагент, реквизиты, сумма и короткие договорные условия.",memos:"Служебные записки, включая «Работа в выходной день» с данными для табеля.",orders:"Тоору изучает разрешённые приказы предприятия как образцы структуры и формулировок, чтобы по запросу готовить новый проект приказа.",directives:"Тоору изучает разрешённые распоряжения предприятия как образцы структуры и формулировок, чтобы по запросу готовить новый проект распоряжения."}[moduleId]||"Специализированный рабочий модуль документов Тори.";
+  return{contracts:"Договоры по контрагентам: реквизиты, номер, дата, сумма, срок и условия. Один контрагент может иметь много договоров.",invoice_offers:"Счёт-оферта — самостоятельный мини-договор 2-в-1: контрагент, реквизиты, сумма и короткие договорные условия.",memos:"Тоору читает служебную записку, извлекает подтверждённые факты, отделяет просьбу от результата, сортирует по году и основной теме, связывает копии/версии и сохраняет знания в памяти проекта.",orders:"Тоору изучает разрешённые приказы предприятия как образцы структуры и формулировок, чтобы по запросу готовить новый проект приказа.",directives:"Тоору изучает разрешённые распоряжения предприятия как образцы структуры и формулировок, чтобы по запросу готовить новый проект распоряжения."}[moduleId]||"Специализированный рабочий модуль документов Тори.";
 }
 function formatBusinessAmount(item){
   if(item.amount_value===null||item.amount_value===undefined||item.amount_value==="")return"";
@@ -261,6 +271,12 @@ function createModuleDocumentRow(item){
   if(item.document_subtype){const x=document.createElement("span");x.className="cloud-badge";x.textContent=item.document_subtype;business.append(x)}
   if(item.employee_name){const x=document.createElement("span");x.className="cloud-badge";x.textContent=item.employee_name;business.append(x)}
   if(item.work_date){const x=document.createElement("span");x.className="cloud-badge lock";x.textContent="Работа: "+item.work_date+(item.work_hours?" · "+item.work_hours+" ч":"");business.append(x)}
+  if(item.memo_year){const x=document.createElement("span");x.className="cloud-badge";x.textContent="Год: "+item.memo_year;business.append(x)}
+  if(item.memo_topic){const x=document.createElement("span");x.className="cloud-badge ai";x.textContent=item.memo_topic;business.append(x)}
+  if(item.memo_is_template){const x=document.createElement("span");x.className="cloud-badge";x.textContent="Шаблон";business.append(x)}
+  if(item.memo_duplicate_of){const x=document.createElement("span");x.className="cloud-badge";x.textContent="Копия";business.append(x)}
+  if(item.memo_possible_version_of){const x=document.createElement("span");x.className="cloud-badge lock";x.textContent="Возможная версия";business.append(x)}
+  if(item.memo_review&&item.memo_review.length){const x=document.createElement("span");x.className="cloud-badge lock";x.textContent="Проверить: "+item.memo_review.length;business.append(x)}
   const meta=document.createElement("div");meta.className="module-document-meta";
   const version=document.createElement("span");version.className="cloud-badge";version.textContent="v"+item.version;meta.append(version);
   if(item.deadlines&&item.deadlines.length){const deadline=document.createElement("span");deadline.className="cloud-badge lock";deadline.textContent="📅 "+item.deadlines[0].date;meta.append(deadline)}
@@ -268,7 +284,11 @@ function createModuleDocumentRow(item){
   const actions=document.createElement("div");actions.className="cloud-actions";
   const open=document.createElement("button");open.className="secondary";open.textContent="Открыть";open.onclick=e=>{e.stopPropagation();openCloudDocument(item)};
   const center=document.createElement("button");center.className="primary";center.textContent="Подробнее";center.onclick=e=>{e.stopPropagation();openPassport(item.id)};
-  actions.append(open,center);row.append(left,actions);return row;
+  actions.append(open);
+  if(item.module_id==="memos"){
+    const facts=document.createElement("button");facts.className="secondary";facts.textContent="Основные факты";facts.onclick=e=>{e.stopPropagation();showMemoCard(item.id)};actions.append(facts);
+  }
+  actions.append(center);row.append(left,actions);return row;
 }
 function renderDocumentModuleItems(items){
   const box=$("documentModuleList");box.innerHTML="";
@@ -624,7 +644,7 @@ async function loadDocumentModule(moduleId){
   $("documentModuleCounterparty").hidden=!["contracts","invoice_offers"].includes(activeDocumentModule);
   $("documentModuleTimesheet").hidden=activeDocumentModule!=="memos";
   $("documentModuleDraft").hidden=!["orders","directives"].includes(activeDocumentModule);
-  $("documentModuleStudy").hidden=!["contracts","invoice_offers","garage","timesheet"].includes(activeDocumentModule);
+  $("documentModuleStudy").hidden=!["contracts","invoice_offers","memos","garage","timesheet"].includes(activeDocumentModule);
   $("documentModuleAddRecord").hidden=!["employees","garage","timesheet"].includes(activeDocumentModule);
   $("documentModuleAddRecord").textContent=activeDocumentModule==="employees"
     ?"＋ Сотрудник"
@@ -638,7 +658,7 @@ async function loadDocumentModule(moduleId){
     const d=await api("/v1/cloud/intelligence/modules/"+encodeURIComponent(activeDocumentModule));
     $("documentModuleIcon").textContent=d.icon;$("documentModuleTitle").textContent=d.title;$("documentModuleLead").textContent=moduleLead(activeDocumentModule);
     $("documentModuleCount").textContent=d.count;$("documentModuleAnalyzed").textContent=d.analyzed;$("documentModuleDeadlines").textContent=d.with_deadlines;$("documentModuleNeeds").textContent=d.needs_analysis;
-    $("documentModuleExtra").textContent=activeDocumentModule==="contracts"?"Контрагентов: "+((d.counterparties||[]).length)+" · у каждого контрагента может быть несколько договоров.":(activeDocumentModule==="invoice_offers"?"Счёт-оферта хранится как самостоятельный мини-договор с реквизитами контрагента.":(activeDocumentModule==="memos"?"Подтип «Работа в выходной день» попадает в табель автоматически после заполнения даты и часов.":(["orders","directives"].includes(activeDocumentModule)?"ИИ использует только образцы с явным разрешением content_read + answer + external_ai.":"")));
+    $("documentModuleExtra").textContent=activeDocumentModule==="contracts"?"Контрагентов: "+((d.counterparties||[]).length)+" · у каждого контрагента может быть несколько договоров.":(activeDocumentModule==="invoice_offers"?"Счёт-оферта хранится как самостоятельный мини-договор с реквизитами контрагента.":(activeDocumentModule==="memos"?"Автосортировка: Проект / Документы / Год / Служебные записки / Тема. Шаблоны хранятся отдельно. «Работа в выходной день» дополнительно попадает в табель.":(["orders","directives"].includes(activeDocumentModule)?"ИИ использует только образцы с явным разрешением content_read + answer + external_ai.":"")));
     const focus=$("documentModuleFocus");focus.innerHTML="";d.ai_focus.slice(0,4).forEach(x=>{const s=document.createElement("span");s.textContent=x;focus.append(s)});
     renderDocumentModuleItems(d.items||[]);$("documentModuleStatus").textContent="";
   }catch(e){$("documentModuleStatus").textContent="Ошибка модуля: "+e.message}
@@ -742,6 +762,35 @@ async function askPassportDocument(){
 function openSmartModal(title,subtitle=""){$("smartTitle").textContent=title;$("smartSubtitle").textContent=subtitle;$("smartBody").innerHTML="";$("smartStatus").textContent="";$("smartModal").hidden=false}
 function closeSmartModal(){$("smartModal").hidden=true}
 function smartLine(title,body,kind=""){const row=document.createElement("div");row.className="smart-line "+kind;const h=document.createElement("strong");h.textContent=title;const p=document.createElement("div");p.className="muted";p.style.whiteSpace="pre-wrap";p.textContent=body;row.append(h,p);return row}
+
+function memoFactBody(fact){
+  if(!fact)return"не указано";
+  const value=typeof fact.value==="string"?fact.value:JSON.stringify(fact.value,null,2);
+  return value+"\nИсточник: "+(fact.source||"не указано")+"\nПодтверждение: "+(fact.snippet||"не указано");
+}
+async function showMemoCard(documentId){
+  openSmartModal("📝 Основные факты служебной записки","Факты, доказательства, сортировка и проверки");
+  try{
+    const d=await api("/v1/cloud/intelligence/files/"+encodeURIComponent(documentId)+"/memo-card");
+    $("smartBody").append(smartLine("Размещение",d.folder_path+"\nГод: "+d.document_year+" · источник года: "+d.year_source+"\nТема: "+d.topic+"\nПричина: "+d.topic_reason,"smart-good"));
+    if(d.is_template)$("smartBody").append(smartLine("Шаблон","Документ распознан как шаблон и хранится отдельно от фактических служебных записок.","smart-good"));
+    const labels={
+      document_date:"Дата записки",document_number:"Номер",organization:"Организация",
+      department:"Подразделение",author:"Автор",addressee:"Адресат",subject:"Тема",
+      summary:"Краткая суть",requested_action:"Что просят сделать",
+      confirmed_result:"Подтверждённый результат",employees_and_roles:"Сотрудники и роли",
+      event_dates_and_periods:"Даты и периоды событий",vehicles:"Техника и номера",
+      counterparties:"Контрагенты",goods_works_services:"Товары, работы и услуги",
+      amounts_and_vat:"Суммы и НДС",related_documents:"Связанные документы"
+    };
+    Object.entries(labels).forEach(([key,label])=>{$("smartBody").append(smartLine(label,memoFactBody(d.facts&&d.facts[key])))});
+    if(d.duplicate_of)$("smartBody").append(smartLine("Полная копия","Совпадает по SHA-256 с "+d.duplicate_of,"smart-good"));
+    if(d.possible_version_of)$("smartBody").append(smartLine("Возможная версия","Похожа на документ "+d.possible_version_of+"; сохранена отдельно."));
+    if(d.discrepancies&&d.discrepancies.length)$("smartBody").append(smartLine("Расхождения",JSON.stringify(d.discrepancies,null,2),"smart-danger"));
+    $("smartBody").append(smartLine("Требует проверки",d.review&&d.review.length?d.review.join("\n• "):"Нет замечаний.",d.review&&d.review.length?"smart-danger":"smart-good"));
+    $("smartBody").append(smartLine("Память проекта","Статус: "+(d.memory_status||"—")+(d.memory_id?"\nMemory ID: "+d.memory_id:"")));
+  }catch(e){$("smartStatus").textContent=e.message}
+}
 async function showKnowledgeCard(){
   if(!activePassportId)return;openSmartModal("💡 Карточка знаний","Целостная картина документа");
   try{const d=await api("/v1/cloud/smart/files/"+encodeURIComponent(activePassportId)+"/card");const hero=document.createElement("div");hero.className="smart-hero";hero.innerHTML="<h4>"+escapeHtml(d.document.name)+"</h4><div class='muted'>"+escapeHtml(d.document.id)+" · v"+d.document.version+"</div>";$("smartBody").append(hero);$("smartBody").append(smartLine("ДНК",(d.dna.kind||"Тип не задан")+"\nПроисхождение: "+(d.dna.origin||"—")+"\nВажная дата: "+(d.dna.important_date||"—")));$("smartBody").append(smartLine("ИИ-договор","Чтение: "+(d.ai_contract.content_read?"да":"нет")+" · ответы: "+(d.ai_contract.answer?"да":"нет")+" · внешний ИИ: "+(d.ai_contract.external_ai?"да":"нет")+" · чистая комната: "+(d.ai_contract.clean_room?"да":"нет")));$("smartBody").append(smartLine("Структура","Версий: "+d.version_count+" · связей: "+d.relations.length+" · наблюдателей: "+d.watchers.length+" · печать: "+(d.latest_seal?"v"+d.latest_seal.version:"нет")));if(d.relation_suggestions.length)$("smartBody").append(smartLine("Предлагаемые связи",d.relation_suggestions.map(x=>x.name+" · совпадение "+x.score).join("\n")))}catch(e){$("smartStatus").textContent=e.message}
@@ -1470,12 +1519,24 @@ let updatePollTimer=null;
 const phaseNames={idle:"Готово",checking:"Проверка GitHub…",current:"Актуальная версия",available:"Доступно обновление",starting:"Запуск процесса…",downloading:"Скачивание…",extracting:"Распаковка и сверка…",backing_up:"Резервная копия…",stopping:"Остановка…",installing:"Установка…",restarting:"Перезапуск…",verifying:"Проверка новой версии…",rolling_back:"Автоматический откат…",success:"Обновлено",failed:"Ошибка обновления",error:"Ошибка проверки"};
 function renderFiles(id,files){const box=$(id);box.innerHTML="";if(!files||!files.length){box.textContent="Нет файлов.";return}files.forEach(name=>{const row=document.createElement("div");row.textContent=name;box.appendChild(row)})}
 function fmtUpdateDate(value){if(!value)return"—";const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleString()}
+function renderReleaseNotes(containerId,release){
+  const box=$(containerId);if(!box)return;box.innerHTML="";
+  if(!release||!release.modules||!release.modules.length){box.innerHTML='<div class="muted">Для этой версии подробные заметки по модулям не сохранены.</div>';return}
+  release.modules.forEach(module=>{
+    const row=document.createElement("div");row.className="module-document";
+    const left=document.createElement("div");const title=document.createElement("div");title.className="cloud-name";title.textContent=module.title+" · v"+module.version;
+    const meta=document.createElement("div");meta.className="cloud-sub";meta.textContent=(module.changes||[]).map(x=>"• "+x).join("\n");meta.style.whiteSpace="pre-wrap";
+    left.append(title,meta);row.append(left);box.append(row);
+  });
+}
 function renderUpdate(d){
   const phase=phaseNames[d.phase]||d.message||d.phase||"—";
   state($("updateState"),phase,d.phase==="available"?"warn":(["failed","error"].includes(d.phase)?"bad":(["success","current"].includes(d.phase)?"ok":"")));
   $("updateLocal").textContent=d.local_version||"—";
   $("updateRemote").textContent=d.remote_version||"—";
   $("updateSha").textContent=d.remote_sha?d.remote_sha.slice(0,12):"—";
+  $("updateReleaseVersion").textContent=d.release?d.release.version:(d.local_version||"—");
+  renderReleaseNotes("updateReleaseNotes",d.release);
   const pct=Math.max(0,Math.min(100,Number(d.progress_percent||0)));
   $("updatePercent").textContent=pct+"%";
   $("updateProgressBar").style.width=pct+"%";
@@ -1494,7 +1555,20 @@ async function updateStatus(){
   catch(e){if(updateWasStarted){state($("updateState"),"Перезапуск…","warn");$("updateProgress").textContent="Сервер временно недоступен. Жду автоматического запуска…";startUpdatePolling()}else{state($("updateState"),"Недоступно","bad");$("updateProgress").textContent=e.message;$("checkUpdate").disabled=false;$("installUpdate").disabled=true}}
 }
 async function refreshUpdateHistory(){
-  try{const d=await api("/v1/update/history?limit=30");const box=$("updateHistory");box.innerHTML="";if(!d.items.length){box.innerHTML='<div class="card muted">История пока пуста.</div>';return}d.items.forEach(item=>{const el=document.createElement("div");el.className="history-item";const ok=item.result==="success";const files=(item.downloaded_files||[]).length;el.innerHTML='<div class="history-head"><div><div class="history-title '+(ok?"ok":"bad")+'">'+(item.description||"Обновление")+'</div><div class="update-meta">'+(item.from_version||"—")+' → '+(item.to_version||"—")+(item.sha?" · "+item.sha.slice(0,10):"")+'</div></div><div class="history-date">'+fmtUpdateDate(item.finished_at)+'</div></div><div class="update-meta" style="margin-top:8px">Скачано файлов: '+files+' · изменено: '+((item.changed_files||[]).length)+' · новых: '+((item.new_files||[]).length)+' · удалено: '+((item.removed_files||[]).length)+(item.rolled_back?" · выполнен автоматический откат":"")+'</div>'+(item.error?'<div class="statusbar bad">'+item.error+'</div>':"");box.appendChild(el)})}catch(e){$("updateHistory").innerHTML='<div class="card bad">Не удалось загрузить историю: '+e.message+'</div>'}
+  try{
+    const d=await api("/v1/update/history?limit=30");const box=$("updateHistory");box.innerHTML="";
+    if(!d.items.length){box.innerHTML='<div class="card muted">История пока пуста.</div>';return}
+    d.items.forEach(item=>{
+      const el=document.createElement("div");el.className="history-item";const ok=item.result==="success";const files=(item.downloaded_files||[]).length;
+      el.innerHTML='<div class="history-head"><div><div class="history-title '+(ok?"ok":"bad")+'">'+escapeHtml(item.description||"Обновление")+'</div><div class="update-meta">'+escapeHtml((item.from_version||"—")+' → '+(item.to_version||"—")+(item.sha?" · "+item.sha.slice(0,10):""))+'</div></div><div class="history-date">'+escapeHtml(fmtUpdateDate(item.finished_at))+'</div></div><div class="update-meta" style="margin-top:8px">Скачано файлов: '+files+' · изменено: '+((item.changed_files||[]).length)+' · новых: '+((item.new_files||[]).length)+' · удалено: '+((item.removed_files||[]).length)+(item.rolled_back?" · выполнен автоматический откат":"")+'</div>';
+      if(item.error){const err=document.createElement("div");err.className="statusbar bad";err.textContent=item.error;el.append(err)}
+      if(item.release&&item.release.modules&&item.release.modules.length){
+        const release=document.createElement("div");release.className="smart-list";release.style.marginTop="10px";
+        item.release.modules.forEach(module=>{const row=document.createElement("div");row.className="smart-line";const title=document.createElement("strong");title.textContent=module.title+" · v"+module.version;const body=document.createElement("div");body.className="muted";body.style.whiteSpace="pre-wrap";body.textContent=(module.changes||[]).map(x=>"• "+x).join("\n");row.append(title,body);release.append(row)});el.append(release);
+      }
+      box.appendChild(el);
+    })
+  }catch(e){$("updateHistory").innerHTML='<div class="card bad">Не удалось загрузить историю: '+escapeHtml(e.message)+'</div>'}
 }
 async function checkForUpdate(){
   $("checkUpdate").disabled=true;

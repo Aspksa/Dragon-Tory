@@ -66,6 +66,11 @@ def test_dashboard_navigation_and_update_button_recovers() -> None:
         )
 
         page.get_by_role("button", name=re.compile("Обновление")).click()
+        expect(page.locator("#updateReleaseNotes")).to_contain_text(
+            "Служебные записки",
+            timeout=10_000,
+        )
+        expect(page.locator("#updateReleaseVersion")).to_have_text("00.00.28")
         check_button = page.locator("#checkUpdate")
         expect(check_button).to_be_enabled()
         check_button.click()

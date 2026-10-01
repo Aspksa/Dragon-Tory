@@ -586,6 +586,44 @@ class CloudStore:
             rows = db.execute(sql, params).fetchall()
         return [self._row(row) for row in rows]
 
+    def all_active_documents(
+        self,
+        *,
+        limit: int = 5_000,
+    ) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT * FROM documents
+                WHERE trashed = 0
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (max(1, min(limit, 20_000)),),
+            ).fetchall()
+        return [self._row(row) for row in rows]
+
+    def documents_by_sha256(
+        self,
+        sha256: str,
+        *,
+        exclude_document_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: list[Any] = [sha256]
+        sql = """
+            SELECT * FROM documents
+            WHERE trashed = 0 AND sha256 = ?
+        """
+        if exclude_document_id:
+            sql += " AND id != ?"
+            params.append(exclude_document_id)
+        sql += " ORDER BY created_at ASC LIMIT ?"
+        params.append(max(1, min(limit, 1_000)))
+        with self._connect() as db:
+            rows = db.execute(sql, params).fetchall()
+        return [self._row(row) for row in rows]
+
     def list_trashed(self, *, limit: int = 500) -> list[dict[str, Any]]:
         with self._connect() as db:
             rows = db.execute(
