@@ -544,3 +544,29 @@ def test_garage_marks_expired_insurance(
     assert vehicle["insurance_alert"] is False
     alerts = smart.garage_alerts(days=15)
     assert alerts[0]["insurance_expired"] is True
+
+
+
+def test_annual_leave_excludes_holiday_but_includes_shifted_day_off(
+    tmp_path: Path,
+) -> None:
+    _, smart = _stack(tmp_path)
+    smart.create_timesheet_manual_entry(
+        {
+            "employee_name": "Сидоров С.С.",
+            "date_from": "2026-03-08",
+            "date_to": "2026-03-09",
+            "code": "ОТ",
+        }
+    )
+
+    data = smart.monthly_timesheet(year=2026, month=3)
+    row = next(
+        item
+        for item in data["rows"]
+        if item["employee_name"] == "Сидоров С.С."
+    )
+
+    assert row["cells"][7]["code"] == "В"
+    assert row["cells"][8]["code"] == "ОТ"
+    assert row["vacation_days"] == 1
