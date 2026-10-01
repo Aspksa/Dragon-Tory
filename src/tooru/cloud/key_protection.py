@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import ctypes
-from ctypes import wintypes
 import os
+from ctypes import wintypes
 from pathlib import Path
-
 
 _DPAPI_MAGIC = b"TORYDPAPI1"
 _DPAPI_DESCRIPTION = "Dragon Tory local Ed25519 seal key"
