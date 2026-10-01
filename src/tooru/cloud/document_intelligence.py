@@ -30,7 +30,7 @@ _URL_RE = re.compile(r'https?://[^\s<>"]+', re.IGNORECASE)
 _IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b", re.IGNORECASE)
 _AMOUNT_RE = re.compile(
     r"(?:(?P<currency1>€|EUR|USD|\$|GBP|£|RUB|₽)\s*)?"
-    r"(?P<amount>\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{1,2})?|\d+(?:[,.]\d{1,2})?)"
+    r"(?P<amount>\d+(?:[ .]\d{3})*(?:[,.]\d{1,2})?)"
     r"(?:\s*(?P<currency2>€|EUR|USD|\$|GBP|£|RUB|₽))?",
     re.IGNORECASE,
 )
