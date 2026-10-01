@@ -4,11 +4,14 @@ import os
 import platform
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
+
+import psutil
 
 
 class UpdateError(RuntimeError):
@@ -16,12 +19,13 @@ class UpdateError(RuntimeError):
 
 
 class UpdateService:
-    """Checks GitHub and starts the detached Windows self-updater."""
+    """Checks GitHub and supervises the detached Windows updater."""
 
     RUNNING_PHASES: ClassVar[set[str]] = {
         "starting",
         "checking",
         "downloading",
+        "extracting",
         "backing_up",
         "stopping",
         "installing",
@@ -29,6 +33,7 @@ class UpdateService:
         "verifying",
         "rolling_back",
     }
+    STALL_SECONDS: ClassVar[int] = 180
 
     def __init__(
         self,
@@ -43,6 +48,12 @@ class UpdateService:
         self.repository = repository
         self.branch = branch
         self.state_path = self.project_root / "data" / "update" / "state.json"
+        self.history_path = (
+            self.project_root / "data" / "update" / "history.json"
+        )
+        self.launch_log_path = (
+            self.project_root / "logs" / "update-launcher.log"
+        )
         self.updater_script = (
             self.project_root / "scripts" / "windows" / "update.ps1"
         )
@@ -60,10 +71,32 @@ class UpdateService:
         state.setdefault("last_updated_at", None)
         state.setdefault("backup_path", None)
         state.setdefault("error", None)
+        state.setdefault("progress_percent", 0)
+        state.setdefault("heartbeat_at", None)
+        state.setdefault("downloaded_files", [])
+        state.setdefault("changed_files", [])
+        state.setdefault("new_files", [])
+        state.setdefault("removed_files", [])
+
+        if state.get("phase") in self.RUNNING_PHASES:
+            state = self._supervise_running_state(state)
+
         state["repository"] = self.repository
         state["branch"] = self.branch
         state["running"] = state.get("phase") in self.RUNNING_PHASES
+        state["stalled"] = self._is_stalled(state) if state["running"] else False
         return state
+
+    def history(self, *, limit: int = 30) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 100))
+        try:
+            raw = json.loads(self.history_path.read_text(encoding="utf-8-sig"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return []
+        if not isinstance(raw, list):
+            return []
+        items = [item for item in raw if isinstance(item, dict)]
+        return list(reversed(items[-limit:]))
 
     def check(self) -> dict[str, Any]:
         current = self.status()
@@ -75,6 +108,8 @@ class UpdateService:
                 **current,
                 "phase": "checking",
                 "message": "Проверка GitHub…",
+                "progress_percent": 5,
+                "heartbeat_at": self._now(),
                 "error": None,
             }
         )
@@ -86,9 +121,9 @@ class UpdateService:
                 available = installed_sha.lower() != remote["sha"].lower()
                 tracking = "commit"
             else:
-                available = self._version_tuple(remote["version"]) > self._version_tuple(
-                    self.local_version
-                )
+                available = self._version_tuple(
+                    remote["version"]
+                ) > self._version_tuple(self.local_version)
                 tracking = "version"
 
             state = {
@@ -106,6 +141,8 @@ class UpdateService:
                 "update_available": available,
                 "tracking": tracking,
                 "last_checked_at": self._now(),
+                "progress_percent": 0,
+                "heartbeat_at": self._now(),
                 "error": None,
             }
             self._write_state(state)
@@ -117,13 +154,17 @@ class UpdateService:
                 "message": "Не удалось проверить обновления.",
                 "error": f"{type(exc).__name__}: {exc}",
                 "last_checked_at": self._now(),
+                "progress_percent": 0,
+                "heartbeat_at": self._now(),
             }
             self._write_state(state)
             raise UpdateError(state["error"]) from exc
 
     def start_install(self, *, force: bool = False) -> dict[str, Any]:
         if platform.system() != "Windows":
-            raise UpdateError("Автоматическая установка обновлений поддерживается на Windows.")
+            raise UpdateError(
+                "Автоматическая установка обновлений поддерживается на Windows."
+            )
 
         current = self.status()
         if current["running"]:
@@ -136,10 +177,18 @@ class UpdateService:
         if not self.updater_script.is_file():
             raise UpdateError(f"Не найден updater: {self.updater_script}")
 
+        started_at = self._now()
         state = {
             **checked,
             "phase": "starting",
-            "message": "Запуск автоматического обновления…",
+            "message": "Запуск процесса обновления…",
+            "progress_percent": 1,
+            "heartbeat_at": started_at,
+            "update_started_at": started_at,
+            "downloaded_files": [],
+            "changed_files": [],
+            "new_files": [],
+            "removed_files": [],
             "error": None,
         }
         self._write_state(state)
@@ -163,34 +212,92 @@ class UpdateService:
         ]
         flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+
+        self.launch_log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            process = subprocess.Popen(
-                args,
-                cwd=self.project_root,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=flags,
-            )
+            with self.launch_log_path.open("a", encoding="utf-8") as log:
+                process = subprocess.Popen(
+                    args,
+                    cwd=self.project_root,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    creationflags=flags,
+                    close_fds=True,
+                )
+                time.sleep(0.6)
+                exit_code = process.poll()
         except OSError as exc:
-            self._write_state(
-                {
-                    **state,
-                    "phase": "error",
-                    "message": "Не удалось запустить updater.",
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            )
+            self._write_launch_failure(state, exc)
             raise UpdateError(str(exc)) from exc
+
+        if exit_code is not None:
+            error = (
+                "Процесс обновления завершился сразу после запуска "
+                f"(код {exit_code}). {self._launch_log_tail()}"
+            )
+            failed = {
+                **state,
+                "phase": "failed",
+                "message": "Не удалось запустить процесс обновления.",
+                "error": error[:2000],
+                "progress_percent": 0,
+                "heartbeat_at": self._now(),
+            }
+            self._write_state(failed)
+            self._append_history_from_state(failed, success=False)
+            raise UpdateError(error)
 
         self._write_state(
             {
                 **state,
                 "updater_pid": process.pid,
-                "message": "Updater запущен. Идёт подготовка обновления…",
+                "message": (
+                    "Процесс обновления запущен. "
+                    "Ожидание первого статуса…"
+                ),
             }
         )
         return self.status()
+
+    def _supervise_running_state(
+        self,
+        state: dict[str, Any],
+    ) -> dict[str, Any]:
+        pid = state.get("updater_pid")
+        if isinstance(pid, int) and pid > 0 and not psutil.pid_exists(pid):
+            failed = {
+                **state,
+                "phase": "failed",
+                "message": "Процесс обновления неожиданно завершился.",
+                "error": (
+                    "Updater больше не запущен. "
+                    + self._launch_log_tail()
+                )[:2000],
+                "progress_percent": 0,
+                "heartbeat_at": self._now(),
+            }
+            self._write_state(failed)
+            self._append_history_from_state(failed, success=False)
+            return failed
+
+        if self._is_stalled(state):
+            state = {
+                **state,
+                "message": (
+                    "Обновление не передавало статус более 3 минут. "
+                    "Проверьте журнал обновления."
+                ),
+            }
+        return state
+
+    def _is_stalled(self, state: dict[str, Any]) -> bool:
+        heartbeat = self._parse_datetime(state.get("heartbeat_at"))
+        if heartbeat is None:
+            return False
+        age = (datetime.now(UTC) - heartbeat).total_seconds()
+        return age > self.STALL_SECONDS
 
     def _remote_info(self) -> dict[str, str]:
         repo_api = f"https://api.github.com/repos/{self.repository}"
@@ -235,7 +342,9 @@ class UpdateService:
         except urllib.error.HTTPError as exc:
             raise UpdateError(f"GitHub HTTP {exc.code}") from exc
         except urllib.error.URLError as exc:
-            raise UpdateError(f"GitHub недоступен: {exc.reason}") from exc
+            raise UpdateError(
+                f"GitHub недоступен: {exc.reason}"
+            ) from exc
 
     def _installed_sha(self) -> str | None:
         git_sha = self._git_head()
@@ -263,7 +372,9 @@ class UpdateService:
 
     def _read_state(self) -> dict[str, Any]:
         try:
-            return json.loads(self.state_path.read_text(encoding="utf-8"))
+            return json.loads(
+                self.state_path.read_text(encoding="utf-8-sig")
+            )
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return {}
 
@@ -275,6 +386,94 @@ class UpdateService:
             encoding="utf-8",
         )
         os.replace(temp, self.state_path)
+
+    def _append_history_from_state(
+        self,
+        state: dict[str, Any],
+        *,
+        success: bool,
+    ) -> None:
+        history = list(reversed(self.history(limit=100)))
+        signature = (
+            state.get("update_started_at"),
+            state.get("remote_sha"),
+            "success" if success else "failed",
+        )
+        for item in history:
+            existing = (
+                item.get("started_at"),
+                item.get("sha"),
+                item.get("result"),
+            )
+            if existing == signature:
+                return
+
+        entry = {
+            "started_at": state.get("update_started_at"),
+            "finished_at": self._now(),
+            "from_version": state.get("local_version"),
+            "to_version": state.get("remote_version"),
+            "sha": state.get("remote_sha"),
+            "result": "success" if success else "failed",
+            "description": (
+                "Обновление успешно установлено."
+                if success
+                else "Обновление завершилось ошибкой."
+            ),
+            "error": state.get("error"),
+            "downloaded_files": state.get("downloaded_files", []),
+            "changed_files": state.get("changed_files", []),
+            "new_files": state.get("new_files", []),
+            "removed_files": state.get("removed_files", []),
+        }
+        history.append(entry)
+        self.history_path.parent.mkdir(parents=True, exist_ok=True)
+        temp = self.history_path.with_suffix(".tmp")
+        temp.write_text(
+            json.dumps(history[-100:], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temp, self.history_path)
+
+    def _write_launch_failure(
+        self,
+        state: dict[str, Any],
+        exc: OSError,
+    ) -> None:
+        failed = {
+            **state,
+            "phase": "failed",
+            "message": "Не удалось запустить updater.",
+            "error": f"{type(exc).__name__}: {exc}",
+            "progress_percent": 0,
+            "heartbeat_at": self._now(),
+        }
+        self._write_state(failed)
+        self._append_history_from_state(failed, success=False)
+
+    def _launch_log_tail(self) -> str:
+        try:
+            lines = self.launch_log_path.read_text(
+                encoding="utf-8",
+                errors="replace",
+            ).splitlines()
+        except OSError:
+            return "Журнал запуска пуст."
+        if not lines:
+            return "Журнал запуска пуст."
+        return "Последние строки: " + " | ".join(lines[-8:])[:1200]
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> datetime | None:
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
 
     @staticmethod
     def _display_version(value: str) -> str:

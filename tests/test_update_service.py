@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from tooru.update.service import UpdateService
@@ -38,3 +39,47 @@ def test_update_state_round_trip(tmp_path: Path) -> None:
     assert status["installed_sha"] == "a" * 40
     assert status["local_version"] == APP_VERSION
     assert status["repository"] == "Aspksa/Dragon-Tory"
+
+
+def test_dead_updater_is_detected(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    service._write_state(
+        {
+            "phase": "starting",
+            "message": "starting",
+            "updater_pid": 2_000_000_000,
+            "update_started_at": "2026-10-01T00:00:00+00:00",
+            "heartbeat_at": "2026-10-01T00:00:00+00:00",
+            "local_version": APP_VERSION,
+            "remote_version": APP_VERSION,
+            "remote_sha": "b" * 40,
+        }
+    )
+
+    status = service.status()
+
+    assert status["phase"] == "failed"
+    assert status["running"] is False
+    assert "неожиданно завершился" in status["message"]
+
+
+def test_history_returns_latest_first(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    service.history_path.parent.mkdir(parents=True, exist_ok=True)
+    service.history_path.write_text(
+        json.dumps(
+            [
+                {"description": "старое"},
+                {"description": "новое"},
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    items = service.history(limit=10)
+
+    assert [item["description"] for item in items] == [
+        "новое",
+        "старое",
+    ]
