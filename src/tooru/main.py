@@ -32,8 +32,8 @@ from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import GuardianConfig, MemoryGuardian
 from tooru.memory.guardian_automation import MemoryGuardianAutomation
-from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.intake import MemoryIntakeGateway
+from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.maintenance import MemoryAutomation
 from tooru.memory.store import SQLiteMemoryStore
 from tooru.update.service import UpdateService
