@@ -33,6 +33,13 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="passportDocumentNumber"' in response.text
     assert 'id="passportAmountValue"' in response.text
     assert 'id="passportTermsSummary"' in response.text
+    assert 'id="passportCounterpartyId"' in response.text
+    assert 'id="counterpartyModal"' in response.text
+    assert 'id="passportDocumentSubtype"' in response.text
+    assert 'id="passportWorkdayFields"' in response.text
+    assert 'id="documentModuleTimesheet"' in response.text
+    assert 'id="documentModuleDraft"' in response.text
+    assert "document-center" in response.text
     assert "Счета-оферты" in response.text
     assert 'id="contractExternalAI"' in response.text
     assert 'id="passportCleanRoom"' in response.text
@@ -56,6 +63,8 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'data-module="contracts"' in response.text
     assert 'data-module="invoice_offers"' in response.text
     assert 'data-module="memos"' in response.text
+    assert 'data-module="orders"' in response.text
+    assert 'data-module="directives"' in response.text
     assert 'id="documentModule"' in response.text
     assert 'id="documentModuleUpload"' in response.text
     assert 'id="documentModuleUploadQueue"' in response.text
@@ -156,4 +165,27 @@ def test_document_modules_endpoint_is_available() -> None:
 
     assert response.status_code == 200
     modules = {item["id"] for item in response.json()["items"]}
-    assert modules == {"contracts", "invoice_offers", "memos"}
+    assert modules == {"contracts", "invoice_offers", "memos", "orders", "directives"}
+
+
+def test_counterparty_directory_endpoint_is_available() -> None:
+    with TestClient(app) as client:
+        created = client.post(
+            "/v1/cloud/smart/counterparties",
+            json={
+                "name": "ООО Тест Контрагент",
+                "inn": "7700000000",
+                "kpp": "770001001",
+                "bank_name": "Тест Банк",
+            },
+        )
+        assert created.status_code == 201
+        counterparty_id = created.json()["id"]
+
+        listed = client.get("/v1/cloud/smart/counterparties")
+
+    assert listed.status_code == 200
+    assert any(
+        item["id"] == counterparty_id
+        for item in listed.json()["items"]
+    )

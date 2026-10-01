@@ -283,3 +283,77 @@ def test_contract_business_fields_and_counterparty_are_preserved(
         assert dna["document_number"] == number
         assert dna["amount_value"] == amount
         assert dna["amount_currency"] == "RUB"
+
+
+def test_counterparty_directory_links_many_documents(tmp_path: Path) -> None:
+    store, smart_drive = _stack(tmp_path)
+    counterparty = smart_drive.create_counterparty(
+        {
+            "name": "ООО Ромашка",
+            "short_name": "Ромашка",
+            "inn": "7700000000",
+            "kpp": "770001001",
+            "bank_name": "Банк Тест",
+            "bik": "044525000",
+            "settlement_account": "40702810000000000001",
+        }
+    )
+    first = _upload(store, "contract-a.txt", b"a")
+    second = _upload(store, "contract-b.txt", b"b")
+
+    for document, number in ((first, "D-1"), (second, "D-2")):
+        dna = smart_drive.update_dna(
+            document["id"],
+            {
+                "kind": "договор",
+                "counterparty_id": counterparty["id"],
+                "document_number": number,
+                "amount_value": 1000,
+                "amount_currency": "RUB",
+            },
+        )
+        assert dna["counterparty_id"] == counterparty["id"]
+        assert dna["counterparty"] == "ООО Ромашка"
+
+    current = smart_drive.get_counterparty(counterparty["id"])
+    assert current["document_count"] == 2
+
+    updated = smart_drive.update_counterparty(
+        counterparty["id"],
+        {
+            **current,
+            "name": "ООО Ромашка Групп",
+        },
+    )
+    assert updated["name"] == "ООО Ромашка Групп"
+    assert smart_drive.get_dna(first["id"])["counterparty"] == (
+        "ООО Ромашка Групп"
+    )
+
+
+def test_weekend_work_timesheet_is_built_from_service_memos(
+    tmp_path: Path,
+) -> None:
+    store, smart_drive = _stack(tmp_path)
+    memo = _upload(store, "weekend.txt", b"weekend work")
+    dna = smart_drive.update_dna(
+        memo["id"],
+        {
+            "kind": "служебная записка",
+            "document_subtype": "Работа в выходной день",
+            "employee_name": "Иванов И.И.",
+            "department": "ИТ",
+            "work_date": "03.10.2026",
+            "work_hours": 8,
+            "work_reason": "Обновление серверов",
+        },
+    )
+    assert dna["work_date"] == "2026-10-03"
+
+    timesheet = smart_drive.weekend_timesheet(
+        year=2026,
+        month=10,
+    )
+    assert timesheet["count"] == 1
+    assert timesheet["total_hours"] == 8
+    assert timesheet["items"][0]["employee_name"] == "Иванов И.И."

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from tooru.ai.base import AIRequest
 from tooru.cloud.document_intelligence import OCRUnavailableError
@@ -27,6 +27,10 @@ class VersionCompareRequest(BaseModel):
         "Сравни версии документа по смыслу. Выдели изменения сумм, дат, "
         "обязательств, сроков и других существенных условий."
     )
+
+
+class ModuleDraftRequest(BaseModel):
+    task: str = Field(min_length=3, max_length=8_000)
 
 
 def _service(request: Request):
@@ -260,6 +264,141 @@ def document_modules(request: Request) -> dict[str, Any]:
 def document_module(module_id: str, request: Request) -> dict[str, Any]:
     try:
         return _service(request).module_profile(module_id)
+    except Exception as exc:
+        raise _error(exc) from exc
+
+
+@router.post("/modules/{module_id}/draft")
+async def draft_from_module(
+    module_id: str,
+    payload: ModuleDraftRequest,
+    request: Request,
+) -> dict[str, Any]:
+    if module_id not in {"orders", "directives"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Создание проекта доступно только для приказов и распоряжений.",
+        )
+    if not request.app.state.ai_router.has_provider("deepseek"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="DeepSeek не настроен.",
+        )
+
+    service = _service(request)
+    smart = _smart(request)
+    try:
+        profile = service.module_profile(module_id)
+        references: list[dict[str, Any]] = []
+        source_parts: list[str] = []
+        for item in profile["items"]:
+            if len(references) >= 6:
+                break
+            contract = smart.get_contract(item["id"])
+            if contract["expired"]:
+                continue
+            if not (
+                contract["content_read"]
+                and contract["answer"]
+                and contract["external_ai"]
+            ):
+                continue
+            try:
+                source = service.version_text(
+                    item["id"],
+                    int(item["version"]),
+                )
+            except (
+                KeyError,
+                FileNotFoundError,
+                UnsupportedDocumentError,
+                OCRUnavailableError,
+                ValueError,
+            ):
+                continue
+            text = source["text"].strip()[:12_000]
+            if not text:
+                continue
+            source_no = len(references) + 1
+            references.append(
+                {
+                    "source_no": source_no,
+                    "document_id": item["id"],
+                    "name": item["name"],
+                    "version": item["version"],
+                    "sha256": source["sha256"],
+                }
+            )
+            source_parts.append(
+                f"[Образец {source_no}: {item['name']} · "
+                f"v{item['version']}]
+{text}"
+            )
+
+        if not references:
+            raise PermissionError(
+                "Нет образцов с разрешениями content_read + answer + "
+                "external_ai. Разрешите их только тем приказам/распоряжениям, "
+                "которые можно использовать как эталоны."
+            )
+
+        title = "приказа" if module_id == "orders" else "распоряжения"
+        response = await request.app.state.ai_router.generate(
+            "deepseek",
+            AIRequest(
+                system_prompt=(
+                    f"Ты Дракончик Тоору. Подготовь проект {title} предприятия. "
+                    "Используй переданные документы только как эталоны структуры, "
+                    "формулировок и оформления. Не переноси из образцов имена, "
+                    "даты, номера, суммы или факты, если пользователь их не дал. "
+                    "Не придумывай обязательные реквизиты: оставляй понятные "
+                    "плейсхолдеры в квадратных скобках. Сохраняй деловой стиль. "
+                    "В конце перечисли, какие поля нужно проверить человеку."
+                ),
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            "
+
+".join(source_parts)
+                            + "
+
+Задача для нового документа:
+"
+                            + payload.task
+                        ),
+                    }
+                ],
+                max_tokens=2_800,
+            ),
+        )
+        for reference in references:
+            smart.record_provenance(
+                reference["document_id"],
+                "module_draft_reference_used",
+                actor="tooru",
+                details={
+                    "module_id": module_id,
+                    "version": reference["version"],
+                    "memory_written": False,
+                    "training_performed": False,
+                },
+            )
+
+        return {
+            "module_id": module_id,
+            "document_type": title,
+            "draft": response.text,
+            "references": references,
+            "provider": response.provider,
+            "model": response.model,
+            "memory_written": False,
+            "training_performed": False,
+            "reference_based_generation": True,
+        }
+    except HTTPException:
+        raise
     except Exception as exc:
         raise _error(exc) from exc
 

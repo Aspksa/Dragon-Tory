@@ -32,6 +32,20 @@ _COUNTERPARTY_RE = re.compile(
     r"(?im)^\s*(?:контрагент|поставщик|исполнитель|заказчик|"
     r"продавец|покупатель)\s*[:\-]\s*([^\n\r]{3,180})"
 )
+_EMPLOYEE_RE = re.compile(
+    r"(?im)^\s*(?:сотрудник|работник|фио)\s*[:\-]\s*([^\n\r]{3,180})"
+)
+_DEPARTMENT_RE = re.compile(
+    r"(?im)^\s*(?:подразделение|отдел|служба)\s*[:\-]\s*([^\n\r]{2,180})"
+)
+_WORK_HOURS_RE = re.compile(
+    r"(?i)(?:количество\s+часов|часов|продолжительность)\s*[:\-]?\s*"
+    r"(\d{1,2}(?:[.,]\d{1,2})?)"
+)
+_WORK_DATE_RE = re.compile(
+    r"(?i)(?:дата\s+работы|выходной\s+день|работа\s+в\s+выходной\s+день)"
+    r"[^\d]{0,30}((?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])[./-](?:19|20)\d{2}|(?:19|20)\d{2}[-/.](?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01]))"
+)
 _AMOUNT_RE = re.compile(
     r"(?:(?P<currency1>€|EUR|USD|\$|GBP|£|RUB|₽)\s*)?"
     r"(?P<amount>\d+(?:[ .]\d{3})*(?:[,.]\d{1,2})?)"
@@ -39,7 +53,8 @@ _AMOUNT_RE = re.compile(
     re.IGNORECASE,
 )
 _REF_RE = re.compile(
-    r"\b(?:договор|contract|invoice|сч[её]т|order|заказ|полис|policy)"
+    r"\b(?:договор|приказ|распоряжение|оферт[аы]?|contract|invoice|"
+    r"сч[её]т|order|заказ|полис|policy)"
     r"\s*(?:№|#|no\.?|number)?\s*[:\-]?\s*([A-ZА-Я0-9][A-ZА-Я0-9._/-]{2,})",
     re.IGNORECASE,
 )
@@ -82,10 +97,25 @@ _KIND_RULES = {
     "служебная записка": (
         "служебная записка",
         "докладная записка",
+        "работа в выходной день",
         "memo",
         "memorandum",
         "кому:",
         "от кого:",
+    ),
+    "приказ": (
+        "приказ №",
+        "приказ от",
+        "приказываю",
+        "приказываю:",
+        "order no",
+    ),
+    "распоряжение": (
+        "распоряжение №",
+        "распоряжение от",
+        "распоряжаюсь",
+        "распоряжаюсь:",
+        "directive",
     ),
     "чек": ("кассовый чек", "receipt", "итого", "total"),
     "страхование": (
@@ -373,6 +403,28 @@ class DocumentIntelligence:
             [match.group(1).strip(" .;") for match in _COUNTERPARTY_RE.finditer(text)],
             limit=30,
         )
+        employees = _unique(
+            [match.group(1).strip(" .;") for match in _EMPLOYEE_RE.finditer(text)],
+            limit=30,
+        )
+        departments = _unique(
+            [match.group(1).strip(" .;") for match in _DEPARTMENT_RE.finditer(text)],
+            limit=30,
+        )
+        work_dates = _unique(
+            [match.group(1) for match in _WORK_DATE_RE.finditer(text)],
+            limit=30,
+        )
+        work_hours = []
+        for match in _WORK_HOURS_RE.finditer(text):
+            try:
+                value = float(match.group(1).replace(",", "."))
+            except ValueError:
+                continue
+            if 0 <= value <= 24:
+                work_hours.append(value)
+            if len(work_hours) >= 30:
+                break
         dates: list[str] = []
         for pattern in _DATE_PATTERNS:
             dates.extend(match.group(0) for match in pattern.finditer(text))
@@ -406,6 +458,10 @@ class DocumentIntelligence:
             "iban": ibans,
             "references": references,
             "counterparties": counterparties,
+            "employees": employees,
+            "departments": departments,
+            "work_dates": work_dates,
+            "work_hours": work_hours,
             "dates": dates,
             "amounts": amounts,
         }
@@ -644,9 +700,33 @@ class DocumentIntelligence:
             "ai_focus": [
                 "автор, адресат и подразделение",
                 "тема и поручение",
+                "работа в выходной день и часы",
                 "срок исполнения",
-                "решения и следующие действия",
-                "связанные документы и проекты",
+                "данные для табеля",
+            ],
+        },
+        "orders": {
+            "title": "Приказы",
+            "icon": "📜",
+            "kinds": {"приказ"},
+            "ai_focus": [
+                "структура и стиль приказов предприятия",
+                "основание и распорядительная часть",
+                "ответственные лица и сроки",
+                "нумерация пунктов",
+                "контроль исполнения",
+            ],
+        },
+        "directives": {
+            "title": "Распоряжения",
+            "icon": "📋",
+            "kinds": {"распоряжение"},
+            "ai_focus": [
+                "структура и стиль распоряжений предприятия",
+                "основание и задача",
+                "исполнители и сроки",
+                "порядок действий",
+                "контроль исполнения",
             ],
         },
     }
@@ -680,11 +760,18 @@ class DocumentIntelligence:
                 """
                 SELECT d.*, dna.kind AS dna_kind,
                        dna.counterparty,
+                       dna.counterparty_id,
                        dna.document_number,
                        dna.document_date,
                        dna.amount_value,
                        dna.amount_currency,
                        dna.terms_summary,
+                       dna.document_subtype,
+                       dna.employee_name,
+                       dna.department,
+                       dna.work_date,
+                       dna.work_hours,
+                       dna.work_reason,
                        i.kind AS intelligence_kind,
                        i.confidence AS intelligence_confidence,
                        i.deadlines_json,
@@ -730,11 +817,18 @@ class DocumentIntelligence:
                     "entities": entities,
                     "analyzed_at": row["analyzed_at"],
                     "counterparty": row["counterparty"] or "",
+                    "counterparty_id": row["counterparty_id"],
                     "document_number": row["document_number"] or "",
                     "document_date": row["document_date"],
                     "amount_value": row["amount_value"],
                     "amount_currency": row["amount_currency"] or "",
                     "terms_summary": row["terms_summary"] or "",
+                    "document_subtype": row["document_subtype"] or "",
+                    "employee_name": row["employee_name"] or "",
+                    "department": row["department"] or "",
+                    "work_date": row["work_date"],
+                    "work_hours": row["work_hours"],
+                    "work_reason": row["work_reason"] or "",
                 }
             )
             items.append(document)

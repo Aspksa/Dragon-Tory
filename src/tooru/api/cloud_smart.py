@@ -44,6 +44,31 @@ class DNAUpdate(BaseModel):
     amount_value: float | None = None
     amount_currency: str | None = Field(default=None, max_length=20)
     terms_summary: str | None = Field(default=None, max_length=5_000)
+    counterparty_id: str | None = Field(default=None, max_length=128)
+    document_subtype: str | None = Field(default=None, max_length=200)
+    employee_name: str | None = Field(default=None, max_length=300)
+    department: str | None = Field(default=None, max_length=300)
+    work_date: str | None = Field(default=None, max_length=80)
+    work_hours: float | None = Field(default=None, ge=0, le=24)
+    work_reason: str | None = Field(default=None, max_length=2_000)
+
+
+class CounterpartyUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=500)
+    short_name: str = Field(default="", max_length=300)
+    inn: str = Field(default="", max_length=32)
+    kpp: str = Field(default="", max_length=32)
+    ogrn: str = Field(default="", max_length=32)
+    legal_address: str = Field(default="", max_length=1_000)
+    postal_address: str = Field(default="", max_length=1_000)
+    bank_name: str = Field(default="", max_length=500)
+    bik: str = Field(default="", max_length=32)
+    settlement_account: str = Field(default="", max_length=64)
+    correspondent_account: str = Field(default="", max_length=64)
+    email: str = Field(default="", max_length=300)
+    phone: str = Field(default="", max_length=120)
+    contact_person: str = Field(default="", max_length=300)
+    notes: str = Field(default="", max_length=5_000)
 
 
 class AIContractUpdate(BaseModel):
@@ -153,6 +178,72 @@ def _ephemeral_chunks(
         if cleanup is not None:
             cleanup.unlink(missing_ok=True)
     return item, _rank_chunks(chunks, question, limit=limit)
+
+
+@router.get("/counterparties")
+def list_counterparties(
+    request: Request,
+    query: str = Query(default="", max_length=300),
+    limit: int = Query(default=300, ge=1, le=1_000),
+) -> dict[str, Any]:
+    return {
+        "items": _smart(request).list_counterparties(
+            query=query,
+            limit=limit,
+        )
+    }
+
+
+@router.post(
+    "/counterparties",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_counterparty(
+    payload: CounterpartyUpsert,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        return _smart(request).create_counterparty(payload.model_dump())
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.get("/counterparties/{counterparty_id}")
+def get_counterparty(
+    counterparty_id: str,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        return _smart(request).get_counterparty(counterparty_id)
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.put("/counterparties/{counterparty_id}")
+def update_counterparty(
+    counterparty_id: str,
+    payload: CounterpartyUpsert,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        return _smart(request).update_counterparty(
+            counterparty_id,
+            payload.model_dump(),
+        )
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.get("/timesheet/weekend-work")
+def weekend_work_timesheet(
+    request: Request,
+    year: int | None = Query(default=None, ge=2000, le=2200),
+    month: int | None = Query(default=None, ge=1, le=12),
+) -> dict[str, Any]:
+    return _smart(request).weekend_timesheet(
+        year=year,
+        month=month,
+    )
 
 
 @router.get("/files/{document_id}/dna")

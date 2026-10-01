@@ -202,3 +202,58 @@ def test_specialized_document_modules_are_separate(tmp_path: Path) -> None:
     assert {item["id"] for item in memos["items"]} == {memo["id"]}
     assert invoice_offers["ai_focus"]
     assert memos["ai_focus"]
+
+
+def test_orders_directives_and_weekend_work_are_recognized(
+    tmp_path: Path,
+) -> None:
+    store, smart, intelligence = _stack(tmp_path)
+
+    order = _upload(
+        store,
+        "order.txt",
+        "ПРИКАЗ № 17\nПРИКАЗЫВАЮ:\n1. Назначить ответственного.".encode(),
+    )
+    directive = _upload(
+        store,
+        "directive.txt",
+        (
+            "РАСПОРЯЖЕНИЕ № 5\nРАСПОРЯЖАЮСЬ:\n"
+            "Выполнить проверку до 20.10.2026."
+        ).encode(),
+    )
+    weekend = _upload(
+        store,
+        "weekend-memo.txt",
+        (
+            "Служебная записка\n"
+            "Работа в выходной день: 03.10.2026\n"
+            "Сотрудник: Иванов И.И.\n"
+            "Подразделение: ИТ\n"
+            "Количество часов: 8\n"
+        ).encode(),
+    )
+
+    results = {}
+    for document in (order, directive, weekend):
+        store.update_passport(
+            document["id"],
+            ai_access="read",
+            confidentiality="personal",
+        )
+        smart.reconcile_contract(document["id"])
+        analysis = intelligence.analyze(document["id"])
+        smart.apply_intelligence_defaults(document["id"], analysis)
+        results[document["id"]] = analysis
+
+    assert results[order["id"]]["kind"] == "приказ"
+    assert results[directive["id"]]["kind"] == "распоряжение"
+    assert intelligence.module_profile("orders")["count"] == 1
+    assert intelligence.module_profile("directives")["count"] == 1
+
+    weekend_dna = smart.get_dna(weekend["id"])
+    assert weekend_dna["document_subtype"] == "Работа в выходной день"
+    assert weekend_dna["employee_name"] == "Иванов И.И"
+    assert weekend_dna["department"] == "ИТ"
+    assert weekend_dna["work_date"] == "2026-10-03"
+    assert weekend_dna["work_hours"] == 8

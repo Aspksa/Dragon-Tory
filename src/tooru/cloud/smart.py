@@ -62,6 +62,20 @@ def _parse_time(value: str | None) -> datetime | None:
         return None
 
 
+def _normalize_date(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(text, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return text[:80]
+
+
 class SmartDrive:
     def __init__(self, cloud_store: CloudStore) -> None:
         self.cloud_store = cloud_store
@@ -144,6 +158,85 @@ class SmartDrive:
                 "document_dna",
                 "terms_summary",
                 "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "counterparty_id",
+                "TEXT",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "document_subtype",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "employee_name",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "department",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "work_date",
+                "TEXT",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "work_hours",
+                "REAL",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "work_reason",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS counterparties (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    short_name TEXT NOT NULL DEFAULT '',
+                    inn TEXT NOT NULL DEFAULT '',
+                    kpp TEXT NOT NULL DEFAULT '',
+                    ogrn TEXT NOT NULL DEFAULT '',
+                    legal_address TEXT NOT NULL DEFAULT '',
+                    postal_address TEXT NOT NULL DEFAULT '',
+                    bank_name TEXT NOT NULL DEFAULT '',
+                    bik TEXT NOT NULL DEFAULT '',
+                    settlement_account TEXT NOT NULL DEFAULT '',
+                    correspondent_account TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    contact_person TEXT NOT NULL DEFAULT '',
+                    notes TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_counterparties_name
+                ON counterparties(name COLLATE NOCASE)
+                """
+            )
+            db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_counterparties_inn
+                ON counterparties(inn)
+                """
             )
 
             db.execute(
@@ -606,6 +699,247 @@ class SmartDrive:
         )
         return True
 
+    @staticmethod
+    def _clean_counterparty_payload(
+        payload: dict[str, Any],
+    ) -> dict[str, str]:
+        limits = {
+            "name": 500,
+            "short_name": 300,
+            "inn": 32,
+            "kpp": 32,
+            "ogrn": 32,
+            "legal_address": 1_000,
+            "postal_address": 1_000,
+            "bank_name": 500,
+            "bik": 32,
+            "settlement_account": 64,
+            "correspondent_account": 64,
+            "email": 300,
+            "phone": 120,
+            "contact_person": 300,
+            "notes": 5_000,
+        }
+        cleaned = {
+            key: str(payload.get(key, "") or "").strip()[:limit]
+            for key, limit in limits.items()
+        }
+        if not cleaned["name"]:
+            raise ValueError("Укажите наименование контрагента.")
+        return cleaned
+
+    def create_counterparty(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        values = self._clean_counterparty_payload(payload)
+        counterparty_id = "TORY-CP-" + uuid4().hex.upper()
+        now = utc_now()
+        with self._connect() as db:
+            db.execute(
+                """
+                INSERT INTO counterparties (
+                    id, name, short_name, inn, kpp, ogrn,
+                    legal_address, postal_address, bank_name, bik,
+                    settlement_account, correspondent_account,
+                    email, phone, contact_person, notes,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    counterparty_id,
+                    values["name"],
+                    values["short_name"],
+                    values["inn"],
+                    values["kpp"],
+                    values["ogrn"],
+                    values["legal_address"],
+                    values["postal_address"],
+                    values["bank_name"],
+                    values["bik"],
+                    values["settlement_account"],
+                    values["correspondent_account"],
+                    values["email"],
+                    values["phone"],
+                    values["contact_person"],
+                    values["notes"],
+                    now,
+                    now,
+                ),
+            )
+        return self.get_counterparty(counterparty_id)
+
+    def update_counterparty(
+        self,
+        counterparty_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        current = self.get_counterparty(counterparty_id)
+        merged = dict(current)
+        merged.update(payload)
+        values = self._clean_counterparty_payload(merged)
+        with self._connect() as db:
+            db.execute(
+                """
+                UPDATE counterparties
+                SET name = ?, short_name = ?, inn = ?, kpp = ?, ogrn = ?,
+                    legal_address = ?, postal_address = ?, bank_name = ?,
+                    bik = ?, settlement_account = ?,
+                    correspondent_account = ?, email = ?, phone = ?,
+                    contact_person = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    values["name"],
+                    values["short_name"],
+                    values["inn"],
+                    values["kpp"],
+                    values["ogrn"],
+                    values["legal_address"],
+                    values["postal_address"],
+                    values["bank_name"],
+                    values["bik"],
+                    values["settlement_account"],
+                    values["correspondent_account"],
+                    values["email"],
+                    values["phone"],
+                    values["contact_person"],
+                    values["notes"],
+                    utc_now(),
+                    counterparty_id,
+                ),
+            )
+            db.execute(
+                """
+                UPDATE document_dna
+                SET counterparty = ?, updated_at = ?
+                WHERE counterparty_id = ?
+                """,
+                (values["name"], utc_now(), counterparty_id),
+            )
+        return self.get_counterparty(counterparty_id)
+
+    def get_counterparty(
+        self,
+        counterparty_id: str,
+    ) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM counterparties WHERE id = ?",
+                (counterparty_id,),
+            ).fetchone()
+            count = db.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM document_dna
+                WHERE counterparty_id = ?
+                """,
+                (counterparty_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(counterparty_id)
+        result = dict(row)
+        result["document_count"] = int(count["count"] if count else 0)
+        return result
+
+    def list_counterparties(
+        self,
+        *,
+        query: str = "",
+        limit: int = 300,
+    ) -> list[dict[str, Any]]:
+        pattern = f"%{query.strip()}%"
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT cp.*,
+                       COUNT(dna.document_id) AS document_count
+                FROM counterparties cp
+                LEFT JOIN document_dna dna
+                  ON dna.counterparty_id = cp.id
+                WHERE (? = '' OR cp.name LIKE ? OR cp.short_name LIKE ?
+                       OR cp.inn LIKE ?)
+                GROUP BY cp.id
+                ORDER BY cp.name COLLATE NOCASE
+                LIMIT ?
+                """,
+                (
+                    query.strip(),
+                    pattern,
+                    pattern,
+                    pattern,
+                    max(1, min(int(limit), 1_000)),
+                ),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def weekend_timesheet(
+        self,
+        *,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> dict[str, Any]:
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT dna.*, d.name AS document_name
+                FROM document_dna dna
+                JOIN documents d ON d.id = dna.document_id
+                WHERE d.trashed = 0
+                  AND LOWER(dna.kind) = 'служебная записка'
+                  AND LOWER(dna.document_subtype) = 'работа в выходной день'
+                ORDER BY dna.work_date, dna.employee_name
+                """
+            ).fetchall()
+        items: list[dict[str, Any]] = []
+        totals: dict[str, float] = {}
+        for row in rows:
+            item = dict(row)
+            work_date = str(item.get("work_date") or "")
+            if year is not None and not work_date.startswith(f"{year:04d}-"):
+                continue
+            if month is not None:
+                prefix = (
+                    f"{year:04d}-{month:02d}-"
+                    if year is not None
+                    else f"-{month:02d}-"
+                )
+                if year is not None and not work_date.startswith(prefix):
+                    continue
+                if year is None and len(work_date) >= 7:
+                    try:
+                        if int(work_date[5:7]) != month:
+                            continue
+                    except ValueError:
+                        continue
+            hours = float(item.get("work_hours") or 0.0)
+            employee = (
+                str(item.get("employee_name") or "").strip()
+                or "Сотрудник не указан"
+            )
+            totals[employee] = totals.get(employee, 0.0) + hours
+            items.append(
+                {
+                    "document_id": item["document_id"],
+                    "document_name": item["document_name"],
+                    "employee_name": employee,
+                    "department": item.get("department") or "",
+                    "work_date": item.get("work_date"),
+                    "work_hours": hours,
+                    "work_reason": item.get("work_reason") or "",
+                }
+            )
+        return {
+            "items": items,
+            "count": len(items),
+            "total_hours": sum(item["work_hours"] for item in items),
+            "by_employee": [
+                {"employee_name": name, "hours": hours}
+                for name, hours in sorted(totals.items())
+            ],
+        }
+
     def get_dna(self, document_id: str) -> dict[str, Any]:
         self.ensure_document(document_id)
         document = self.cloud_store.get(
@@ -620,6 +954,15 @@ class SmartDrive:
         if row is None:
             raise KeyError(document_id)
         dna = dict(row)
+        dna["counterparty_record"] = None
+        if dna.get("counterparty_id"):
+            with self._connect() as db:
+                counterparty = db.execute(
+                    "SELECT * FROM counterparties WHERE id = ?",
+                    (dna["counterparty_id"],),
+                ).fetchone()
+            if counterparty is not None:
+                dna["counterparty_record"] = dict(counterparty)
         dna["document"] = {
             "id": document["id"],
             "name": document["name"],
@@ -660,9 +1003,11 @@ class SmartDrive:
             "document_number": str(
                 payload.get("document_number", current["document_number"]) or ""
             )[:200],
-            "document_date": payload.get(
-                "document_date",
-                current["document_date"],
+            "document_date": _normalize_date(
+                payload.get(
+                    "document_date",
+                    current["document_date"],
+                )
             ),
             "amount_value": payload.get(
                 "amount_value",
@@ -678,7 +1023,55 @@ class SmartDrive:
             "terms_summary": str(
                 payload.get("terms_summary", current["terms_summary"]) or ""
             )[:5_000],
+            "counterparty_id": payload.get(
+                "counterparty_id",
+                current.get("counterparty_id"),
+            ),
+            "document_subtype": str(
+                payload.get(
+                    "document_subtype",
+                    current.get("document_subtype", ""),
+                )
+                or ""
+            )[:200],
+            "employee_name": str(
+                payload.get(
+                    "employee_name",
+                    current.get("employee_name", ""),
+                )
+                or ""
+            )[:300],
+            "department": str(
+                payload.get(
+                    "department",
+                    current.get("department", ""),
+                )
+                or ""
+            )[:300],
+            "work_date": _normalize_date(
+                payload.get(
+                    "work_date",
+                    current.get("work_date"),
+                )
+            ),
+            "work_hours": payload.get(
+                "work_hours",
+                current.get("work_hours"),
+            ),
+            "work_reason": str(
+                payload.get(
+                    "work_reason",
+                    current.get("work_reason", ""),
+                )
+                or ""
+            )[:2_000],
         }
+
+        if values["counterparty_id"]:
+            counterparty = self.get_counterparty(
+                str(values["counterparty_id"])
+            )
+            values["counterparty"] = counterparty["name"]
         with self._connect() as db:
             db.execute(
                 """
@@ -688,6 +1081,9 @@ class SmartDrive:
                     counterparty = ?, document_number = ?,
                     document_date = ?, amount_value = ?,
                     amount_currency = ?, terms_summary = ?,
+                    counterparty_id = ?, document_subtype = ?,
+                    employee_name = ?, department = ?,
+                    work_date = ?, work_hours = ?, work_reason = ?,
                     updated_at = ?
                 WHERE document_id = ?
                 """,
@@ -704,6 +1100,13 @@ class SmartDrive:
                     values["amount_value"],
                     values["amount_currency"],
                     values["terms_summary"],
+                    values["counterparty_id"],
+                    values["document_subtype"],
+                    values["employee_name"],
+                    values["department"],
+                    values["work_date"],
+                    values["work_hours"],
+                    values["work_reason"],
                     utc_now(),
                     document_id,
                 ),
@@ -774,6 +1177,56 @@ class SmartDrive:
         ):
             payload["counterparty"] = str(counterparties[0])
             fields.append("counterparty")
+            matches = [
+                cp
+                for cp in self.list_counterparties(
+                    query=str(counterparties[0]),
+                    limit=20,
+                )
+                if cp["name"].strip().casefold()
+                == str(counterparties[0]).strip().casefold()
+                or (
+                    cp.get("short_name")
+                    and cp["short_name"].strip().casefold()
+                    == str(counterparties[0]).strip().casefold()
+                )
+            ]
+            if len(matches) == 1 and not dna.get("counterparty_id"):
+                payload["counterparty_id"] = matches[0]["id"]
+                fields.append("counterparty_id")
+
+        if analysis.get("kind") == "служебная записка":
+            employees = entities.get("employees") or []
+            departments = entities.get("departments") or []
+            work_dates = entities.get("work_dates") or []
+            work_hours = entities.get("work_hours") or []
+            work_signals = bool(
+                employees or departments or work_dates or work_hours
+            )
+            if (
+                work_signals
+                and not str(dna.get("document_subtype") or "").strip()
+            ):
+                payload["document_subtype"] = "Работа в выходной день"
+                fields.append("document_subtype")
+            if (
+                not str(dna.get("employee_name") or "").strip()
+                and len(employees) == 1
+            ):
+                payload["employee_name"] = str(employees[0])
+                fields.append("employee_name")
+            if (
+                not str(dna.get("department") or "").strip()
+                and len(departments) == 1
+            ):
+                payload["department"] = str(departments[0])
+                fields.append("department")
+            if not dna.get("work_date") and len(work_dates) == 1:
+                payload["work_date"] = str(work_dates[0])
+                fields.append("work_date")
+            if dna.get("work_hours") is None and len(work_hours) == 1:
+                payload["work_hours"] = float(work_hours[0])
+                fields.append("work_hours")
 
         if payload:
             self.update_dna(
