@@ -5,7 +5,7 @@
 Персональная AI-платформа с раздельной личной и проектной памятью,
 инструментами и одной основной облачной моделью DeepSeek.
 
-## Memory Engine v5.2 + Cognitive Core IV
+## Memory Engine v6 + Cognitive Core V
 
 В ядре уже есть:
 
@@ -49,6 +49,25 @@
 - verified-outcome эпизоды после успешной проверки;
 - Experience Learning только по повторяемому проверенному опыту;
 - новые рабочие правила проходят Guardian и не становятся инструкциями автоматически.
+
+### Grey Matter 01.00.00
+
+Версия 00.00.34 добавляет «серое вещество» Тоору:
+
+- настоящие локальные multilingual embeddings через FastEmbed + hash fallback;
+- иерархическую память через summary/PART_OF;
+- Entity Resolution и алиасы сущностей;
+- причинную память причина → проблема → действие → результат;
+- Uncertainty Engine с альтернативными конфликтующими фактами;
+- фоновую Memory Consolidation v2 («сон мозга»);
+- память целей, задач, состояний и зависимостей;
+- multi-hop graph retrieval;
+- обучаемую надёжность источников;
+- correction learning на явных исправлениях пользователя;
+- counterfactual verifier;
+- отдельную Skill Memory с Guardian review.
+
+Статус слоя: `GET /v1/memory/grey-matter/status`.
 
 ## Document Intelligence v2
 
