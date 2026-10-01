@@ -5,6 +5,8 @@ from datetime import date, datetime
 from typing import Any
 
 from tooru.ai.base import AIRequest
+from tooru.cloud.document_intelligence import OCRUnavailableError
+from tooru.cloud.intelligence import UnsupportedDocumentError
 
 _WEEKEND_RE = re.compile(
     r"(?:работ[ауы]?\s+в\s+выходн|выходн(?:ой|ого)\s+день)",
@@ -143,45 +145,50 @@ async def create_weekend_work_document(
 
     references: list[dict[str, Any]] = []
     source_parts: list[str] = []
-    try:
-        profile = intelligence.module_profile("memos")
-        for item in profile["items"]:
-            if len(references) >= 6:
-                break
-            contract = smart.get_contract(item["id"])
-            if contract["expired"]:
-                continue
-            if not (
-                contract["content_read"]
-                and contract["answer"]
-                and contract["external_ai"]
-            ):
-                continue
-            try:
-                source = intelligence.version_text(
-                    item["id"],
-                    int(item["version"]),
-                )
-            except Exception:
-                continue
-            text = source["text"].strip()[:10_000]
-            if not text:
-                continue
-            number = len(references) + 1
-            references.append(
-                {
-                    "source_no": number,
-                    "document_id": item["id"],
-                    "name": item["name"],
-                    "version": item["version"],
-                }
+    profile = intelligence.module_profile("memos")
+    for item in profile["items"]:
+        if len(references) >= 6:
+            break
+        contract = smart.get_contract(item["id"])
+        if contract["expired"]:
+            continue
+        if not (
+            contract["content_read"]
+            and contract["answer"]
+            and contract["external_ai"]
+        ):
+            continue
+        try:
+            source = intelligence.version_text(
+                item["id"],
+                int(item["version"]),
             )
-            source_parts.append(
-                f"[Образец {number}: {item['name']}]\n{text}"
-            )
-    except Exception:
-        references = []
-        source_parts = []
+        except (
+            KeyError,
+            FileNotFoundError,
+            PermissionError,
+            UnsupportedDocumentError,
+            OCRUnavailableError,
+            ValueError,
+            RuntimeError,
+            OSError,
+        ):
+            continue
+        text = source["text"].strip()[:10_000]
+        if not text:
+            continue
+        number = len(references) + 1
+        references.append(
+            {
+                "source_no": number,
+                "document_id": item["id"],
+                "name": item["name"],
+                "version": item["version"],
+            }
+        )
+        source_parts.append(
+            f"[Образец {number}: {item['name']}]\n{text}"
+        )
 
     work_date = f"{year:04d}-{month:02d}-{day:02d}"
     vehicle_text = ""
