@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     def memory_db_path(self) -> Path:
         return self.data_dir / "memory" / "tooru_memory.sqlite3"
 
+    @property
+    def chat_db_path(self) -> Path:
+        return self.data_dir / "chat" / "tooru_chat.sqlite3"
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
 from tooru.api.chat import router as chat_router
+from tooru.api.chats import router as chats_router
 from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
@@ -16,6 +17,7 @@ from tooru.api.settings import remove_legacy_claude_settings
 from tooru.api.settings import router as settings_router
 from tooru.api.update import router as update_router
 from tooru.chat.pipeline import ChatPipeline
+from tooru.chat.store import ChatStore
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
@@ -39,6 +41,9 @@ async def lifespan(app: FastAPI):
         related_threshold=settings.memory_related_threshold,
     )
     memory.initialize()
+
+    chat_store = ChatStore(settings.chat_db_path)
+    chat_store.initialize()
 
     ai_router = AIRouter()
     if settings.deepseek_api_key:
@@ -100,6 +105,8 @@ async def lifespan(app: FastAPI):
         branch=settings.update_branch,
     )
     app.state.memory = memory
+    app.state.chat_store = chat_store
+    app.state.chat_tasks = {}
     app.state.ai_router = ai_router
     app.state.deepseek_config = {
         "configured": bool(settings.deepseek_api_key),
@@ -124,6 +131,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        for task in list(app.state.chat_tasks.values()):
+            task.cancel()
         await guardian_automation.stop()
         await automation.stop()
 
@@ -138,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(home_router)
     app.include_router(health_router)
     app.include_router(chat_router)
+    app.include_router(chats_router)
     app.include_router(diagnostics_router)
     app.include_router(settings_router)
     app.include_router(update_router)
