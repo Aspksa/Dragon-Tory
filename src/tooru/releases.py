@@ -469,6 +469,22 @@ RELEASE_NOTES: dict[str, dict[str, Any]] = {
                 ],
             },
             {
+                "id": "drive",
+                "title": "Мой диск",
+                "version": "01.09.00",
+                "changes": [
+                    "Document Intelligence v2 и структурный provenance остаются совместимыми с Adaptive Grey Matter.",
+                ],
+            },
+            {
+                "id": "memos",
+                "title": "Служебные записки",
+                "version": "01.06.00",
+                "changes": [
+                    "Правила обработки служебных записок не меняются и продолжают использовать изолированную проектную память.",
+                ],
+            },
+            {
                 "id": "updater",
                 "title": "Обновление",
                 "version": "01.05.00",
