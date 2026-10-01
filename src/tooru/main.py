@@ -31,6 +31,7 @@ from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import GuardianConfig, MemoryGuardian
 from tooru.memory.guardian_automation import MemoryGuardianAutomation
 from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
+from tooru.memory.intake import MemoryIntakeGateway
 from tooru.memory.maintenance import MemoryAutomation
 from tooru.memory.store import SQLiteMemoryStore
 from tooru.update.service import UpdateService
@@ -107,6 +108,8 @@ async def lifespan(app: FastAPI):
         ),
     )
 
+    memory_intake = MemoryIntakeGateway(guardian)
+
     guardian_automation = MemoryGuardianAutomation(
         guardian,
         interval_seconds=settings.memory_guardian_interval_seconds,
@@ -148,6 +151,7 @@ async def lifespan(app: FastAPI):
     }
     app.state.memory_intelligence = intelligence
     app.state.memory_guardian = guardian
+    app.state.memory_intake = memory_intake
     app.state.memory_guardian_automation = guardian_automation
     app.state.memory_automation = automation
     app.state.chat_pipeline = ChatPipeline(
