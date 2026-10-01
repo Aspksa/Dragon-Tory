@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from tooru.ai.base import AIRequest
-from tooru.ai.router import AIRouteResult, AIRouter
+from tooru.ai.router import AIRouter, AIRouteResult
 from tooru.memory.engine import MemoryEngine
 from tooru.memory.guardian import MemoryGuardian
 from tooru.memory.models import (
