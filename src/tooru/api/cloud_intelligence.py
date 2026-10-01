@@ -331,8 +331,7 @@ async def draft_from_module(
             )
             source_parts.append(
                 f"[Образец {source_no}: {item['name']} · "
-                f"v{item['version']}]
-{text}"
+                f"v{item['version']}]\n{text}"
             )
 
         if not references:
@@ -359,13 +358,8 @@ async def draft_from_module(
                     {
                         "role": "user",
                         "content": (
-                            "
-
-".join(source_parts)
-                            + "
-
-Задача для нового документа:
-"
+                            "\n\n".join(source_parts)
+                            + "\n\nЗадача для нового документа:\n"
                             + payload.task
                         ),
                     }

@@ -4,7 +4,7 @@ import base64
 import hashlib
 import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -68,9 +68,19 @@ def _normalize_date(value: Any) -> str | None:
     text = str(value).strip()
     if not text:
         return None
-    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y"):
+    try:
+        return date.fromisoformat(text).isoformat()
+    except ValueError:
+        pass
+    for separator in (".", "/", "-"):
+        parts = text.split(separator)
+        if len(parts) != 3:
+            continue
         try:
-            return datetime.strptime(text, fmt).date().isoformat()
+            day, month, year = (int(part) for part in parts)
+            if year < 1000:
+                continue
+            return date(year, month, day).isoformat()
         except ValueError:
             continue
     return text[:80]
