@@ -541,14 +541,84 @@ function openEmployeeEditor(){
   [["ФИО *","empFull","Иванов Иван Иванович"],["Табельный номер","empNumber",""],["Должность","empPosition","Водитель"],["Подразделение","empDepartment",""],["Телефон","empPhone",""],["E-mail","empEmail",""],["Водительское удостоверение","empLicense",""]].forEach(x=>grid.append(formField(x[0],x[1],x[2])));
   $("smartBody").append(grid);const save=document.createElement("button");save.className="primary";save.textContent="Сохранить сотрудника";save.onclick=async()=>{const full=$("empFull").value.trim();if(!full){$("smartStatus").textContent="Укажите ФИО.";return}try{await api("/v1/cloud/smart/employees",{method:"POST",body:JSON.stringify({full_name:full,personnel_number:$("empNumber").value.trim(),position:$("empPosition").value.trim(),department:$("empDepartment").value.trim(),phone:$("empPhone").value.trim(),email:$("empEmail").value.trim(),driver_license:$("empLicense").value.trim()})});$("smartStatus").textContent="Сотрудник сохранён.";await loadDocumentModule("employees")}catch(e){$("smartStatus").textContent=e.message}};$("smartBody").append(save);
 }
-async function openVehicleEditor(){
+async function openVehicleEditor(item=null){
   let employees=[];try{employees=(await api("/v1/cloud/smart/employees?limit=1000")).items||[]}catch{}
-  openSmartModal("🚗 Новый автомобиль","Гараж Тори · автомобиль можно закрепить за сотрудником");
+  const editing=!!(item&&item.id);
+  openSmartModal(editing?"🚗 Карточка автомобиля":"🚗 Новый автомобиль","Гараж Тори · ГСМ, шины, страхование и закреплённый водитель");
   const grid=document.createElement("div");grid.className="passport-data-grid";
-  [["Гаражный номер","carGarage",""],["Госномер","carPlate",""],["Марка / модель","carModel",""],["VIN","carVin",""]].forEach(x=>grid.append(formField(x[0],x[1],x[2])));
-  const driverWrap=document.createElement("div");driverWrap.className="field span-2";const label=document.createElement("label");label.textContent="Закреплённый водитель";const select=document.createElement("select");select.id="carDriver";const blank=document.createElement("option");blank.value="";blank.textContent="Не закреплён";select.append(blank);employees.forEach(emp=>{const o=document.createElement("option");o.value=emp.id;o.textContent=emp.full_name+(emp.position?" · "+emp.position:"");select.append(o)});driverWrap.append(label,select);grid.append(driverWrap);$("smartBody").append(grid);
-  const save=document.createElement("button");save.className="primary";save.textContent="Сохранить автомобиль";save.onclick=async()=>{try{await api("/v1/cloud/smart/garage",{method:"POST",body:JSON.stringify({garage_number:$("carGarage").value.trim(),plate_number:$("carPlate").value.trim(),make_model:$("carModel").value.trim(),vin:$("carVin").value.trim(),driver_employee_id:$("carDriver").value||null})});$("smartStatus").textContent="Автомобиль сохранён.";await loadDocumentModule("garage")}catch(e){$("smartStatus").textContent=e.message}};$("smartBody").append(save);
+  [
+    ["Гаражный номер","carGarage","", "text",item&&item.garage_number],
+    ["Госномер","carPlate","", "text",item&&item.plate_number],
+    ["Марка / модель","carModel","", "text",item&&item.make_model],
+    ["VIN","carVin","", "text",item&&item.vin],
+    ["Вид топлива","carFuelType","АИ-95 / ДТ", "text",item&&item.fuel_type],
+    ["Расход ГСМ летом, л/100 км","carFuelSummer","", "number",item&&item.fuel_rate_summer],
+    ["Расход ГСМ зимой, л/100 км","carFuelWinter","", "number",item&&item.fuel_rate_winter],
+    ["Шины лето","carTireSummer","225/60 R17", "text",item&&item.tire_size_summer],
+    ["Шины зима","carTireWinter","225/60 R17", "text",item&&item.tire_size_winter],
+    ["Тип страховки","carInsuranceType","ОСАГО / КАСКО", "text",item&&item.insurance_type],
+    ["Номер полиса","carInsurancePolicy","", "text",item&&item.insurance_policy],
+    ["Страховая компания","carInsuranceCompany","", "text",item&&item.insurance_company],
+    ["Страховка с","carInsuranceStart","", "date",item&&item.insurance_start],
+    ["Страховка по","carInsuranceEnd","", "date",item&&item.insurance_end]
+  ].forEach(x=>{const field=formField(x[0],x[1],x[2],x[3]);const input=field.querySelector("input");if(x[3]==="number"){input.step="0.001";input.min="0"}if(x[4]!==null&&x[4]!==undefined)input.value=x[4];grid.append(field)});
+  const driverWrap=document.createElement("div");driverWrap.className="field span-2";const label=document.createElement("label");label.textContent="Закреплённый водитель";const select=document.createElement("select");select.id="carDriver";const blank=document.createElement("option");blank.value="";blank.textContent="Не закреплён";select.append(blank);employees.forEach(emp=>{const o=document.createElement("option");o.value=emp.id;o.textContent=emp.full_name+(emp.position?" · "+emp.position:"");o.selected=!!(item&&item.driver_employee_id===emp.id);select.append(o)});driverWrap.append(label,select);grid.append(driverWrap);
+  const notesWrap=document.createElement("div");notesWrap.className="field span-2";const notesLabel=document.createElement("label");notesLabel.textContent="Примечание";const notes=document.createElement("textarea");notes.id="carNotes";notes.value=item&&item.notes||"";notesWrap.append(notesLabel,notes);grid.append(notesWrap);
+  $("smartBody").append(grid);
+  if(editing&&item.insurance_end){const info=document.createElement("div");info.className="statusbar "+(item.insurance_expired?"bad":item.insurance_alert?"warn":"");info.textContent=item.insurance_expired?"Страховка просрочена.":(item.insurance_alert?"До окончания страховки "+item.insurance_days_left+" дн.":"Страховка действует до "+item.insurance_end);$("smartBody").append(info)}
+  const save=document.createElement("button");save.className="primary";save.textContent=editing?"Сохранить изменения":"Сохранить автомобиль";
+  save.onclick=async()=>{try{
+    const body={
+      garage_number:$("carGarage").value.trim(),
+      plate_number:$("carPlate").value.trim(),
+      make_model:$("carModel").value.trim(),
+      vin:$("carVin").value.trim(),
+      driver_employee_id:$("carDriver").value||null,
+      fuel_type:$("carFuelType").value.trim(),
+      fuel_rate_summer:$("carFuelSummer").value===""?null:Number($("carFuelSummer").value),
+      fuel_rate_winter:$("carFuelWinter").value===""?null:Number($("carFuelWinter").value),
+      tire_size_summer:$("carTireSummer").value.trim(),
+      tire_size_winter:$("carTireWinter").value.trim(),
+      insurance_type:$("carInsuranceType").value.trim(),
+      insurance_policy:$("carInsurancePolicy").value.trim(),
+      insurance_company:$("carInsuranceCompany").value.trim(),
+      insurance_start:$("carInsuranceStart").value||null,
+      insurance_end:$("carInsuranceEnd").value||null,
+      notes:$("carNotes").value.trim()
+    };
+    const url=editing?"/v1/cloud/smart/garage/"+encodeURIComponent(item.id):"/v1/cloud/smart/garage";
+    await api(url,{method:editing?"PUT":"POST",body:JSON.stringify(body)});
+    $("smartStatus").textContent=editing?"Карточка автомобиля обновлена.":"Автомобиль сохранён.";
+    await loadDocumentModule("garage");
+  }catch(e){$("smartStatus").textContent=e.message}};
+  $("smartBody").append(save);
 }
+async function openTimesheetEntryEditor(){
+  let employees=[];try{employees=(await api("/v1/cloud/smart/employees?limit=1000")).items||[]}catch{}
+  openSmartModal("📊 Ручная отметка табеля","Отпуск и больничный вводятся вручную и остаются в локальном структурированном учёте.");
+  const grid=document.createElement("div");grid.className="passport-data-grid";
+  const employeeWrap=document.createElement("div");employeeWrap.className="field span-2";const employeeLabel=document.createElement("label");employeeLabel.textContent="Сотрудник из справочника (необязательно)";const employeeSelect=document.createElement("select");employeeSelect.id="tsEmployee";const blank=document.createElement("option");blank.value="";blank.textContent="Ввести ФИО вручную";employeeSelect.append(blank);employees.forEach(emp=>{const o=document.createElement("option");o.value=emp.id;o.textContent=emp.full_name+(emp.personnel_number?" · "+emp.personnel_number:"");employeeSelect.append(o)});employeeWrap.append(employeeLabel,employeeSelect);grid.append(employeeWrap);
+  grid.append(formField("ФИО вручную","tsEmployeeName","Иванов И.И."));
+  const codeWrap=document.createElement("div");codeWrap.className="field";const codeLabel=document.createElement("label");codeLabel.textContent="Код";const codeSelect=document.createElement("select");codeSelect.id="tsCode";[["ОТ","ОТ — ежегодный оплачиваемый отпуск"],["Б","Б — временная нетрудоспособность"]].forEach(([value,text])=>{const o=document.createElement("option");o.value=value;o.textContent=text;codeSelect.append(o)});codeWrap.append(codeLabel,codeSelect);grid.append(codeWrap);
+  grid.append(formField("Дата с","tsDateFrom","", "date"));
+  grid.append(formField("Дата по","tsDateTo","", "date"));
+  const noteWrap=document.createElement("div");noteWrap.className="field span-2";const noteLabel=document.createElement("label");noteLabel.textContent="Примечание";const note=document.createElement("textarea");note.id="tsNote";note.placeholder="Например: приказ на отпуск / больничный лист";noteWrap.append(noteLabel,note);grid.append(noteWrap);
+  $("smartBody").append(grid);
+  const save=document.createElement("button");save.className="primary";save.textContent="Добавить в табель";save.onclick=async()=>{try{
+    const from=$("tsDateFrom").value,to=$("tsDateTo").value||from;
+    if(!from){$("smartStatus").textContent="Укажите дату.";return}
+    const selected=employees.find(x=>x.id===$("tsEmployee").value);
+    await api("/v1/cloud/smart/timesheet/manual",{method:"POST",body:JSON.stringify({
+      employee_id:$("tsEmployee").value||null,
+      employee_name:selected?selected.full_name:$("tsEmployeeName").value.trim(),
+      date_from:from,date_to:to,code:$("tsCode").value,note:$("tsNote").value.trim()
+    })});
+    $("smartStatus").textContent="Ручная отметка добавлена.";
+    await loadTimesheetModule();
+  }catch(e){$("smartStatus").textContent=e.message}};
+  $("smartBody").append(save);
+}
+
 async function loadDocumentModule(moduleId){
   activeDocumentModule=moduleId||activeDocumentModule;
   $("documentModuleCounterparty").hidden=!["contracts","invoice_offers"].includes(activeDocumentModule);
