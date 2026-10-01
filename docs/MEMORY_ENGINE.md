@@ -1,4 +1,4 @@
-# Memory Engine v5.1
+# Memory Engine v5.2
 
 Dragon Tory owns its memory. DeepSeek is the configured reasoning provider,
 but it does not own long-term memory.
@@ -36,6 +36,18 @@ usage feedback and pinning.
 The default hash embedding remains an offline deterministic fallback. A real
 OpenAI-compatible embedding endpoint can be configured when stronger semantic
 similarity is required.
+
+## Truth Engine
+
+Version 00.00.31 adds a deterministic trust assessment for each durable memory.
+The score combines memory confidence, evidence confidence, feedback, temporal
+status, SUPPORTS links and a penalty for CONTRADICTS links. It is intended as
+an explainable retrieval signal, not as an absolute claim that a fact is true.
+
+Graph-assisted retrieval expands lexical/semantic candidates through RELATED,
+SUPPORTS, SUMMARIZES and temporal links before final reranking.
+
+`GET /v1/memory/{memory_id}/truth` returns the complete assessment.
 
 ## Temporal truth
 

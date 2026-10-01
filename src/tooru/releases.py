@@ -186,6 +186,56 @@ RELEASE_NOTES: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "00.00.31": {
+        "title": "Cognitive Core III: Reasoning & Truth Engine",
+        "modules": [
+            {
+                "id": "memory",
+                "title": "Память Тоору",
+                "version": "02.02.00",
+                "changes": [
+                    "Добавлен детерминированный trust-score по confidence, evidence, feedback, времени, поддержке и конфликтам.",
+                    "Факты с одинаковым key и непересекающимися периодами больше не считаются ложным противоречием.",
+                    "Добавлены temporal_successor и temporal_predecessor связи.",
+                    "Recall расширяет кандидатов через граф RELATED/SUPPORTS/SUMMARIZES и временные связи.",
+                    "Финальный reranker учитывает graph_score и truth_score.",
+                    "Добавлен API /v1/memory/{memory_id}/truth.",
+                ],
+            },
+            {
+                "id": "dashboard",
+                "title": "Главная / Системный мозг",
+                "version": "01.08.00",
+                "changes": [
+                    "Контекст памяти теперь содержит truth-score, подготовленный для визуализации доверия и конфликтов.",
+                ],
+            },
+            {
+                "id": "memos",
+                "title": "Служебные записки",
+                "version": "01.05.00",
+                "changes": [
+                    "Evidence из служебных записок участвует в оценке доверия факта.",
+                ],
+            },
+            {
+                "id": "drive",
+                "title": "Мой диск",
+                "version": "01.08.00",
+                "changes": [
+                    "Документные доказательства используются Truth Engine при оценке памяти.",
+                ],
+            },
+            {
+                "id": "updater",
+                "title": "Обновление",
+                "version": "01.05.00",
+                "changes": [
+                    "00.00.31 не требует разрушительной миграции базы и сохраняет данные 00.00.30.",
+                ],
+            },
+        ],
+    },
 }
 
 

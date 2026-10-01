@@ -35,6 +35,7 @@ from tooru.memory.models import (
     MemorySearch,
     MemorySyncRequest,
     MemorySyncResponse,
+    MemoryTruthAssessment,
     MemoryUpdate,
 )
 from tooru.memory.store import MemoryConflictError, MemoryNotFoundError
@@ -237,6 +238,21 @@ def get_memory_links(
     relation: Annotated[MemoryLinkType | None, Query()] = None,
 ) -> list[MemoryLink]:
     return request.app.state.memory.links_for(memory_id, relation)
+
+
+@router.get("/{memory_id}/truth", response_model=MemoryTruthAssessment)
+def get_memory_truth(
+    memory_id: str,
+    request: Request,
+    owner_id: Annotated[str, Query()] = "local-user",
+) -> MemoryTruthAssessment:
+    try:
+        return request.app.state.memory.truth(
+            memory_id,
+            owner_id=owner_id,
+        )
+    except MemoryNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
 
 @router.get("/{memory_id}/history", response_model=list[MemoryRevision])

@@ -755,7 +755,13 @@ class SQLiteMemoryStore:
             limit=100,
         )
         for item in self.candidates(request, limit=200):
-            if " ".join(item.content.lower().split()) == normalized:
+            if " ".join(item.content.lower().split()) != normalized:
+                continue
+            if (
+                item.valid_from == memory.valid_from
+                and item.valid_to == memory.valid_to
+                and item.event_at == memory.event_at
+            ):
                 return item
         return None
 
@@ -933,6 +939,114 @@ class SQLiteMemoryStore:
                 params,
             ).fetchall()
         return [self._row_to_link(row) for row in rows]
+
+    def graph_candidates(
+        self,
+        request: MemorySearch,
+        seed_ids: list[str],
+        *,
+        limit: int = 100,
+    ) -> list[tuple[MemoryItem, float]]:
+        if not seed_ids:
+            return []
+
+        allowed_relations = {
+            MemoryLinkType.RELATED.value,
+            MemoryLinkType.SUPPORTS.value,
+            MemoryLinkType.SUMMARIZES.value,
+            MemoryLinkType.TEMPORAL_SUCCESSOR.value,
+            MemoryLinkType.TEMPORAL_PREDECESSOR.value,
+        }
+        placeholders = ",".join("?" for _ in seed_ids)
+        relation_placeholders = ",".join("?" for _ in allowed_relations)
+        params: list[object] = [
+            *seed_ids,
+            *seed_ids,
+            *sorted(allowed_relations),
+        ]
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT source_id, target_id, relation, weight
+                FROM memory_links
+                WHERE (
+                    source_id IN ({placeholders})
+                    OR target_id IN ({placeholders})
+                )
+                  AND relation IN ({relation_placeholders})
+                """,
+                params,
+            ).fetchall()
+
+        weights: dict[str, float] = {}
+        seeds = set(seed_ids)
+        for row in rows:
+            source_id = str(row["source_id"])
+            target_id = str(row["target_id"])
+            weight = float(row["weight"])
+            if source_id in seeds and target_id != source_id:
+                weights[target_id] = max(
+                    weights.get(target_id, 0.0),
+                    weight,
+                )
+            if target_id in seeds and source_id != target_id:
+                weights[source_id] = max(
+                    weights.get(source_id, 0.0),
+                    weight,
+                )
+        if not weights:
+            return []
+
+        ordered_ids = sorted(
+            weights,
+            key=lambda memory_id: weights[memory_id],
+            reverse=True,
+        )[: max(1, min(limit, 500))]
+        id_placeholders = ",".join("?" for _ in ordered_ids)
+        item_params: list[object] = [*ordered_ids, request.owner_id, request.scope.value]
+        clauses = [
+            f"id IN ({id_placeholders})",
+            "owner_id = ?",
+            "scope = ?",
+            "deleted_at IS NULL",
+        ]
+        if request.scope is MemoryScope.PROJECT:
+            clauses.append("project_id = ?")
+            item_params.append(request.project_id)
+        else:
+            clauses.append("project_id IS NULL")
+        if not request.include_archived:
+            clauses.append("status = 'active'")
+            clauses.append("(expires_at IS NULL OR expires_at > ?)")
+            item_params.append(self._now())
+        if request.kind is not None:
+            clauses.append("kind = ?")
+            item_params.append(request.kind.value)
+        clauses.append("importance >= ?")
+        item_params.append(request.min_importance)
+        for tag in request.tags:
+            clauses.append("tags_json LIKE ?")
+            item_params.append(f'%"{tag}"%')
+
+        with self._connect() as conn:
+            item_rows = conn.execute(
+                f"""
+                SELECT {self.SELECT_COLUMNS}
+                FROM memory_items
+                WHERE {" AND ".join(clauses)}
+                """,
+                item_params,
+            ).fetchall()
+
+        items = {
+            row["id"]: self._row_to_item(row)
+            for row in item_rows
+        }
+        return [
+            (items[memory_id], weights[memory_id])
+            for memory_id in ordered_ids
+            if memory_id in items
+        ]
 
     def add_evidence(
         self,

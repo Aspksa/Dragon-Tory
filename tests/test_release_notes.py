@@ -41,3 +41,15 @@ def test_release_0030_lists_cognitive_core_changes() -> None:
         for change in modules["memory"]["changes"]
     )
 
+def test_release_0031_lists_truth_engine_changes() -> None:
+    release = release_notes_for("0.0.31")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert {"memos", "drive", "memory", "updater"} <= set(modules)
+    assert modules["memory"]["version"] == "02.02.00"
+    assert any(
+        "trust-score" in change
+        for change in modules["memory"]["changes"]
+    )
+

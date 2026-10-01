@@ -6,10 +6,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "dashboard",
         "title": "Главная / Системный мозг",
-        "version": "01.07.00",
+        "version": "01.08.00",
         "area": "system",
         "description": "Real-time дашборд состояния, архитектуры, памяти, нагрузки и активных процессов.",
-        "last_update": "Cognitive Core II: рабочая память длинного чата, эпизоды результата, временные факты и provenance.",
+        "last_update": "Cognitive Core III: Truth Engine, временное разрешение конфликтов и graph-assisted retrieval.",
         "depends_on": ["memory", "drive", "updater"],
     },
     {
@@ -96,10 +96,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "memory",
         "title": "Память Тоору",
-        "version": "02.01.00",
+        "version": "02.02.00",
         "area": "system",
         "description": "Раздельная личная и проектная долговременная память, Guardian, поиск и обслуживание.",
-        "last_update": "Добавлены episodic outcome memory, temporal truth поля и доказательства происхождения каждой структурированной записи.",
+        "last_update": "Добавлены trust-score, временное различение фактов и графовое расширение поиска.",
         "depends_on": [],
     },
     {
