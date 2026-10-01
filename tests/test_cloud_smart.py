@@ -255,3 +255,31 @@ def test_intelligence_autofill_never_overwrites_manual_dna(tmp_path: Path) -> No
     assert "kind" not in result["fields"]
     assert "external_ref" not in result["fields"]
     assert "important_date" not in result["fields"]
+
+
+def test_contract_business_fields_and_counterparty_are_preserved(
+    tmp_path: Path,
+) -> None:
+    store, smart_drive = _stack(tmp_path)
+    first = _upload(store, "contract-1.txt", b"contract one")
+    second = _upload(store, "contract-2.txt", b"contract two")
+
+    for document, number, amount in (
+        (first, "D-001", 125000.0),
+        (second, "D-002", 98000.0),
+    ):
+        dna = smart_drive.update_dna(
+            document["id"],
+            {
+                "kind": "договор",
+                "counterparty": "ООО Ромашка",
+                "document_number": number,
+                "document_date": "01.10.2026",
+                "amount_value": amount,
+                "amount_currency": "RUB",
+            },
+        )
+        assert dna["counterparty"] == "ООО Ромашка"
+        assert dna["document_number"] == number
+        assert dna["amount_value"] == amount
+        assert dna["amount_currency"] == "RUB"

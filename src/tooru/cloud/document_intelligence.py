@@ -28,6 +28,10 @@ _VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b", re.IGNORECASE)
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 _URL_RE = re.compile(r'https?://[^\s<>"]+', re.IGNORECASE)
 _IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b", re.IGNORECASE)
+_COUNTERPARTY_RE = re.compile(
+    r"(?im)^\s*(?:контрагент|поставщик|исполнитель|заказчик|"
+    r"продавец|покупатель)\s*[:\-]\s*([^\n\r]{3,180})"
+)
 _AMOUNT_RE = re.compile(
     r"(?:(?P<currency1>€|EUR|USD|\$|GBP|£|RUB|₽)\s*)?"
     r"(?P<amount>\d+(?:[ .]\d{3})*(?:[,.]\d{1,2})?)"
@@ -60,18 +64,20 @@ _KIND_RULES = {
         "contract",
         "agreement",
     ),
-    "счёт": (
-        "счет на оплату",
-        "счёт на оплату",
+    "счёт-оферта": (
+        "счет-оферта",
+        "счёт-оферта",
+        "счет оферта",
+        "счёт оферта",
+        "invoice-offer",
         "invoice",
         "payment due",
-    ),
-    "оферта": (
+        "счет на оплату",
+        "счёт на оплату",
         "оферта",
-        "публичная оферта",
-        "коммерческое предложение",
-        "offer",
-        "proposal",
+        "условия оплаты",
+        "условия поставки",
+        "акцепт",
     ),
     "служебная записка": (
         "служебная записка",
@@ -363,6 +369,10 @@ class DocumentIntelligence:
             [match.group(1) for match in _REF_RE.finditer(text)],
             limit=50,
         )
+        counterparties = _unique(
+            [match.group(1).strip(" .;") for match in _COUNTERPARTY_RE.finditer(text)],
+            limit=30,
+        )
         dates: list[str] = []
         for pattern in _DATE_PATTERNS:
             dates.extend(match.group(0) for match in pattern.finditer(text))
@@ -395,6 +405,7 @@ class DocumentIntelligence:
             "urls": urls,
             "iban": ibans,
             "references": references,
+            "counterparties": counterparties,
             "dates": dates,
             "amounts": amounts,
         }
@@ -607,35 +618,23 @@ class DocumentIntelligence:
             "icon": "📑",
             "kinds": {"договор"},
             "ai_focus": [
-                "стороны и реквизиты",
-                "срок действия и продление",
-                "обязательства и ответственность",
-                "суммы, платежи и штрафы",
-                "существенные изменения между версиями",
-            ],
-        },
-        "invoices": {
-            "title": "Счета",
-            "icon": "🧾",
-            "kinds": {"счёт"},
-            "ai_focus": [
-                "номер и поставщик",
+                "контрагент и реквизиты",
+                "номер и дата договора",
                 "сумма и валюта",
-                "срок оплаты",
-                "связанный договор или заказ",
-                "дубликаты и повторные начисления",
+                "срок действия и продление",
+                "обязательства, ответственность и изменения версий",
             ],
         },
-        "offers": {
-            "title": "Оферты",
-            "icon": "🤝",
-            "kinds": {"оферта"},
+        "invoice_offers": {
+            "title": "Счета-оферты",
+            "icon": "🧾",
+            "kinds": {"счёт-оферта", "счёт", "оферта"},
             "ai_focus": [
-                "предмет предложения",
-                "цена и условия",
-                "срок действия предложения",
-                "условия акцепта",
-                "отличия от договора и предыдущей оферты",
+                "номер, дата и контрагент",
+                "позиции, сумма, НДС и валюта",
+                "срок и условия оплаты",
+                "краткие договорные условия",
+                "условия поставки, акцепта и гарантии",
             ],
         },
         "memos": {
@@ -643,7 +642,7 @@ class DocumentIntelligence:
             "icon": "📝",
             "kinds": {"служебная записка"},
             "ai_focus": [
-                "автор и адресат",
+                "автор, адресат и подразделение",
                 "тема и поручение",
                 "срок исполнения",
                 "решения и следующие действия",
@@ -680,6 +679,12 @@ class DocumentIntelligence:
             rows = db.execute(
                 """
                 SELECT d.*, dna.kind AS dna_kind,
+                       dna.counterparty,
+                       dna.document_number,
+                       dna.document_date,
+                       dna.amount_value,
+                       dna.amount_currency,
+                       dna.terms_summary,
                        i.kind AS intelligence_kind,
                        i.confidence AS intelligence_confidence,
                        i.deadlines_json,
@@ -724,6 +729,12 @@ class DocumentIntelligence:
                     "deadlines": deadlines,
                     "entities": entities,
                     "analyzed_at": row["analyzed_at"],
+                    "counterparty": row["counterparty"] or "",
+                    "document_number": row["document_number"] or "",
+                    "document_date": row["document_date"],
+                    "amount_value": row["amount_value"],
+                    "amount_currency": row["amount_currency"] or "",
+                    "terms_summary": row["terms_summary"] or "",
                 }
             )
             items.append(document)
@@ -738,6 +749,23 @@ class DocumentIntelligence:
         items = self.module_items(module_id, limit=10_000)
         with_deadlines = sum(bool(item["deadlines"]) for item in items)
         analyzed = sum(item["analyzed_at"] is not None for item in items)
+        counterparties: list[dict[str, Any]] = []
+        if module_id == "contracts":
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for item in items:
+                name = (item.get("counterparty") or "Контрагент не указан").strip()
+                grouped.setdefault(name, []).append(item)
+            counterparties = [
+                {
+                    "name": name,
+                    "contracts": len(group_items),
+                    "document_ids": [item["id"] for item in group_items],
+                }
+                for name, group_items in sorted(
+                    grouped.items(),
+                    key=lambda pair: pair[0].casefold(),
+                )
+            ]
         return {
             "id": module_id,
             "title": config["title"],
@@ -747,6 +775,7 @@ class DocumentIntelligence:
             "analyzed": analyzed,
             "with_deadlines": with_deadlines,
             "needs_analysis": len(items) - analyzed,
+            "counterparties": counterparties,
             "items": items,
         }
 

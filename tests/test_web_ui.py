@@ -14,7 +14,7 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Чат" in response.text
     assert "Мой диск Тори" in response.text
     assert 'id="cloudNewFolder"' in response.text
-    assert 'id="cloudTrash"' in response.text
+    assert 'id="cloudTrashSidebar"' in response.text
     assert 'id="passportVersions"' in response.text
     assert 'id="passportActivity"' in response.text
     assert 'id="passportPreview"' in response.text
@@ -29,6 +29,11 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="cloudTimeMachine"' in response.text
     assert 'id="cloudAlerts"' in response.text
     assert 'id="passportDnaKind"' in response.text
+    assert 'id="passportCounterparty"' in response.text
+    assert 'id="passportDocumentNumber"' in response.text
+    assert 'id="passportAmountValue"' in response.text
+    assert 'id="passportTermsSummary"' in response.text
+    assert "Счета-оферты" in response.text
     assert 'id="contractExternalAI"' in response.text
     assert 'id="passportCleanRoom"' in response.text
     assert 'id="passportSeal"' in response.text
@@ -49,8 +54,7 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Мой диск Тори · личный документ" in response.text
     assert "Центр документа Тори" in response.text
     assert 'data-module="contracts"' in response.text
-    assert 'data-module="invoices"' in response.text
-    assert 'data-module="offers"' in response.text
+    assert 'data-module="invoice_offers"' in response.text
     assert 'data-module="memos"' in response.text
     assert 'id="documentModule"' in response.text
     assert 'id="documentModuleUpload"' in response.text
@@ -152,4 +156,4 @@ def test_document_modules_endpoint_is_available() -> None:
 
     assert response.status_code == 200
     modules = {item["id"] for item in response.json()["items"]}
-    assert modules == {"contracts", "invoices", "offers", "memos"}
+    assert modules == {"contracts", "invoice_offers", "memos"}

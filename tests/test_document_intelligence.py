@@ -99,7 +99,7 @@ def test_intelligence_suggestions_do_not_change_file_bytes(
     assert store.content_path(document["id"]).read_bytes() == before
     current = store.get(document["id"])
     assert current["tags"]
-    assert smart.get_dna(document["id"])["kind"] == "счёт"
+    assert smart.get_dna(document["id"])["kind"] == "счёт-оферта"
 
 
 def test_local_version_diff_detects_dates_and_amounts(
@@ -167,10 +167,15 @@ def test_ocr_status_is_local_and_never_implies_external_ai(
 def test_specialized_document_modules_are_separate(tmp_path: Path) -> None:
     store, smart, intelligence = _stack(tmp_path)
 
-    offer = _upload(
+    invoice_offer = _upload(
         store,
-        "offer.txt",
-        "Публичная оферта. Цена EUR 300. Действует до 01.12.2027.".encode(),
+        "invoice-offer.txt",
+        (
+            "Счёт-оферта №154\n"
+            "Поставщик: ООО Ромашка\n"
+            "Цена EUR 300. Условия оплаты: в течение 10 дней.\n"
+            "Оферта действует до 01.12.2027."
+        ).encode(),
     )
     memo = _upload(
         store,
@@ -178,7 +183,7 @@ def test_specialized_document_modules_are_separate(tmp_path: Path) -> None:
         "Служебная записка\nКому: Руководителю\nОт кого: Отдел ИТ\n"
         "Исполнить до 15.12.2027.".encode(),
     )
-    for document in (offer, memo):
+    for document in (invoice_offer, memo):
         store.update_passport(
             document["id"],
             ai_access="read",
@@ -188,12 +193,12 @@ def test_specialized_document_modules_are_separate(tmp_path: Path) -> None:
         result = intelligence.analyze(document["id"])
         smart.apply_intelligence_defaults(document["id"], result)
 
-    offers = intelligence.module_profile("offers")
+    invoice_offers = intelligence.module_profile("invoice_offers")
     memos = intelligence.module_profile("memos")
-    invoices = intelligence.module_profile("invoices")
 
-    assert {item["id"] for item in offers["items"]} == {offer["id"]}
+    assert {item["id"] for item in invoice_offers["items"]} == {
+        invoice_offer["id"]
+    }
     assert {item["id"] for item in memos["items"]} == {memo["id"]}
-    assert invoices["count"] == 0
-    assert offers["ai_focus"]
+    assert invoice_offers["ai_focus"]
     assert memos["ai_focus"]

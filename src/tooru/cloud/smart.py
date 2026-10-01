@@ -75,6 +75,22 @@ class SmartDrive:
         db.row_factory = sqlite3.Row
         return db
 
+    @staticmethod
+    def _ensure_column(
+        db: sqlite3.Connection,
+        table: str,
+        column: str,
+        definition: str,
+    ) -> None:
+        columns = {
+            row["name"]
+            for row in db.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column not in columns:
+            db.execute(
+                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+            )
+
     def initialize(self) -> None:
         self.identity_dir.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
@@ -93,6 +109,43 @@ class SmartDrive:
                 )
                 """
             )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "counterparty",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "document_number",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "document_date",
+                "TEXT",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "amount_value",
+                "REAL",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "amount_currency",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            self._ensure_column(
+                db,
+                "document_dna",
+                "terms_summary",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS document_ai_contract (
@@ -601,6 +654,30 @@ class SmartDrive:
                 payload.get("language", current["language"]) or ""
             )[:60],
             "notes": str(payload.get("notes", current["notes"]) or "")[:5_000],
+            "counterparty": str(
+                payload.get("counterparty", current["counterparty"]) or ""
+            )[:500],
+            "document_number": str(
+                payload.get("document_number", current["document_number"]) or ""
+            )[:200],
+            "document_date": payload.get(
+                "document_date",
+                current["document_date"],
+            ),
+            "amount_value": payload.get(
+                "amount_value",
+                current["amount_value"],
+            ),
+            "amount_currency": str(
+                payload.get(
+                    "amount_currency",
+                    current["amount_currency"],
+                )
+                or ""
+            )[:20],
+            "terms_summary": str(
+                payload.get("terms_summary", current["terms_summary"]) or ""
+            )[:5_000],
         }
         with self._connect() as db:
             db.execute(
@@ -608,6 +685,9 @@ class SmartDrive:
                 UPDATE document_dna
                 SET kind = ?, origin = ?, external_ref = ?,
                     important_date = ?, language = ?, notes = ?,
+                    counterparty = ?, document_number = ?,
+                    document_date = ?, amount_value = ?,
+                    amount_currency = ?, terms_summary = ?,
                     updated_at = ?
                 WHERE document_id = ?
                 """,
@@ -618,6 +698,12 @@ class SmartDrive:
                     values["important_date"],
                     values["language"],
                     values["notes"],
+                    values["counterparty"],
+                    values["document_number"],
+                    values["document_date"],
+                    values["amount_value"],
+                    values["amount_currency"],
+                    values["terms_summary"],
                     utc_now(),
                     document_id,
                 ),
@@ -668,6 +754,26 @@ class SmartDrive:
         if not dna.get("important_date") and len(deadlines) == 1:
             payload["important_date"] = deadlines[0].get("date")
             fields.append("important_date")
+
+        if not str(dna.get("document_number") or "").strip() and len(
+            references
+        ) == 1:
+            payload["document_number"] = str(references[0])
+            fields.append("document_number")
+
+        amounts = entities.get("amounts") or []
+        if dna.get("amount_value") is None and len(amounts) == 1:
+            payload["amount_value"] = amounts[0].get("value")
+            payload["amount_currency"] = amounts[0].get("currency") or ""
+            fields.extend(["amount_value", "amount_currency"])
+
+        counterparties = entities.get("counterparties") or []
+        if (
+            not str(dna.get("counterparty") or "").strip()
+            and len(counterparties) == 1
+        ):
+            payload["counterparty"] = str(counterparties[0])
+            fields.append("counterparty")
 
         if payload:
             self.update_dna(

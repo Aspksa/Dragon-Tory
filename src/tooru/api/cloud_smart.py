@@ -38,6 +38,12 @@ class DNAUpdate(BaseModel):
     important_date: str | None = Field(default=None, max_length=80)
     language: str | None = Field(default=None, max_length=60)
     notes: str | None = Field(default=None, max_length=5_000)
+    counterparty: str | None = Field(default=None, max_length=500)
+    document_number: str | None = Field(default=None, max_length=200)
+    document_date: str | None = Field(default=None, max_length=80)
+    amount_value: float | None = None
+    amount_currency: str | None = Field(default=None, max_length=20)
+    terms_summary: str | None = Field(default=None, max_length=5_000)
 
 
 class AIContractUpdate(BaseModel):
