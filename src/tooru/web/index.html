@@ -65,8 +65,6 @@
       <div class="grid">
         <div class="card"><div class="label">Backend</div><div id="homeBackend" class="value">Проверка…</div></div>
         <div class="card"><div class="label">DeepSeek</div><div id="homeAI" class="value">Проверка…</div></div>
-        <div class="card"><div class="label">Клод</div><div id="homeClaude" class="value">Проверка…</div></div>
-        <div class="card"><div class="label">Маршрутизатор ИИ</div><div id="homeRouter" class="value">Проверка…</div></div>
         <div class="card"><div class="label">Хранитель памяти</div><div id="homeGuardian" class="value">Проверка…</div></div>
         <div class="card"><div class="label">Записей памяти</div><div id="homeMemories" class="value">—</div></div>
       </div>
@@ -75,15 +73,11 @@
     </section>
 
     <section id="chat" class="view">
-      <h2>Чат</h2><p class="lead">Конвейер чата: память → Маршрутизатор ИИ v2 → DeepSeek/Клод → Хранитель памяти.</p>
+      <h2>Чат</h2><p class="lead">Дракончик Тоору использует DeepSeek и автоматически подключает личную и проектную память.</p>
       <div id="chatBox" class="chatbox"><div class="msg system">Введите вопрос. Если API-ключ ещё не настроен, откройте «Настройки».</div></div>
-      <div class="grid" style="grid-template-columns:1fr 220px">
-        <div><textarea id="chatInput" placeholder="Напишите сообщение Тоору…"></textarea></div>
-        <div>
-          <div class="field"><label>Проект</label><input id="chatProject" value="dragon-tory"></div>
-          <div class="field"><label>Модель</label><select id="chatProvider"><option value="auto">Автоматически</option><option value="deepseek">DeepSeek</option><option value="claude">Клод</option></select></div>
-          <label class="muted"><input id="chatRemember" type="checkbox" checked style="width:auto"> запоминать через Хранителя</label>
-        </div>
+      <textarea id="chatInput" placeholder="Напишите сообщение Тоору…"></textarea>
+      <div class="row" style="margin-top:10px">
+        <label class="muted"><input id="chatRemember" type="checkbox" checked style="width:auto"> запоминать через Хранителя памяти</label>
       </div>
       <div class="row"><button id="sendChat" class="primary">Отправить</button><button id="clearChat" class="secondary">Очистить экран</button><span id="chatStatus" class="statusbar"></span></div>
     </section>
@@ -93,8 +87,6 @@
       <div class="grid">
         <div class="card"><div class="label">Backend</div><div id="dBackend" class="value">—</div></div>
         <div class="card"><div class="label">DeepSeek API</div><div id="dAI" class="value">—</div></div>
-        <div class="card"><div class="label">Клод API</div><div id="dClaude" class="value">—</div></div>
-        <div class="card"><div class="label">Маршрутизатор ИИ</div><div id="dRouter" class="value">—</div></div>
         <div class="card"><div class="label">Хранитель памяти</div><div id="dGuardian" class="value">—</div></div>
         <div class="card"><div class="label">Memory Automation</div><div id="dMemoryAuto" class="value">—</div></div>
         <div class="card"><div class="label">Guardian Automation</div><div id="dGuardianAuto" class="value">—</div></div>
@@ -183,23 +175,14 @@
     </section>
 
     <section id="settings" class="view">
-      <h2>Настройки</h2><p class="lead">Ключи хранятся только локально в .env и никогда не возвращаются в браузер.</p>
-      <div class="grid">
-        <div class="card">
-          <h3 style="margin-top:0">DeepSeek · Cloud.ru</h3>
-          <div class="field"><label>Cloud.ru Key Secret</label><input id="apiKey" type="password" autocomplete="off" placeholder="Вставьте Key Secret"><div class="secret-note">Ключ после сохранения очищается из поля.</div></div>
-          <div class="field"><label>Base URL</label><input id="baseUrl" value="https://foundation-models.api.cloud.ru/v1"></div>
-          <div class="field"><label>Модель</label><input id="modelName" value="deepseek-ai/DeepSeek-V4-Flash"></div>
-          <div class="row"><button id="saveSettings" class="primary">Сохранить DeepSeek</button><button id="testSettings" class="secondary">Проверить DeepSeek</button></div>
-          <div id="settingsStatus" class="statusbar">Загрузка состояния…</div>
-        </div>
-        <div class="card">
-          <h3 style="margin-top:0">Клод · Anthropic</h3>
-          <div class="field"><label>Anthropic API Key</label><input id="claudeApiKey" type="password" autocomplete="off" placeholder="Вставьте API Key"><div class="secret-note">Сохранённый ключ не возвращается через API.</div></div>
-          <div class="field"><label>Модель</label><input id="claudeModel" value="claude-sonnet-5-5"></div>
-          <div class="row"><button id="saveClaude" class="primary">Сохранить Клод</button><button id="testClaude" class="secondary">Проверить Клод</button></div>
-          <div id="claudeSettingsStatus" class="statusbar">Загрузка состояния…</div>
-        </div>
+      <h2>Настройки</h2><p class="lead">Дракончик Тоору использует только DeepSeek через Cloud.ru Foundation Models.</p>
+      <div class="card" style="max-width:760px">
+        <h3 style="margin-top:0">DeepSeek · Cloud.ru</h3>
+        <div class="field"><label>Cloud.ru Key Secret</label><input id="apiKey" type="password" autocomplete="off" placeholder="Вставьте Key Secret"><div class="secret-note">Ключ хранится только локально в .env и никогда не возвращается в браузер.</div></div>
+        <div class="field"><label>Модель</label><div class="update-meta">deepseek-ai/DeepSeek-V4-Flash</div></div>
+        <div class="field"><label>API</label><div class="update-meta">https://foundation-models.api.cloud.ru/v1</div></div>
+        <div class="row"><button id="saveSettings" class="primary">Сохранить ключ</button><button id="testSettings" class="secondary">Проверить DeepSeek</button></div>
+        <div id="settingsStatus" class="statusbar">Загрузка состояния…</div>
       </div>
     </section>
   </main>
@@ -215,19 +198,17 @@ function showView(view,source=null){document.querySelectorAll(".nav").forEach(x=
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>showView(b.dataset.view,b));
 $("openUpdate").onclick=()=>showView("updates",$("openUpdate"));
 function addMsg(role,text){const d=document.createElement("div");d.className="msg "+role;d.textContent=text;$("chatBox").appendChild(d);$("chatBox").scrollTop=$("chatBox").scrollHeight}
-async function sendChat(){const text=$("chatInput").value.trim();if(!text)return;$("chatInput").value="";addMsg("user",text);$("sendChat").disabled=true;$("chatStatus").textContent="Тоору думает…";try{const d=await api("/v1/chat",{method:"POST",body:JSON.stringify({message:text,project_id:$("chatProject").value.trim()||null,provider:$("chatProvider").value,remember:$("chatRemember").checked,history:history.slice(-20)})});addMsg("assistant",d.answer);history.push({role:"user",content:text},{role:"assistant",content:d.answer});$("chatStatus").textContent=d.provider+" · "+d.model+" · контекст: "+d.context_memories+" · "+d.routing_reason+(d.fallback_used?" · резервный переход":"")+" · память: "+d.memory_status}catch(e){addMsg("system","Ошибка: "+e.message);$("chatStatus").textContent="Ошибка API"}finally{$("sendChat").disabled=false}}
+async function sendChat(){const text=$("chatInput").value.trim();if(!text)return;$("chatInput").value="";addMsg("user",text);$("sendChat").disabled=true;$("chatStatus").textContent="Тоору думает…";try{const d=await api("/v1/chat",{method:"POST",body:JSON.stringify({message:text,remember:$("chatRemember").checked,history:history.slice(-20)})});addMsg("assistant",d.answer);history.push({role:"user",content:text},{role:"assistant",content:d.answer});$("chatStatus").textContent="DeepSeek · "+d.model+" · контекст памяти: "+d.context_memories+" · память: "+d.memory_status}catch(e){addMsg("system","Ошибка: "+e.message);$("chatStatus").textContent="Ошибка DeepSeek API"}finally{$("sendChat").disabled=false}}
 $("sendChat").onclick=sendChat;$("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}});$("clearChat").onclick=()=>{$("chatBox").innerHTML="";history.length=0};
-async function refreshDiag(){try{const d=await api("/v1/diagnostics/status");$("brandVersion").textContent=d.backend.version||"—";state($("homeBackend"),"Работает","ok");state($("homeAI"),d.ai.deepseek_configured?"Подключён":"Не настроен",d.ai.deepseek_configured?"ok":"warn");state($("homeClaude"),d.ai.claude_configured?"Подключён":"Не настроен",d.ai.claude_configured?"ok":"warn");state($("homeRouter"),d.ai.providers.length+" провайдер(а)",d.ai.providers.length?"ok":"warn");state($("homeGuardian"),d.guardian.queued_pending?"Ожидают: "+d.guardian.queued_pending:"Работает",d.guardian.queued_pending?"warn":"ok");$("homeMemories").textContent=d.memory_engine.total;
-state($("dBackend"),"Работает","ok");state($("dAI"),d.ai.deepseek_configured?"Подключён":"Нет ключа",d.ai.deepseek_configured?"ok":"warn");state($("dClaude"),d.ai.claude_configured?"Подключён":"Нет ключа",d.ai.claude_configured?"ok":"warn");const last=d.ai.router.last_route;state($("dRouter"),last&&last.selected?(last.selected+(last.fallback_used?" · fallback":"")):(d.ai.providers.length?"Готов":"Нет моделей"),d.ai.providers.length?"ok":"warn");state($("dGuardian"),"Работает","ok");state($("dMemoryAuto"),d.memory_automation.started?(d.memory_automation.running?"Выполняется":"Активна"):"Выключена",d.memory_automation.started?"ok":"warn");state($("dGuardianAuto"),d.guardian_automation.started?(d.guardian_automation.running?"Выполняется":"Активна"):"Выключена",d.guardian_automation.started?"ok":"warn");
+async function refreshDiag(){try{const d=await api("/v1/diagnostics/status");$("brandVersion").textContent=d.backend.version||"—";state($("homeBackend"),"Работает","ok");state($("homeAI"),d.ai.configured?"Подключён":"Не настроен",d.ai.configured?"ok":"warn");state($("homeGuardian"),d.guardian.queued_pending?"Ожидают: "+d.guardian.queued_pending:"Работает",d.guardian.queued_pending?"warn":"ok");$("homeMemories").textContent=d.memory_engine.total;
+state($("dBackend"),"Работает","ok");state($("dAI"),d.ai.configured?"Подключён":"Нет ключа",d.ai.configured?"ok":"warn");state($("dGuardian"),"Работает","ok");state($("dMemoryAuto"),d.memory_automation.started?(d.memory_automation.running?"Выполняется":"Активна"):"Выключена",d.memory_automation.started?"ok":"warn");state($("dGuardianAuto"),d.guardian_automation.started?(d.guardian_automation.running?"Выполняется":"Активна"):"Выключена",d.guardian_automation.started?"ok":"warn");
 $("dRam").textContent=fmtBytes(d.system_memory.used_bytes)+" / "+fmtBytes(d.system_memory.total_bytes)+" ("+d.system_memory.percent+"%)";$("dProcessRam").textContent=fmtBytes(d.process.rss_bytes);$("dDisk").textContent=fmtBytes(d.disk.free_bytes);
 $("mTotal").textContent=d.memory_engine.total;$("mActive").textContent=d.memory_engine.active;$("mArchived").textContent=d.memory_engine.archived;$("mSuperseded").textContent=d.memory_engine.superseded;$("mPersonal").textContent=d.memory_engine.personal;$("mProject").textContent=d.memory_engine.project;$("mDb").textContent=fmtBytes(d.memory_engine.database_bytes);
 $("qPending").textContent=d.guardian.queued_pending;$("qApplied").textContent=d.guardian.queued_applied;$("qRejected").textContent=d.guardian.queued_rejected;$("qDead").textContent=d.guardian.queued_dead;$("autoErrors").textContent=(d.memory_automation.failure_count||0)+(d.guardian_automation.failure_count||0);$("diagStatus").textContent="Обновлено: "+new Date().toLocaleTimeString()}catch(e){state($("homeBackend"),"Ошибка","bad");state($("dBackend"),"Ошибка","bad");$("diagStatus").textContent=e.message}}
 $("refreshDiag").onclick=refreshDiag;$("runMaintenance").onclick=async()=>{try{$("diagStatus").textContent="Обслуживание…";await api("/v1/memory/maintenance/run",{method:"POST"});await refreshDiag()}catch(e){$("diagStatus").textContent=e.message}};
-async function loadSettings(){try{const [d,c]=await Promise.all([api("/v1/settings/ai/deepseek"),api("/v1/settings/ai/claude")]);$("baseUrl").value=d.base_url;$("modelName").value=d.model;$("apiKey").value="";$("apiKey").placeholder=d.configured?"Ключ сохранён ••••••••":"Вставьте Key Secret";$("settingsStatus").textContent=d.configured?"DeepSeek настроен"+(d.registered?" и активен.":"."):"API-ключ пока не сохранён.";$("claudeModel").value=c.model;$("claudeApiKey").value="";$("claudeApiKey").placeholder=c.configured?"Ключ сохранён ••••••••":"Вставьте Anthropic API Key";$("claudeSettingsStatus").textContent=c.configured?"Клод настроен"+(c.registered?" и активен.":"."):"Ключ Клода пока не сохранён."}catch(e){$("settingsStatus").textContent=e.message;$("claudeSettingsStatus").textContent=e.message}}
-$("saveSettings").onclick=async()=>{const key=$("apiKey").value.trim();if(!key){$("settingsStatus").textContent="Вставьте Key Secret.";return}try{$("settingsStatus").textContent="Сохранение…";const d=await api("/v1/settings/ai/deepseek",{method:"POST",body:JSON.stringify({api_key:key,base_url:$("baseUrl").value.trim(),model:$("modelName").value.trim()})});$("apiKey").value="";$("apiKey").placeholder="Ключ сохранён ••••••••";$("settingsStatus").textContent=d.registered?"Сохранено. DeepSeek активен без перезапуска.":"Сохранено.";await refreshDiag()}catch(e){$("settingsStatus").textContent="Ошибка: "+e.message}};
+async function loadSettings(){try{const d=await api("/v1/settings/ai/deepseek");$("apiKey").value="";$("apiKey").placeholder=d.configured?"Ключ сохранён ••••••••":"Вставьте Key Secret";$("settingsStatus").textContent=d.configured?"DeepSeek настроен"+(d.registered?" и активен.":"."):"API-ключ пока не сохранён."}catch(e){$("settingsStatus").textContent=e.message}}
+$("saveSettings").onclick=async()=>{const key=$("apiKey").value.trim();if(!key){$("settingsStatus").textContent="Вставьте Key Secret.";return}try{$("settingsStatus").textContent="Сохранение…";const d=await api("/v1/settings/ai/deepseek",{method:"POST",body:JSON.stringify({api_key:key})});$("apiKey").value="";$("apiKey").placeholder="Ключ сохранён ••••••••";$("settingsStatus").textContent=d.registered?"Сохранено. DeepSeek активен без перезапуска.":"Сохранено.";await refreshDiag()}catch(e){$("settingsStatus").textContent="Ошибка: "+e.message}};
 $("testSettings").onclick=async()=>{try{$("settingsStatus").textContent="Проверка API…";const d=await api("/v1/settings/ai/deepseek/test",{method:"POST"});$("settingsStatus").textContent="API работает: "+d.provider+" / "+d.model+" → "+d.response}catch(e){$("settingsStatus").textContent="Ошибка API: "+e.message}};
-$("saveClaude").onclick=async()=>{const key=$("claudeApiKey").value.trim();if(!key){$("claudeSettingsStatus").textContent="Вставьте Anthropic API Key.";return}try{$("claudeSettingsStatus").textContent="Сохранение…";const d=await api("/v1/settings/ai/claude",{method:"POST",body:JSON.stringify({api_key:key,model:$("claudeModel").value.trim()})});$("claudeApiKey").value="";$("claudeApiKey").placeholder="Ключ сохранён ••••••••";$("claudeSettingsStatus").textContent=d.registered?"Сохранено. Клод активен без перезапуска.":"Сохранено.";await refreshDiag()}catch(e){$("claudeSettingsStatus").textContent="Ошибка: "+e.message}};
-$("testClaude").onclick=async()=>{try{$("claudeSettingsStatus").textContent="Проверка API…";const d=await api("/v1/settings/ai/claude/test",{method:"POST"});$("claudeSettingsStatus").textContent="API работает: "+d.provider+" / "+d.model+" → "+d.response}catch(e){$("claudeSettingsStatus").textContent="Ошибка API: "+e.message}};
 
 let updateWasStarted=false;
 let updatePollTimer=null;
