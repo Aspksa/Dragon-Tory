@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel, Field
 
 from tooru.ai.base import AIRequest
 from tooru.memory.models import (
@@ -75,7 +75,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
                 max_tokens=2_000,
             ),
         )
-    except Exception as exc:  # noqa: BLE001 - network/provider boundary
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI provider error: {type(exc).__name__}: {exc}",
@@ -111,7 +111,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
                 f"pending={guardian_result.pending_count}, "
                 f"blocked={guardian_result.blocked_count}"
             )
-        except Exception as exc:  # noqa: BLE001 - chat answer must survive memory failure
+        except Exception as exc:
             memory_status = f"memory-error:{type(exc).__name__}"
 
     return ChatResponse(
