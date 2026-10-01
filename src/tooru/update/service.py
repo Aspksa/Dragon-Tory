@@ -342,35 +342,6 @@ class UpdateService:
 
         return self.status()
 
-            error = (
-                "PowerShell updater завершился до начала установки "
-                f"(код {exit_code}). {self._launch_log_tail()}"
-            )
-            failed = {
-                **state,
-                **current_after_exit,
-                "phase": "failed",
-                "message": "Не удалось запустить процесс обновления.",
-                "error": error[:2000],
-                "progress_percent": 0,
-                "heartbeat_at": self._now(),
-            }
-            self._write_state(failed)
-            self._append_history_from_state(failed, success=False)
-            raise UpdateError(error)
-
-        current_after_launch = self._read_state()
-        if current_after_launch.get("phase") not in self.RUNNING_PHASES:
-            current_after_launch = state
-
-        current_after_launch["updater_pid"] = process.pid
-        current_after_launch.setdefault(
-            "message",
-            "Процесс обновления запущен. Ожидание первого статуса…",
-        )
-        self._write_state(current_after_launch)
-        return self.status()
-
     def _supervise_running_state(
         self,
         state: dict[str, Any],
