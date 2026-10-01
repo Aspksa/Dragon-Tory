@@ -288,7 +288,7 @@ class UpdateService:
         parts = [int(part) for part in re.findall(r"\d+", value)[:3]]
         while len(parts) < 3:
             parts.append(0)
-        return tuple(parts[:3])  # type: ignore[return-value]
+        return parts[0], parts[1], parts[2]
 
     @staticmethod
     def _now() -> str:
