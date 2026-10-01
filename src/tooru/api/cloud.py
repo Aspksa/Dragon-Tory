@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from tooru.ai.base import AIRequest
+from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
 from tooru.cloud.intelligence import (
     UnsupportedDocumentError,
     extract_document,
@@ -505,7 +506,10 @@ async def ask_document(
         sources.append(source)
         context_parts.append(
             f"[Источник {chunk['chunk_no']}: {chunk['label']}]\n"
-            f"{chunk['text']}"
+            + wrap_untrusted_text(
+                chunk["text"],
+                source=f"document:{document_id}:chunk:{chunk['chunk_no']}",
+            )
         )
 
     response = await request.app.state.ai_router.generate(
@@ -515,7 +519,8 @@ async def ask_document(
                 "Ты Дракончик Тоору. Отвечай только по переданным "
                 "фрагментам документа. Не придумывай отсутствующие факты. "
                 "Если данных недостаточно, прямо скажи об этом. "
-                "Ссылайся на источники в виде [Источник N]."
+                "Ссылайся на источники в виде [Источник N]. "
+                + UNTRUSTED_CONTENT_POLICY
             ),
             messages=[
                 {
