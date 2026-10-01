@@ -609,8 +609,12 @@ async def semantic_version_compare(
             payload.second_version,
         )
 
-        first_text = first["text"][:28_000]
-        second_text = second["text"][:28_000]
+        first_text = str(
+            first.get("representative_text") or first["text"]
+        )[:28_000]
+        second_text = str(
+            second.get("representative_text") or second["text"]
+        )[:28_000]
         response = await request.app.state.ai_router.generate(
             "deepseek",
             AIRequest(
@@ -683,6 +687,10 @@ async def semantic_version_compare(
             "sha256_a": first["sha256"],
             "sha256_b": second["sha256"],
             "local_diff": local_diff,
+            "structure_a": first.get("structure") or {},
+            "structure_b": second.get("structure") or {},
+            "checks_a": first.get("checks") or {},
+            "checks_b": second.get("checks") or {},
             "provider": response.provider,
             "model": response.model,
             "memory_written": False,
