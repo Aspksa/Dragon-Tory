@@ -459,6 +459,7 @@ class CloudStore:
         size_bytes: int,
         sha256: str,
         folder_id: str | None = None,
+        source: str = "upload",
     ) -> dict[str, Any]:
         with self._mutation_lock:
             document_id = "TORY-DOC-" + uuid4().hex.upper()
@@ -483,7 +484,7 @@ class CloudStore:
                         )
                         VALUES (
                             ?, ?, ?, ?, ?, ?, ?, 'personal', 'personal', 'denied',
-                            'blocked', 1, 'upload', ?, ?, ?, 0, '', '[]', 0
+                            'blocked', 1, ?, ?, ?, ?, 0, '', '[]', 0
                         )
                         """,
                         (
@@ -494,6 +495,7 @@ class CloudStore:
                             content_type or "application/octet-stream",
                             size_bytes,
                             sha256,
+                            source[:120],
                             now,
                             now,
                             folder_id,
@@ -505,7 +507,7 @@ class CloudStore:
                             document_id, version, storage_ref, content_type,
                             size_bytes, sha256, created_at, source
                         )
-                        VALUES (?, 1, ?, ?, ?, ?, ?, 'upload')
+                        VALUES (?, 1, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             document_id,
@@ -514,6 +516,7 @@ class CloudStore:
                             size_bytes,
                             sha256,
                             now,
+                            source[:120],
                         ),
                     )
                     self._log(
