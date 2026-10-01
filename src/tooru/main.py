@@ -18,6 +18,7 @@ from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
 from tooru.api.memory import router as memory_router
+from tooru.api.observability import router as observability_router
 from tooru.api.settings import remove_legacy_claude_settings
 from tooru.api.settings import router as settings_router
 from tooru.api.update import router as update_router
@@ -36,6 +37,7 @@ from tooru.memory.intake import MemoryIntakeGateway
 from tooru.memory.intelligence import IntelligenceConfig, MemoryIntelligence
 from tooru.memory.maintenance import MemoryAutomation
 from tooru.memory.store import SQLiteMemoryStore
+from tooru.observability.store import ObservabilityStore
 from tooru.update.service import UpdateService
 
 
@@ -43,6 +45,12 @@ from tooru.update.service import UpdateService
 async def lifespan(app: FastAPI):
     settings = get_settings()
     remove_legacy_claude_settings(Path(".env").resolve())
+
+    observability = ObservabilityStore(
+        settings.observability_db_path,
+        retention_days=settings.observability_retention_days,
+    )
+    observability.initialize()
 
     store = SQLiteMemoryStore(settings.memory_db_path)
     memory = MemoryEngine(
@@ -64,10 +72,13 @@ async def lifespan(app: FastAPI):
     cloud_store.initialize()
     cloud_smart = SmartDrive(cloud_store)
     cloud_smart.initialize()
-    document_intelligence = DocumentIntelligence(cloud_store)
+    document_intelligence = DocumentIntelligence(
+        cloud_store,
+        observability=observability,
+    )
     document_intelligence.initialize()
 
-    ai_router = AIRouter()
+    ai_router = AIRouter(observability=observability)
     if settings.deepseek_api_key:
         ai_router.register(
             OpenAICompatibleProvider(
@@ -100,6 +111,7 @@ async def lifespan(app: FastAPI):
     guardian = MemoryGuardian(
         intelligence=intelligence,
         store=store,
+        observability=observability,
         config=GuardianConfig(
             enabled=settings.memory_guardian_enabled,
             medium_importance=settings.memory_guardian_medium_importance,
@@ -129,6 +141,7 @@ async def lifespan(app: FastAPI):
     )
 
     app.state.settings = settings
+    app.state.observability = observability
     app.state.started_at = datetime.now(UTC)
     app.state.update_service = UpdateService(
         project_root=Path.cwd(),
@@ -222,6 +235,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router)
     app.include_router(update_router)
     app.include_router(memory_router)
+    app.include_router(observability_router)
     return app
 
 
