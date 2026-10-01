@@ -42,6 +42,8 @@ class ContextMemory:
         return SimpleNamespace(
             rendered_context="<tooru_memory></tooru_memory>",
             total_memories=0,
+            personal_hits=[],
+            project_hits=[],
         )
 
 
@@ -220,6 +222,28 @@ def test_reasoning_router_uses_chain_for_simple_chat() -> None:
     assert route.branch_count == 0
     assert "fast-path" in route.reasons
 
+
+
+def test_memory_uncertainty_can_force_tree_without_long_prompt() -> None:
+    reasoning = CognitiveReasoning(
+        router=SequenceRouter([]),
+        memory=ContextMemory(),
+        guardian=NoopGuardian(),
+    )
+    hit = SimpleNamespace(
+        uncertainty_score=0.82,
+        memory=SimpleNamespace(id="memory-uncertain"),
+    )
+
+    route = reasoning.route(
+        "Кто сейчас водитель?",
+        response_mode="normal",
+        recent_history=[],
+        memory_hits=[hit],
+    )
+
+    assert route.mode is ReasoningMode.TREE
+    assert "high-memory-uncertainty" in route.reasons
 
 def test_reasoning_router_uses_tree_for_high_complexity() -> None:
     reasoning = CognitiveReasoning(
