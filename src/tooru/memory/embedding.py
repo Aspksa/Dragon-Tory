@@ -57,7 +57,7 @@ class FastEmbedProvider:
 
     def __init__(
         self,
-        model: str = "intfloat/multilingual-e5-small",
+        model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         dimensions: int = 384,
         cache_dir: str | None = None,
     ):
@@ -65,8 +65,8 @@ class FastEmbedProvider:
             from fastembed import TextEmbedding
         except ImportError as exc:
             raise RuntimeError(
-                "FastEmbed is not installed. Install Dragon Tory with "
-                "the optional 'semantic' dependency."
+                "FastEmbed is not installed. Reinstall Dragon Tory runtime "
+                "dependencies before enabling semantic memory."
             ) from exc
         kwargs = {"model_name": model}
         if cache_dir:
@@ -148,7 +148,7 @@ def build_embedding_provider(settings) -> EmbeddingProvider:
         return FastEmbedProvider(
             model=(
                 settings.memory_embedding_model
-                or "intfloat/multilingual-e5-small"
+                or "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
             ),
             dimensions=settings.memory_embedding_dimensions,
             cache_dir=(
