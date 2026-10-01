@@ -758,16 +758,26 @@ class DocumentIntelligence:
             "gbp",
             "rub",
         }
+        term_source = lower
+        if requested_year:
+            term_source = term_source.replace(requested_year, " ")
+        if amount_match:
+            term_source = term_source.replace(amount_match.group(0), " ")
+        term_source = (
+            term_source.replace("€", " ")
+            .replace("$", " ")
+            .replace("£", " ")
+            .replace("₽", " ")
+        )
         terms = {
             token.strip(".,:;!?()[]{}").casefold()
-            for token in cleaned.split()
+            for token in term_source.split()
             if len(token.strip(".,:;!?()[]{}")) >= 2
         }
         terms = {
             term
             for term in terms
             if term not in stop
-            and term != requested_year
             and not re.fullmatch(r"\d+(?:[.,]\d+)?", term)
         }
 
