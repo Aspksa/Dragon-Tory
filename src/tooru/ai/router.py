@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 from tooru.ai.base import AIProvider, AIRequest, AIResponse
+from tooru.observability.context import current_observation
 
 
 class AIRouter:
@@ -68,14 +70,38 @@ class AIRouter:
 
         span_id = None
         if self.observability is not None:
+            context = current_observation()
+            trace_id = context.trace_id or uuid4().hex
+            resolved_module = module or context.module
+            resolved_source_type = source_type or context.source_type
+            resolved_source_id = source_id or context.source_id
+            resolved_document_id = document_id or context.document_id
+            if context.trace_id is None and (
+                resolved_source_type
+                or resolved_source_id
+                or resolved_document_id
+            ):
+                self.observability.event(
+                    category="source",
+                    stage="source",
+                    operation="source_received",
+                    status="success",
+                    trace_id=trace_id,
+                    module=resolved_module,
+                    source_type=resolved_source_type,
+                    source_id=resolved_source_id,
+                    document_id=resolved_document_id,
+                    message="Источник передан AI-модулю.",
+                )
             span_id = self.observability.start_span(
                 category="ai",
                 stage="analysis",
                 operation=operation,
-                module=module,
-                source_type=source_type,
-                source_id=source_id,
-                document_id=document_id,
+                module=resolved_module,
+                trace_id=trace_id,
+                source_type=resolved_source_type,
+                source_id=resolved_source_id,
+                document_id=resolved_document_id,
                 provider=provider_name,
                 model=getattr(provider, "model", None),
                 message=f"{provider_name}: {operation}",
