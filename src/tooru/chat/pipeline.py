@@ -321,7 +321,7 @@ class ChatPipeline:
                     f"blocked={result.blocked_count}"
                 )
         except Exception as exc:  # noqa: BLE001 - keep chat answer
-            return f"memory-error:{type(exc).__name__}"
+            summaries.append(f"memory-error:{type(exc).__name__}")
 
         episode_content = (
             "Задача пользователя:\n"
