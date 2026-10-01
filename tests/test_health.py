@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from tooru.main import app
+from tooru.version import APP_VERSION
 
 
 def test_health() -> None:
@@ -9,4 +10,4 @@ def test_health() -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["version"] == "00.00.03"
+    assert response.json()["version"] == APP_VERSION

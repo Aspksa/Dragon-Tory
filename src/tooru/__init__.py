@@ -1,3 +1,5 @@
 """Dragon Tory core package."""
 
-__version__ = "00.00.02"
+from tooru.version import APP_VERSION, __version__
+
+__all__ = ["APP_VERSION", "__version__"]

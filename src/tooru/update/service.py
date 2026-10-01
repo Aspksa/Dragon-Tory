@@ -196,16 +196,16 @@ class UpdateService:
         repo_api = f"https://api.github.com/repos/{self.repository}"
         commit = self._get_json(f"{repo_api}/commits/{self.branch}")
         contents = self._get_json(
-            f"{repo_api}/contents/pyproject.toml?ref={self.branch}"
+            f"{repo_api}/contents/src/tooru/version.py?ref={self.branch}"
         )
         encoded = contents.get("content")
         if not encoded:
-            raise UpdateError("GitHub не вернул pyproject.toml.")
+            raise UpdateError("GitHub не вернул src/tooru/version.py.")
 
-        pyproject = base64.b64decode(encoded).decode("utf-8")
+        version_source = base64.b64decode(encoded).decode("utf-8")
         match = re.search(
-            r'(?ms)^\[project\].*?^version\s*=\s*"([^"]+)"',
-            pyproject,
+            r'(?m)^__version__\s*=\s*"([^"]+)"',
+            version_source,
         )
         if not match:
             raise UpdateError("Не удалось определить удалённую версию.")

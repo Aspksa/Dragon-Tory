@@ -220,17 +220,17 @@ try {
             ForEach-Object { $_.Name }
     )
 
-    $remotePyProject = Join-Path $sourceRoot "pyproject.toml"
-    if (-not (Test-Path -LiteralPath $remotePyProject -PathType Leaf)) {
-        throw "Downloaded archive does not contain pyproject.toml."
+    $remoteVersionFile = Join-Path $sourceRoot "src\tooru\version.py"
+    if (-not (Test-Path -LiteralPath $remoteVersionFile -PathType Leaf)) {
+        throw "Downloaded archive does not contain src\tooru\version.py."
     }
-    $remoteText = Get-Content -LiteralPath $remotePyProject -Raw -Encoding UTF8
+    $remoteText = Get-Content -LiteralPath $remoteVersionFile -Raw -Encoding UTF8
     $versionMatch = [regex]::Match(
         $remoteText,
-        '(?ms)^\[project\].*?^version\s*=\s*"([^"]+)"'
+        '(?m)^__version__\s*=\s*"([^"]+)"'
     )
     if (-not $versionMatch.Success) {
-        throw "Could not read version from downloaded pyproject.toml."
+        throw "Could not read version from src\tooru\version.py."
     }
     $remoteVersion = $versionMatch.Groups[1].Value
 

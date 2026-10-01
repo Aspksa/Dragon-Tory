@@ -1,4 +1,4 @@
-# Dragon Tory architecture — Ver 00.00.02
+# Dragon Tory architecture
 
 ## Core rule
 

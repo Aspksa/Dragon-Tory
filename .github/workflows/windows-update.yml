@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "src/tooru/update/**"
+      - "src/tooru/version.py"
       - "src/tooru/api/update.py"
       - "scripts/windows/update.ps1"
       - "scripts/windows/bootstrap.ps1"
@@ -44,7 +45,7 @@ jobs:
           Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "*") -Destination $target -Recurse -Force
           "UPDATE_TEST_ROOT=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-          Set-Content -LiteralPath (Join-Path $target ".env") -Value "TOORU_VERSION=00.00.03" -Encoding utf8
+          Set-Content -LiteralPath (Join-Path $target ".env") -Value "TOORU_TEST_SENTINEL=preserve-me" -Encoding utf8
           New-Item -ItemType Directory -Path (Join-Path $target "data") -Force | Out-Null
           Set-Content -LiteralPath (Join-Path $target "data\preserve.txt") -Value "keep-memory-data" -Encoding utf8
 
@@ -112,7 +113,7 @@ jobs:
           }
 
           $envSentinel = Get-Content -LiteralPath (Join-Path $env:UPDATE_TEST_ROOT ".env") -Raw
-          if ($envSentinel -notmatch "TOORU_VERSION=00.00.03") {
+          if ($envSentinel -notmatch "TOORU_TEST_SENTINEL=preserve-me") {
             throw "Updater changed protected .env."
           }
 
