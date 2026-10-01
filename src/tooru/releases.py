@@ -429,6 +429,55 @@ RELEASE_NOTES: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "00.00.35": {
+        "title": "Cognitive Core VI: Adaptive Grey Matter",
+        "modules": [
+            {
+                "id": "grey_matter",
+                "title": "Серое вещество",
+                "version": "02.00.00",
+                "changes": [
+                    "Recall автоматически выбирает lexical, semantic, graph, temporal, causal или balanced стратегию.",
+                    "Temporal retrieval поддерживает as_of и переоценивает truth на исторический момент.",
+                    "Truth-feedback сохраняет predicted trust и строит Brier score / calibration error.",
+                    "Противоречивые факты объединяются в кластеры с trust-gap и признаком unresolved.",
+                    "Причинные связи проверяют порядок событий и обучают вес CAUSES по подтверждениям.",
+                    "Entity merge проходит proposal → Guardian → finalize и не склеивает сущности молча.",
+                    "Adaptive forgetting укрепляет полезную память, ослабляет слабую и архивирует только безопасные типы.",
+                    "Фоновый sleep-cycle запускает conservative adaptive forgetting автоматически.",
+                    "Добавлен retrieval benchmark evaluator и scale-runner для 1k/10k/100k записей.",
+                ],
+            },
+            {
+                "id": "memory",
+                "title": "Память Тоору",
+                "version": "03.01.00",
+                "changes": [
+                    "MemorySearch получил strategy и as_of; MemoryRecallHit показывает фактически выбранную стратегию.",
+                    "Reranker использует разные профили весов для lexical/semantic/graph/temporal/causal запросов.",
+                    "Graph expansion выбирает семейство связей по стратегии запроса.",
+                    "SQLite хранит truth-feedback calibration events и проверяет их целостность в health-report.",
+                    "Добавлено audited archive_memory для безопасного adaptive forgetting.",
+                ],
+            },
+            {
+                "id": "reasoning",
+                "title": "Мышление Тоору",
+                "version": "02.00.00",
+                "changes": [
+                    "Planner и Verifier автоматически получают более релевантный контекст через Adaptive Recall.",
+                ],
+            },
+            {
+                "id": "updater",
+                "title": "Обновление",
+                "version": "01.05.00",
+                "changes": [
+                    "00.00.35 добавляет совместимую SQLite-таблицу truth-feedback без удаления существующей памяти.",
+                ],
+            },
+        ],
+    },
 }
 
 
