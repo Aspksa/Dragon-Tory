@@ -65,6 +65,16 @@ class MemoryUncertaintyLevel(StrEnum):
     LOW = "low"
 
 
+class MemoryRetrievalStrategy(StrEnum):
+    AUTO = "auto"
+    BALANCED = "balanced"
+    LEXICAL = "lexical"
+    SEMANTIC = "semantic"
+    GRAPH = "graph"
+    TEMPORAL = "temporal"
+    CAUSAL = "causal"
+
+
 class MemoryIntelligenceAction(StrEnum):
     IGNORE = "ignore"
     CREATE = "create"
@@ -177,6 +187,8 @@ class MemoryDelete(BaseModel):
 class MemorySearch(ScopedMemoryModel):
     query: str = Field(min_length=1, max_length=2_000)
     kind: MemoryKind | None = None
+    strategy: MemoryRetrievalStrategy = MemoryRetrievalStrategy.AUTO
+    as_of: str | None = None
     min_importance: float = Field(default=0.0, ge=0.0, le=1.0)
     tags: list[str] = Field(default_factory=list, max_length=10)
     include_archived: bool = False
@@ -186,6 +198,7 @@ class MemorySearch(ScopedMemoryModel):
 class MemoryRecallHit(BaseModel):
     memory: MemoryItem
     score: float
+    strategy: MemoryRetrievalStrategy = MemoryRetrievalStrategy.BALANCED
     semantic_score: float
     lexical_score: float
     retrieval_score: float = 0.0
@@ -329,6 +342,72 @@ class GreyMatterReport(BaseModel):
     skills_found: int = Field(ge=0)
     goals_found: int = Field(ge=0)
     low_confidence_items: int = Field(ge=0)
+
+
+class TruthFeedbackEvent(BaseModel):
+    id: str
+    memory_id: str
+    confirmed: bool
+    predicted_trust: float = Field(ge=0.0, le=1.0)
+    created_at: str
+
+
+class CalibrationBucket(BaseModel):
+    lower: float = Field(ge=0.0, le=1.0)
+    upper: float = Field(ge=0.0, le=1.0)
+    count: int = Field(ge=0)
+    predicted_mean: float = Field(ge=0.0, le=1.0)
+    observed_rate: float = Field(ge=0.0, le=1.0)
+    gap: float = Field(ge=0.0, le=1.0)
+
+
+class CalibrationReport(BaseModel):
+    sample_count: int = Field(ge=0)
+    brier_score: float = Field(ge=0.0, le=1.0)
+    expected_calibration_error: float = Field(ge=0.0, le=1.0)
+    buckets: list[CalibrationBucket] = Field(default_factory=list)
+
+
+class ContradictionMember(BaseModel):
+    memory_id: str
+    content: str
+    trust_score: float = Field(ge=0.0, le=1.0)
+    valid_from: str | None = None
+    valid_to: str | None = None
+
+
+class ContradictionCluster(BaseModel):
+    cluster_id: str
+    members: list[ContradictionMember]
+    recommended_memory_id: str | None = None
+    trust_gap: float = Field(default=0.0, ge=0.0, le=1.0)
+    unresolved: bool = True
+
+
+class EntityMergeProposal(BaseModel):
+    canonical_memory_id: str
+    duplicate_memory_id: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    queue_id: str | None = None
+    applied: bool = False
+    reason: str
+
+
+class MemoryForgettingReport(BaseModel):
+    scanned: int = Field(ge=0)
+    reinforced: int = Field(ge=0)
+    decayed: int = Field(ge=0)
+    archived: int = Field(ge=0)
+    protected: int = Field(ge=0)
+
+
+class MemoryBenchmarkReport(BaseModel):
+    corpus_size: int = Field(ge=0)
+    query_count: int = Field(ge=0)
+    hit_at_1: float = Field(ge=0.0, le=1.0)
+    hit_at_5: float = Field(ge=0.0, le=1.0)
+    mean_reciprocal_rank: float = Field(ge=0.0, le=1.0)
+    strategies: dict[str, int] = Field(default_factory=dict)
 
 
 class MemoryFeedback(BaseModel):
