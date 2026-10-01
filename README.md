@@ -5,7 +5,7 @@
 Персональная AI-платформа с раздельной личной и проектной памятью,
 инструментами и одной основной облачной моделью DeepSeek.
 
-## Memory Engine v6 + Cognitive Core V
+## Memory Engine v6 + Cognitive Core VII
 
 В ядре уже есть:
 
