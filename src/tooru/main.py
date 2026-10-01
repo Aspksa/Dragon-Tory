@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
+from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
@@ -29,6 +30,16 @@ async def lifespan(app: FastAPI):
     memory.initialize()
 
     ai_router = AIRouter()
+    if settings.deepseek_api_key:
+        ai_router.register(
+            OpenAICompatibleProvider(
+                name="deepseek",
+                api_key=settings.deepseek_api_key,
+                base_url=settings.deepseek_base_url,
+                model=settings.deepseek_model,
+            )
+        )
+
     intelligence = MemoryIntelligence(
         engine=memory,
         router=ai_router,
