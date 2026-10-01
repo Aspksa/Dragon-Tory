@@ -1716,13 +1716,33 @@ class DocumentIntelligence:
         b = self.version_text(document_id, second)
         a_entities = self._entities(a["text"])
         b_entities = self._entities(b["text"])
-        a_dates = set(a_entities["dates"])
-        b_dates = set(b_entities["dates"])
+        a_dates = {
+            str(item.get("value"))
+            for item in (a.get("evidence") or [])
+            if item.get("type") in {"date", "deadline"} and item.get("value")
+        } or set(a_entities["dates"])
+        b_dates = {
+            str(item.get("value"))
+            for item in (b.get("evidence") or [])
+            if item.get("type") in {"date", "deadline"} and item.get("value")
+        } or set(b_entities["dates"])
         a_amounts = {
+            (str(item.get("currency")), float(item.get("value")))
+            for item in (a.get("evidence") or [])
+            if item.get("type") == "amount"
+            and item.get("currency")
+            and isinstance(item.get("value"), (int, float))
+        } or {
             (item["currency"], item["value"])
             for item in a_entities["amounts"]
         }
         b_amounts = {
+            (str(item.get("currency")), float(item.get("value")))
+            for item in (b.get("evidence") or [])
+            if item.get("type") == "amount"
+            and item.get("currency")
+            and isinstance(item.get("value"), (int, float))
+        } or {
             (item["currency"], item["value"])
             for item in b_entities["amounts"]
         }
