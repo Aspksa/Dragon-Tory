@@ -144,6 +144,7 @@ class MemoryEngine:
         return selected
 
     def context_pack(self, request: MemoryContextRequest) -> MemoryContextPack:
+        search_query = self._bounded_search_query(request.query)
         pinned_personal: list[MemoryItem] = []
         personal_hits: list[MemoryRecallHit] = []
         pinned_project: list[MemoryItem] = []
@@ -161,7 +162,7 @@ class MemoryEngine:
                     MemorySearch(
                         owner_id=request.owner_id,
                         scope=MemoryScope.PERSONAL,
-                        query=request.query,
+                        query=search_query,
                         limit=request.personal_limit,
                     )
                 )
@@ -178,7 +179,7 @@ class MemoryEngine:
                     owner_id=request.owner_id,
                     scope=MemoryScope.PROJECT,
                     project_id=request.project_id,
-                    query=request.query,
+                    query=search_query,
                     limit=request.project_limit,
                 )
             )
