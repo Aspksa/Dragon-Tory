@@ -149,6 +149,10 @@ def diagnostics_status(request: Request) -> dict:
             **_memory_counts(settings.memory_db_path),
             "database_bytes": _path_size(settings.memory_db_path),
         },
+        "chat_history": {
+            **request.app.state.chat_store.counts(),
+            "database_bytes": _path_size(settings.chat_db_path),
+        },
         "guardian": guardian.model_dump(mode="json"),
         "memory_automation": memory_automation.model_dump(mode="json"),
         "guardian_automation": guardian_automation.model_dump(
