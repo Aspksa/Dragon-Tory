@@ -15,8 +15,12 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Клод" in response.text
     assert "Маршрутизатор ИИ" in response.text
     assert 'id="chatProvider"' in response.text
-    assert "Обновление" in response.text
+    assert "Центр обновления" in response.text
+    assert 'id="openUpdate"' in response.text
+    assert 'id="updates"' in response.text
     assert 'id="installUpdate"' in response.text
+    assert "История обновлений" in response.text
+    assert "Скачанные файлы" in response.text
 
 
 def test_diagnostics_status_is_available() -> None:
@@ -53,3 +57,14 @@ def test_update_status_endpoint_is_available() -> None:
     payload = response.json()
     assert payload["local_version"] == APP_VERSION
     assert payload["repository"] == "Aspksa/Dragon-Tory"
+
+
+
+def test_update_history_endpoint_is_available() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/update/history")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "items" in payload
+    assert "count" in payload
