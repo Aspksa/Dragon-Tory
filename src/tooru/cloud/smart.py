@@ -897,8 +897,6 @@ class SmartDrive:
                 FROM document_dna dna
                 JOIN documents d ON d.id = dna.document_id
                 WHERE d.trashed = 0
-                  AND LOWER(dna.kind) = 'служебная записка'
-                  AND LOWER(dna.document_subtype) = 'работа в выходной день'
                 ORDER BY dna.work_date, dna.employee_name
                 """
             ).fetchall()
@@ -906,6 +904,14 @@ class SmartDrive:
         totals: dict[str, float] = {}
         for row in rows:
             item = dict(row)
+            if str(item.get("kind") or "").strip().casefold() != (
+                "служебная записка"
+            ):
+                continue
+            if str(item.get("document_subtype") or "").strip().casefold() != (
+                "работа в выходной день"
+            ):
+                continue
             work_date = str(item.get("work_date") or "")
             if year is not None and not work_date.startswith(f"{year:04d}-"):
                 continue
