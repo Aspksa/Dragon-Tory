@@ -355,24 +355,50 @@ function Install-RuntimeDependencies {
         throw ".venv does not exist."
     }
 
-    & $VenvPython -m pip --version *> $null
-    if ($LASTEXITCODE -ne 0) {
-        Write-LauncherLog "INFO" "pip is missing. Running ensurepip."
-        & $VenvPython -m ensurepip --upgrade
-        if ($LASTEXITCODE -ne 0) {
-            throw "Could not prepare pip."
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $pipVersionOutput = & $VenvPython -m pip --version 2>&1
+        $pipVersionExit = $LASTEXITCODE
+
+        if ($pipVersionExit -ne 0) {
+            Write-LauncherLog "INFO" "pip is missing or unhealthy. Running ensurepip."
+            $ensureOutput = & $VenvPython -m ensurepip --upgrade 2>&1
+            $ensureExit = $LASTEXITCODE
+            foreach ($line in $ensureOutput) {
+                Write-Host $line
+                Add-Content -LiteralPath $LauncherLog -Value ([string]$line) -Encoding UTF8
+            }
+            if ($ensureExit -ne 0) {
+                throw "Could not prepare pip. ensurepip exit code: $ensureExit"
+            }
+        } else {
+            Write-LauncherLog "OK" ("pip is available: " + (($pipVersionOutput | Out-String).Trim()))
         }
-    }
 
-    Write-LauncherLog "INFO" "Installing Dragon Tory and required libraries from pyproject.toml."
-    & $VenvPython -m pip install --disable-pip-version-check --no-input --editable $ProjectRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "pip could not install Dragon Tory or one or more required libraries."
-    }
+        Write-LauncherLog "INFO" "Installing Dragon Tory and required libraries from pyproject.toml."
+        $installOutput = & $VenvPython -m pip install --disable-pip-version-check --no-input --editable $ProjectRoot 2>&1
+        $installExit = $LASTEXITCODE
+        foreach ($line in $installOutput) {
+            Write-Host $line
+            Add-Content -LiteralPath $LauncherLog -Value ([string]$line) -Encoding UTF8
+        }
+        if ($installExit -ne 0) {
+            throw "pip could not install Dragon Tory or one or more required libraries. Exit code: $installExit"
+        }
 
-    & $VenvPython -m pip check
-    if ($LASTEXITCODE -ne 0) {
-        throw "Installed Python libraries have dependency conflicts."
+        Write-LauncherLog "INFO" "Checking installed Python dependency consistency."
+        $checkOutput = & $VenvPython -m pip check 2>&1
+        $checkExit = $LASTEXITCODE
+        foreach ($line in $checkOutput) {
+            Write-Host $line
+            Add-Content -LiteralPath $LauncherLog -Value ([string]$line) -Encoding UTF8
+        }
+        if ($checkExit -ne 0) {
+            throw "Installed Python libraries have dependency conflicts. pip check exit code: $checkExit"
+        }
+    } finally {
+        $ErrorActionPreference = $previousPreference
     }
 
     if (-not (Test-RuntimeDependencies)) {
