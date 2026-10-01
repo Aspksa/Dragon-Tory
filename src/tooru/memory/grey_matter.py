@@ -26,7 +26,7 @@ from tooru.memory.models import (
 class GreyMatterService:
     """Higher cognition over durable memory without bypassing Guardian."""
 
-    _correction_signal = re.compile(
+    _correction_signal: ClassVar[re.Pattern[str]] = re.compile(
         r"(?i)(?:"
         r"\bнет[, ]|"
         r"\bневерно\b|"
@@ -39,19 +39,21 @@ class GreyMatterService:
         r")"
     )
 
-    _entity_stop = {
-        "ооо",
-        "ао",
-        "пао",
-        "зао",
-        "ип",
-        "llc",
-        "ltd",
-        "inc",
-        "corp",
-        "company",
-        "компания",
-    }
+    _entity_stop: ClassVar[frozenset[str]] = frozenset(
+        {
+            "ооо",
+            "ао",
+            "пао",
+            "зао",
+            "ип",
+            "llc",
+            "ltd",
+            "inc",
+            "corp",
+            "company",
+            "компания",
+        }
+    )
 
     def __init__(
         self,
@@ -782,7 +784,9 @@ class GreyMatterService:
                     item.updated_at,
                 ),
             )
-            for duplicate in group[1:]:
+            for duplicate in group:
+                if duplicate.id == canonical.id:
+                    continue
                 self._same_scope(canonical, duplicate)
                 self.store.add_link(
                     canonical.id,
