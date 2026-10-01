@@ -43,6 +43,15 @@ def _friendly_ai_error(exc: Exception) -> str:
 
 @router.post("", response_model=ChatResponse)
 async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
+    if not request.app.state.ai_router.available_providers():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "ИИ-модели не настроены. Откройте «Настройки» "
+                "и сохраните ключ DeepSeek или Клода."
+            ),
+        )
+
     try:
         result = await request.app.state.chat_pipeline.run(
             message=payload.message,
