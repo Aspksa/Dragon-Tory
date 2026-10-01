@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, ClassVar
 
 from tooru.ai.base import AIRequest
 from tooru.cloud.document_intelligence import OCRUnavailableError
@@ -12,9 +12,11 @@ PROJECT_ID = "dragon-tory"
 
 
 class ModuleLearningService:
-    DOCUMENT_MODULES = {"contracts", "invoice_offers"}
-    STRUCTURED_MODULES = {"garage", "timesheet"}
-    SUPPORTED_MODULES = DOCUMENT_MODULES | STRUCTURED_MODULES
+    DOCUMENT_MODULES: ClassVar[set[str]] = {"contracts", "invoice_offers"}
+    STRUCTURED_MODULES: ClassVar[set[str]] = {"garage", "timesheet"}
+    SUPPORTED_MODULES: ClassVar[set[str]] = (
+        DOCUMENT_MODULES | STRUCTURED_MODULES
+    )
 
     def __init__(
         self,
