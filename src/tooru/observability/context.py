@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Iterator
 from uuid import uuid4
 
 
@@ -16,14 +16,14 @@ class ObservationContext:
     document_id: str | None = None
 
 
-_CURRENT: ContextVar[ObservationContext] = ContextVar(
+_CURRENT: ContextVar[ObservationContext | None] = ContextVar(
     "tooru_observation_context",
-    default=ObservationContext(),
+    default=None,
 )
 
 
 def current_observation() -> ObservationContext:
-    return _CURRENT.get()
+    return _CURRENT.get() or ObservationContext()
 
 
 @contextmanager
