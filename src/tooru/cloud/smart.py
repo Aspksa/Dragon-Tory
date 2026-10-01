@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import base64
+import calendar
 import hashlib
 import json
 import sqlite3
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -1456,6 +1457,302 @@ class SmartDrive:
                 {"employee_name": name, "hours": hours}
                 for name, hours in sorted(totals.items())
             ],
+        }
+
+    @staticmethod
+    def _clean_timesheet_manual_payload(
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        code = str(payload.get("code") or "").strip().upper()
+        if code not in {"ОТ", "Б"}:
+            raise ValueError(
+                "Для ручного ввода сейчас поддерживаются коды ОТ и Б."
+            )
+        date_from = _normalize_date(payload.get("date_from"))
+        date_to = _normalize_date(payload.get("date_to"))
+        if not date_from or not date_to:
+            raise ValueError("Укажите даты начала и окончания.")
+        try:
+            start = date.fromisoformat(date_from)
+            end = date.fromisoformat(date_to)
+        except ValueError as exc:
+            raise ValueError("Некорректная дата табеля.") from exc
+        if end < start:
+            raise ValueError("Дата окончания не может быть раньше начала.")
+
+        employee_id = (
+            str(payload.get("employee_id")).strip()
+            if payload.get("employee_id")
+            else None
+        )
+        return {
+            "employee_id": employee_id,
+            "employee_name": str(
+                payload.get("employee_name") or ""
+            ).strip()[:300],
+            "date_from": date_from,
+            "date_to": date_to,
+            "code": code,
+            "hours": None,
+            "note": str(payload.get("note") or "").strip()[:2_000],
+        }
+
+    def create_timesheet_manual_entry(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        values = self._clean_timesheet_manual_payload(payload)
+        if values["employee_id"]:
+            employee = self.get_employee(values["employee_id"])
+            if not values["employee_name"]:
+                values["employee_name"] = employee["full_name"]
+        if not values["employee_name"]:
+            raise ValueError(
+                "Укажите сотрудника вручную или выберите из справочника."
+            )
+        entry_id = "TORY-TS-" + uuid4().hex.upper()
+        now = utc_now()
+        with self._connect() as db:
+            db.execute(
+                """
+                INSERT INTO timesheet_manual_entries (
+                    id, employee_id, employee_name, date_from, date_to,
+                    code, hours, note, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entry_id,
+                    values["employee_id"],
+                    values["employee_name"],
+                    values["date_from"],
+                    values["date_to"],
+                    values["code"],
+                    values["hours"],
+                    values["note"],
+                    now,
+                    now,
+                ),
+            )
+        return self.get_timesheet_manual_entry(entry_id)
+
+    def get_timesheet_manual_entry(
+        self,
+        entry_id: str,
+    ) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                """
+                SELECT t.*, e.full_name AS directory_employee_name
+                FROM timesheet_manual_entries t
+                LEFT JOIN employees e ON e.id = t.employee_id
+                WHERE t.id = ?
+                """,
+                (entry_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(entry_id)
+        item = dict(row)
+        if item.get("directory_employee_name"):
+            item["employee_name"] = item["directory_employee_name"]
+        item.pop("directory_employee_name", None)
+        return item
+
+    def list_timesheet_manual_entries(
+        self,
+        *,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> list[dict[str, Any]]:
+        params: list[Any] = []
+        where = ""
+        if year is not None and month is not None:
+            last_day = calendar.monthrange(year, month)[1]
+            month_start = date(year, month, 1).isoformat()
+            month_end = date(year, month, last_day).isoformat()
+            where = "WHERE t.date_to >= ? AND t.date_from <= ?"
+            params.extend([month_start, month_end])
+        with self._connect() as db:
+            rows = db.execute(
+                f"""
+                SELECT t.*, e.full_name AS directory_employee_name
+                FROM timesheet_manual_entries t
+                LEFT JOIN employees e ON e.id = t.employee_id
+                {where}
+                ORDER BY t.date_from, t.employee_name COLLATE NOCASE
+                """,
+                params,
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            if item.get("directory_employee_name"):
+                item["employee_name"] = item["directory_employee_name"]
+            item.pop("directory_employee_name", None)
+            result.append(item)
+        return result
+
+    def delete_timesheet_manual_entry(self, entry_id: str) -> None:
+        with self._connect() as db:
+            result = db.execute(
+                "DELETE FROM timesheet_manual_entries WHERE id = ?",
+                (entry_id,),
+            )
+        if result.rowcount < 1:
+            raise KeyError(entry_id)
+
+    def monthly_timesheet(
+        self,
+        *,
+        year: int,
+        month: int,
+    ) -> dict[str, Any]:
+        calendar_data = production_calendar(year, month=month)
+        calendar_days = calendar_data["days"]
+        by_date = {item["date"]: item for item in calendar_days}
+        manual_entries = self.list_timesheet_manual_entries(
+            year=year,
+            month=month,
+        )
+        weekend_data = self.weekend_timesheet(year=year, month=month)
+
+        rows: dict[str, dict[str, Any]] = {}
+        conflicts: list[dict[str, Any]] = []
+
+        def ensure_row(
+            employee_name: str,
+            employee_id: str | None = None,
+        ) -> dict[str, Any]:
+            key = employee_id or employee_name.strip().casefold()
+            if key not in rows:
+                cells = [
+                    {
+                        "date": day["date"],
+                        "day": day["day"],
+                        "code": day["planned_code"],
+                        "hours": day["planned_hours"],
+                        "source": "calendar",
+                        "reason": day["reason"],
+                    }
+                    for day in calendar_days
+                ]
+                rows[key] = {
+                    "employee_id": employee_id,
+                    "employee_name": employee_name,
+                    "cells": cells,
+                }
+            return rows[key]
+
+        for entry in manual_entries:
+            row = ensure_row(
+                str(entry["employee_name"]),
+                entry.get("employee_id"),
+            )
+            start = date.fromisoformat(entry["date_from"])
+            end = date.fromisoformat(entry["date_to"])
+            current = start
+            while current <= end:
+                current_iso = current.isoformat()
+                day_info = by_date.get(current_iso)
+                if day_info is not None:
+                    # Annual leave is measured in calendar days, but official
+                    # non-working holidays are not included in the leave.
+                    if entry["code"] == "ОТ" and day_info["is_holiday"]:
+                        current += timedelta(days=1)
+                        continue
+                    cell = row["cells"][current.day - 1]
+                    cell.update(
+                        {
+                            "code": entry["code"],
+                            "hours": None,
+                            "source": "manual",
+                            "reason": entry.get("note") or (
+                                "Отпуск"
+                                if entry["code"] == "ОТ"
+                                else "Больничный"
+                            ),
+                            "entry_id": entry["id"],
+                        }
+                    )
+                current += timedelta(days=1)
+
+        for item in weekend_data["items"]:
+            work_date = str(item.get("work_date") or "")
+            day_info = by_date.get(work_date)
+            if day_info is None:
+                continue
+            employee_name = str(
+                item.get("employee_name") or "Сотрудник не указан"
+            )
+            row = ensure_row(employee_name)
+            cell = row["cells"][int(work_date[8:10]) - 1]
+            if cell["code"] in {"ОТ", "Б"}:
+                conflicts.append(
+                    {
+                        "employee_name": employee_name,
+                        "date": work_date,
+                        "manual_code": cell["code"],
+                        "document_id": item["document_id"],
+                        "reason": (
+                            "Работа в выходной пересекается с ручной отметкой "
+                            f"{cell['code']}."
+                        ),
+                    }
+                )
+                continue
+            cell.update(
+                {
+                    "code": "РВ",
+                    "hours": float(item.get("work_hours") or 0.0),
+                    "source": "weekend-work-document",
+                    "reason": item.get("work_reason") or "",
+                    "document_id": item["document_id"],
+                }
+            )
+
+        prepared_rows: list[dict[str, Any]] = []
+        for row in sorted(
+            rows.values(),
+            key=lambda item: item["employee_name"].casefold(),
+        ):
+            cells = row["cells"]
+            prepared_rows.append(
+                {
+                    **row,
+                    "worked_hours": round(
+                        sum(
+                            float(cell["hours"] or 0.0)
+                            for cell in cells
+                            if cell["code"] in {"Я", "РВ"}
+                        ),
+                        2,
+                    ),
+                    "vacation_days": sum(
+                        1 for cell in cells if cell["code"] == "ОТ"
+                    ),
+                    "sick_days": sum(
+                        1 for cell in cells if cell["code"] == "Б"
+                    ),
+                    "weekend_work_hours": round(
+                        sum(
+                            float(cell["hours"] or 0.0)
+                            for cell in cells
+                            if cell["code"] == "РВ"
+                        ),
+                        2,
+                    ),
+                }
+            )
+
+        return {
+            "year": year,
+            "month": month,
+            "calendar": calendar_data,
+            "rows": prepared_rows,
+            "manual_entries": manual_entries,
+            "weekend_work": weekend_data["items"],
+            "conflicts": conflicts,
+            "row_count": len(prepared_rows),
         }
 
     def get_dna(self, document_id: str) -> dict[str, Any]:
