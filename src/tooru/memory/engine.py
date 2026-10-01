@@ -183,10 +183,12 @@ class MemoryEngine:
             item.id
             for item in [*lexical_candidates[:20], *primary_candidates[:20]]
         ]
+        graph_relations = self._graph_relations(strategy)
         graph_candidates = self.store.graph_candidates(
             request,
             seed_ids,
             limit=max(100, request.limit * 20),
+            relations=graph_relations,
         )
         graph_rank = {
             item.id: weight
@@ -666,6 +668,36 @@ class MemoryEngine:
             rendered = rendered[: request.max_chars].rsplit("\n", 1)[0]
             rendered += "\n</tooru_memory>"
         return rendered, total
+
+    @staticmethod
+    def _graph_relations(
+        strategy: MemoryRetrievalStrategy,
+    ) -> set[MemoryLinkType] | None:
+        if strategy is MemoryRetrievalStrategy.CAUSAL:
+            return {
+                MemoryLinkType.CAUSES,
+                MemoryLinkType.REQUIRES,
+                MemoryLinkType.DEPENDS_ON,
+                MemoryLinkType.DERIVED_FROM,
+            }
+        if strategy is MemoryRetrievalStrategy.TEMPORAL:
+            return {
+                MemoryLinkType.TEMPORAL_SUCCESSOR,
+                MemoryLinkType.TEMPORAL_PREDECESSOR,
+                MemoryLinkType.SUPERSEDES,
+                MemoryLinkType.CORRECTS,
+                MemoryLinkType.SUPPORTS,
+            }
+        if strategy is MemoryRetrievalStrategy.GRAPH:
+            return {
+                MemoryLinkType.RELATED,
+                MemoryLinkType.SAME_ENTITY,
+                MemoryLinkType.PART_OF,
+                MemoryLinkType.DEPENDS_ON,
+                MemoryLinkType.SUPPORTS,
+                MemoryLinkType.SUMMARIZES,
+            }
+        return None
 
     @staticmethod
     def _parse_as_of(value: str | None) -> datetime | None:
