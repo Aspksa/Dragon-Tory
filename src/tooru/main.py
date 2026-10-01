@@ -22,6 +22,7 @@ from tooru.api.observability import router as observability_router
 from tooru.api.settings import remove_legacy_claude_settings
 from tooru.api.settings import router as settings_router
 from tooru.api.update import router as update_router
+from tooru.chat.documents import ChatDocumentAssistant
 from tooru.chat.pipeline import ChatPipeline
 from tooru.chat.store import ChatStore
 from tooru.cloud.document_intelligence import DocumentIntelligence
@@ -170,10 +171,19 @@ async def lifespan(app: FastAPI):
     app.state.memory_intake = memory_intake
     app.state.memory_guardian_automation = guardian_automation
     app.state.memory_automation = automation
+    app.state.chat_document_assistant = ChatDocumentAssistant(
+        cloud_store=cloud_store,
+        smart=cloud_smart,
+        intelligence=document_intelligence,
+        ai_router=ai_router,
+        memory_intake=memory_intake,
+        observability=observability,
+    )
     app.state.chat_pipeline = ChatPipeline(
         memory=memory,
         router=ai_router,
         guardian=guardian,
+        cloud_store=cloud_store,
     )
 
     if settings.memory_automation_enabled:

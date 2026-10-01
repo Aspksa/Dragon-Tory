@@ -104,6 +104,9 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="renameChat"' in response.text
     assert 'id="deleteChat"' in response.text
     assert 'id="composerAction"' in response.text
+    assert 'id="chatAttach"' in response.text
+    assert 'id="chatFileInput"' in response.text
+    assert 'id="chatUploadQueue"' in response.text
     assert 'id="chatMode"' in response.text
     assert 'id="stopChat"' not in response.text
     assert 'id="retryChat"' not in response.text
@@ -296,6 +299,7 @@ def test_dashboard_assets_are_served_separately() -> None:
     assert "withBusyButton" in javascript.text
     assert "refreshHomeObservability" in javascript.text
     assert "renderHomeObservability" in javascript.text
+    assert "uploadChatDocuments" in javascript.text
     assert "javascript" in javascript.headers["content-type"]
 
 

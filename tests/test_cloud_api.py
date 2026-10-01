@@ -223,3 +223,19 @@ def test_text_preview_index_and_content_search() -> None:
         )
         assert ask_denied.status_code == 403
         client.delete(f"/v1/cloud/files/{document_id}")
+
+
+
+def test_document_recognition_status_lists_extended_formats() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/cloud/intelligence/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert {"DOCX", "PPTX", "ODT", "RTF", "EML", "MSG", "EPUB"} <= set(
+        payload["supported_native"]
+    )
+    assert {"PNG", "PDF"} <= set(payload["supported_ocr"])
+    assert {"DOC", "PPT"} <= set(payload["supported_via_converter"])
+    assert "converter" in payload
+    assert isinstance(payload["converter"]["available"], bool)

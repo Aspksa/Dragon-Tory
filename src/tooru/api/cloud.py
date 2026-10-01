@@ -13,11 +13,7 @@ from starlette.background import BackgroundTask
 
 from tooru.ai.base import AIRequest
 from tooru.ai.prompt_guard import UNTRUSTED_CONTENT_POLICY, wrap_untrusted_text
-from tooru.cloud.intelligence import (
-    UnsupportedDocumentError,
-    extract_document,
-    preview_document,
-)
+from tooru.cloud.intelligence import UnsupportedDocumentError
 
 router = APIRouter(prefix="/v1/cloud", tags=["cloud"])
 
@@ -334,19 +330,41 @@ def preview_file(document_id: str, request: Request) -> dict:
         item = store.get(document_id)
         path, cleanup = store.materialize_plaintext(document_id)
         try:
-            preview = preview_document(
-                path,
-                name=item["name"],
-                content_type=item["content_type"],
+            chunks, method, ocr_used = (
+                request.app.state.document_intelligence.extract(
+                    path,
+                    name=item["name"],
+                    content_type=item["content_type"],
+                )
             )
         finally:
             if cleanup is not None:
                 cleanup.unlink(missing_ok=True)
+        used = []
+        total = 0
+        for chunk in chunks:
+            remaining = 30_000 - total
+            if remaining <= 0:
+                break
+            text = chunk.text[:remaining]
+            used.append(
+                {
+                    "label": chunk.label,
+                    "page": chunk.page,
+                    "text": text,
+                }
+            )
+            total += len(text)
         return {
             "document_id": document_id,
             "name": item["name"],
             "version": item["version"],
-            **preview,
+            "chunks": used,
+            "chunk_count": len(chunks),
+            "preview_chars": total,
+            "truncated": len(used) < len(chunks),
+            "extraction_method": method,
+            "ocr_used": ocr_used,
         }
     except PermissionError as exc:
         raise HTTPException(
@@ -383,10 +401,12 @@ def index_file(document_id: str, request: Request) -> dict:
             )
         path, cleanup = store.materialize_plaintext(document_id)
         try:
-            extracted = extract_document(
-                path,
-                name=item["name"],
-                content_type=item["content_type"],
+            extracted, extraction_method, ocr_used = (
+                request.app.state.document_intelligence.extract(
+                    path,
+                    name=item["name"],
+                    content_type=item["content_type"],
+                )
             )
         finally:
             if cleanup is not None:
@@ -415,6 +435,8 @@ def index_file(document_id: str, request: Request) -> dict:
             "version": updated["version"],
             "chunk_count": len(chunks),
             "index_status": updated["ai_index_status"],
+            "extraction_method": extraction_method,
+            "ocr_used": ocr_used,
         }
     except KeyError as exc:
         raise HTTPException(

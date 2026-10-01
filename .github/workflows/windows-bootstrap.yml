@@ -22,6 +22,8 @@ jobs:
   first-run-russian-windows:
     runs-on: windows-latest
     timeout-minutes: 15
+    env:
+      TOORU_SKIP_DOCUMENT_ENGINES: "1"
 
     steps:
       - name: Checkout
@@ -64,7 +66,7 @@ jobs:
             throw "Downloaded local Python version validation failed."
           }
 
-          & $venvPython -c "import fastapi, uvicorn, pydantic_settings"
+          & $venvPython -c "import fastapi, uvicorn, pydantic_settings, pypdf, docx, openpyxl, pptx, odf, striprtf, bs4, charset_normalizer, xlrd, pyxlsb, extract_msg, ebooklib, pymupdf"
           if ($LASTEXITCODE -ne 0) {
             throw "Required runtime libraries cannot be imported."
           }
