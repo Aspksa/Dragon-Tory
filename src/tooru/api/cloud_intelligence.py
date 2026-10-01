@@ -390,6 +390,10 @@ async def draft_from_module(
                 ],
                 max_tokens=2_800,
             ),
+            module=module_id,
+            operation="administrative_draft",
+            source_type="module",
+            source_id=module_id,
         )
         for reference in references:
             smart.record_provenance(
@@ -574,6 +578,11 @@ async def semantic_version_compare(
                 ],
                 max_tokens=2_400,
             ),
+            module="drive",
+            operation="document_version_compare",
+            source_type="document",
+            source_id=document_id,
+            document_id=document_id,
         )
         smart.record_provenance(
             document_id,
