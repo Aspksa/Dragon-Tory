@@ -76,8 +76,8 @@ On first setup, or when `pyproject.toml` changes, the launcher:
 
 1. creates/rebuilds `.venv`;
 2. ensures pip exists;
-3. generates a runtime requirements file from `pyproject.toml`;
-4. installs the required libraries with pip;
+3. installs Dragon Tory in editable mode directly from `pyproject.toml`;
+4. installs all required runtime libraries declared by the project;
 5. runs `pip check`;
 6. imports the critical runtime modules as a final validation;
 7. saves the SHA-256 hash of `pyproject.toml`.
