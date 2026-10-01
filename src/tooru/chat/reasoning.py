@@ -279,9 +279,9 @@ class CognitiveReasoning:
                     project_id=PROJECT_ID,
                     query=message,
                     limit=8,
-                    ),
-                    track_usage=False,
-                )
+                ),
+                track_usage=False,
+            )
             except Exception:  # noqa: BLE001 - routing must never break chat
                 return 0.0, 0
 
