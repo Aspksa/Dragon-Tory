@@ -1623,7 +1623,10 @@ class SmartDrive:
             employee_name: str,
             employee_id: str | None = None,
         ) -> dict[str, Any]:
-            key = employee_id or employee_name.strip().casefold()
+            # Weekend-work documents store an employee name, while manual
+            # entries may additionally have a directory ID. Use the name as
+            # the common key so the same person is not rendered twice.
+            key = employee_name.strip().casefold()
             if key not in rows:
                 cells = [
                     {
@@ -1641,6 +1644,8 @@ class SmartDrive:
                     "employee_name": employee_name,
                     "cells": cells,
                 }
+            elif employee_id and not rows[key].get("employee_id"):
+                rows[key]["employee_id"] = employee_id
             return rows[key]
 
         for entry in manual_entries:
