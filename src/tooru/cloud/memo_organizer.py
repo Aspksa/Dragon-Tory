@@ -114,6 +114,38 @@ def utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def ensure_service_memo_schema(db: sqlite3.Connection) -> None:
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS service_memo_records (
+            document_id TEXT PRIMARY KEY,
+            version INTEGER NOT NULL,
+            document_year TEXT NOT NULL,
+            year_source TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            topic_reason TEXT NOT NULL,
+            is_template INTEGER NOT NULL DEFAULT 0,
+            folder_id TEXT,
+            folder_path TEXT NOT NULL,
+            duplicate_of TEXT,
+            possible_version_of TEXT,
+            facts_json TEXT NOT NULL,
+            discrepancies_json TEXT NOT NULL,
+            review_json TEXT NOT NULL,
+            memory_status TEXT NOT NULL DEFAULT '',
+            memory_id TEXT,
+            processed_at TEXT NOT NULL
+        )
+        """
+    )
+    db.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_service_memo_year_topic
+        ON service_memo_records(document_year, topic)
+        """
+    )
+
+
 def _snippet(text: str, start: int, end: int, radius: int = 130) -> str:
     value = text[max(0, start - radius) : min(len(text), end + radius)]
     return " ".join(value.replace("\r", " ").replace("\n", " ").split())[:500]
@@ -158,35 +190,7 @@ class ServiceMemoOrganizer:
 
     def initialize(self) -> None:
         with self._connect() as db:
-            db.execute(
-                """
-                CREATE TABLE IF NOT EXISTS service_memo_records (
-                    document_id TEXT PRIMARY KEY,
-                    version INTEGER NOT NULL,
-                    document_year TEXT NOT NULL,
-                    year_source TEXT NOT NULL,
-                    topic TEXT NOT NULL,
-                    topic_reason TEXT NOT NULL,
-                    is_template INTEGER NOT NULL DEFAULT 0,
-                    folder_id TEXT,
-                    folder_path TEXT NOT NULL,
-                    duplicate_of TEXT,
-                    possible_version_of TEXT,
-                    facts_json TEXT NOT NULL,
-                    discrepancies_json TEXT NOT NULL,
-                    review_json TEXT NOT NULL,
-                    memory_status TEXT NOT NULL DEFAULT '',
-                    memory_id TEXT,
-                    processed_at TEXT NOT NULL
-                )
-                """
-            )
-            db.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_service_memo_year_topic
-                ON service_memo_records(document_year, topic)
-                """
-            )
+            ensure_service_memo_schema(db)
 
     @staticmethod
     def _fact(
