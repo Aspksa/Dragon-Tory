@@ -1,4 +1,4 @@
-# Memory Engine v5.2
+# Memory Engine v6
 
 Dragon Tory owns its memory. DeepSeek is the configured reasoning provider,
 but it does not own long-term memory.
@@ -33,9 +33,29 @@ Those candidates are merged with the broader semantic candidate set and then
 ranked by semantic similarity, lexical overlap, importance, confidence, recency,
 usage feedback and pinning.
 
-The default hash embedding remains an offline deterministic fallback. A real
-OpenAI-compatible embedding endpoint can be configured when stronger semantic
-similarity is required.
+The deterministic hash embedding remains a safe fallback. Dragon Tory now also
+ships FastEmbed runtime support for local multilingual semantic vectors. Semantic
+mode is selected with TOORU_MEMORY_EMBEDDING_PROVIDER=fastembed; the compact
+multilingual MiniLM model is the default semantic model when no model name is
+provided. OpenAI-compatible embedding endpoints remain supported.
+
+## Grey Matter / metacognition
+
+Cognitive Core V adds a higher layer over Memory Engine without bypassing its
+scope isolation or Guardian.
+
+- hierarchical summaries use PART_OF links;
+- entity aliases resolve alternate names to canonical ENTITY memory;
+- causal chains use CAUSES and REQUIRES;
+- uncertainty combines trust, conflicts and missing evidence;
+- goal/task state uses PART_OF and DEPENDS_ON;
+- ordinary recall performs typed two-hop graph expansion;
+- explicit graph exploration supports up to six hops;
+- source reliability is learned separately from retrieval helpfulness;
+- explicit user corrections create LESSON memory;
+- repeated verified procedures become SKILL candidates;
+- SKILL candidates are high-impact and require Guardian review;
+- the maintenance daemon runs a non-duplicating Grey Matter sleep cycle.
 
 ## Truth Engine
 
@@ -99,7 +119,7 @@ GET /v1/memory/maintenance/latest
 ## Memory classes
 
 Durable types include fact, preference, decision, task, event, episode, goal,
-entity, note, instruction, relationship and summary.
+entity, note, instruction, relationship, summary, skill and lesson.
 
 
 ## AI Context Builder
