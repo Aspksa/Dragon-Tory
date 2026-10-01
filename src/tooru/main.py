@@ -72,6 +72,14 @@ async def lifespan(app: FastAPI):
                 api_key=settings.deepseek_api_key,
                 base_url=settings.deepseek_base_url,
                 model=settings.deepseek_model,
+                timeout_seconds=settings.deepseek_timeout_seconds,
+                max_attempts=settings.deepseek_max_attempts,
+                retry_base_seconds=settings.deepseek_retry_base_seconds,
+                retry_max_seconds=settings.deepseek_retry_max_seconds,
+                circuit_breaker_failures=settings.deepseek_circuit_breaker_failures,
+                circuit_breaker_cooldown_seconds=(
+                    settings.deepseek_circuit_breaker_cooldown_seconds
+                ),
             )
         )
 
@@ -135,6 +143,8 @@ async def lifespan(app: FastAPI):
         "configured": bool(settings.deepseek_api_key),
         "base_url": settings.deepseek_base_url,
         "model": settings.deepseek_model,
+        "timeout_seconds": settings.deepseek_timeout_seconds,
+        "max_attempts": settings.deepseek_max_attempts,
     }
     app.state.memory_intelligence = intelligence
     app.state.memory_guardian = guardian
