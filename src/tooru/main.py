@@ -200,6 +200,7 @@ async def lifespan(app: FastAPI):
         router=ai_router,
         guardian=guardian,
         cloud_store=cloud_store,
+        grey_matter=grey_matter,
     )
 
     if settings.memory_automation_enabled:
