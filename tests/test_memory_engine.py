@@ -8,6 +8,7 @@ from tooru.memory.models import (
     MemoryConsolidateRequest,
     MemoryContextRequest,
     MemoryCreate,
+    MemoryEvidenceCreate,
     MemoryExtractRequest,
     MemoryFeedback,
     MemoryKind,
@@ -295,3 +296,127 @@ def test_conversation_extraction_and_consolidation(tmp_path: Path) -> None:
     assert consolidated.memory is not None
     assert consolidated.memory.kind is MemoryKind.SUMMARY
     assert consolidated.source_ids
+
+def test_temporal_same_key_records_do_not_false_conflict(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    first = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.FACT,
+            key="garage.vehicle7.driver",
+            content="Водитель автомобиля №7 — Иванов.",
+            valid_from="2026-01-01T00:00:00+00:00",
+            valid_to="2026-09-30T23:59:59+00:00",
+        )
+    )
+    second = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.FACT,
+            key="garage.vehicle7.driver",
+            content="Водитель автомобиля №7 — Петров.",
+            valid_from="2026-10-01T00:00:00+00:00",
+        )
+    )
+
+    assert engine.get(first.id).status is MemoryStatus.ACTIVE
+    successor = engine.links_for(
+        second.id,
+        MemoryLinkType.TEMPORAL_SUCCESSOR,
+    )
+    conflicts = engine.links_for(second.id, MemoryLinkType.CONTRADICTS)
+    assert any(link.target_id == first.id for link in successor)
+    assert conflicts == []
+
+
+def test_truth_assessment_uses_evidence_support_and_conflicts(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    fact = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.FACT,
+            content="Страховой полис автомобиля действует до декабря.",
+            confidence=0.8,
+        )
+    )
+    supporting = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.NOTE,
+            content="В карточке страхования указана дата окончания полиса.",
+        )
+    )
+    engine.add_evidence(
+        fact.id,
+        MemoryEvidenceCreate(
+            source_type="document",
+            source_ref="document:insurance-1",
+            document_id="insurance-1",
+            page=1,
+            excerpt="Срок действия до 31.12.2026",
+            confidence=0.95,
+        ),
+    )
+    engine.store.add_link(
+        fact.id,
+        supporting.id,
+        MemoryLinkType.SUPPORTS,
+        0.9,
+    )
+
+    assessment = engine.truth(fact.id)
+
+    assert assessment.evidence_count == 1
+    assert assessment.support_count == 1
+    assert assessment.conflict_count == 0
+    assert assessment.evidence_score == 0.95
+    assert assessment.trust_score > 0.7
+
+
+def test_graph_assisted_recall_brings_linked_context(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    vehicle = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.ENTITY,
+            content="Subaru Forester, гаражный номер 7.",
+            importance=0.9,
+        )
+    )
+    insurance = engine.add(
+        MemoryCreate(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            kind=MemoryKind.FACT,
+            content="Страховка заканчивается 15 октября.",
+            importance=0.5,
+        )
+    )
+    engine.store.add_link(
+        vehicle.id,
+        insurance.id,
+        MemoryLinkType.SUPPORTS,
+        1.0,
+    )
+
+    hits = engine.recall(
+        MemorySearch(
+            scope=MemoryScope.PROJECT,
+            project_id="dragon-tory",
+            query="Subaru Forester",
+            limit=10,
+        ),
+        track_usage=False,
+    )
+
+    by_id = {hit.memory.id: hit for hit in hits}
+    assert insurance.id in by_id
+    assert by_id[insurance.id].graph_score > 0
+
