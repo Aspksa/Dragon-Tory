@@ -34,6 +34,7 @@ from tooru.memory.models import (
     MemorySyncResponse,
     MemoryUpdate,
     SourceReliability,
+    TruthFeedbackEvent,
 )
 
 
@@ -57,6 +58,7 @@ class SQLiteMemoryStore:
         "memory_guardian_queue",
         "memory_source_reliability",
         "memory_entity_aliases",
+        "memory_truth_feedback",
     }
 
     SELECT_COLUMNS = """
@@ -231,6 +233,25 @@ class SQLiteMemoryStore:
                 ON memory_entity_aliases(
                     owner_id, scope, project_id, normalized_alias
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_truth_feedback (
+                    id TEXT PRIMARY KEY,
+                    memory_id TEXT NOT NULL,
+                    confirmed INTEGER NOT NULL,
+                    predicted_trust REAL NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(memory_id)
+                        REFERENCES memory_items(id) ON DELETE CASCADE
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_memory_truth_feedback_memory
+                ON memory_truth_feedback(memory_id, created_at DESC)
                 """
             )
             conn.execute(
@@ -1274,6 +1295,80 @@ class SQLiteMemoryStore:
             raise RuntimeError("failed to persist source reliability")
         return result
 
+    def add_truth_feedback(
+        self,
+        memory_id: str,
+        *,
+        owner_id: str,
+        confirmed: bool,
+        predicted_trust: float,
+    ) -> TruthFeedbackEvent:
+        self.get(memory_id, owner_id)
+        event = TruthFeedbackEvent(
+            id=str(uuid4()),
+            memory_id=memory_id,
+            confirmed=confirmed,
+            predicted_trust=max(0.0, min(1.0, predicted_trust)),
+            created_at=self._now(),
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO memory_truth_feedback (
+                    id, memory_id, confirmed, predicted_trust, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    event.id,
+                    event.memory_id,
+                    int(event.confirmed),
+                    event.predicted_trust,
+                    event.created_at,
+                ),
+            )
+        return event
+
+    def truth_feedback_events(
+        self,
+        *,
+        owner_id: str,
+        scope: MemoryScope,
+        project_id: str | None,
+        limit: int = 5000,
+    ) -> list[TruthFeedbackEvent]:
+        params: list[object] = [owner_id, scope.value]
+        project_clause = "m.project_id IS NULL"
+        if scope is MemoryScope.PROJECT:
+            project_clause = "m.project_id = ?"
+            params.append(project_id)
+        params.append(max(1, min(limit, 50_000)))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT f.id, f.memory_id, f.confirmed,
+                       f.predicted_trust, f.created_at
+                FROM memory_truth_feedback f
+                JOIN memory_items m ON m.id = f.memory_id
+                WHERE m.owner_id = ?
+                  AND m.scope = ?
+                  AND {project_clause}
+                  AND m.deleted_at IS NULL
+                ORDER BY f.created_at DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [
+            TruthFeedbackEvent(
+                id=row["id"],
+                memory_id=row["memory_id"],
+                confirmed=bool(row["confirmed"]),
+                predicted_trust=float(row["predicted_trust"]),
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
     def add_entity_alias(
         self,
         *,
@@ -2082,6 +2177,8 @@ class SQLiteMemoryStore:
             "invalid_entity_alias_scope": 0,
             "entity_aliases": 0,
             "source_reliability_entries": 0,
+            "truth_feedback_events": 0,
+            "orphan_truth_feedback": 0,
             "active_memories": 0,
             "personal_memories": 0,
             "project_memories": 0,
@@ -2251,6 +2348,27 @@ class SQLiteMemoryStore:
                         or 0
                     )
 
+                if "memory_truth_feedback" in tables:
+                    report["truth_feedback_events"] = int(
+                        conn.execute(
+                            "SELECT COUNT(*) FROM memory_truth_feedback"
+                        ).fetchone()[0]
+                        or 0
+                    )
+                    if "memory_items" in tables:
+                        report["orphan_truth_feedback"] = int(
+                            conn.execute(
+                                """
+                                SELECT COUNT(*)
+                                FROM memory_truth_feedback f
+                                LEFT JOIN memory_items m
+                                  ON m.id = f.memory_id
+                                WHERE m.id IS NULL
+                                """
+                            ).fetchone()[0]
+                            or 0
+                        )
+
                 if "memory_fts" in tables:
                     report["fts_available"] = True
                     report["fts_entries"] = int(
@@ -2300,6 +2418,7 @@ class SQLiteMemoryStore:
                 or report["orphan_evidence"] > 0
                 or report["orphan_entity_aliases"] > 0
                 or report["invalid_entity_alias_scope"] > 0
+                or report["orphan_truth_feedback"] > 0
                 or report["foreign_key_errors"] > 0
                 or (
                     deep
