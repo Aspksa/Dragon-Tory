@@ -1018,11 +1018,12 @@ class SQLiteMemoryStore:
         seed_ids: list[str],
         *,
         limit: int = 100,
+        relations: set[MemoryLinkType] | None = None,
     ) -> list[tuple[MemoryItem, float]]:
         if not seed_ids:
             return []
 
-        allowed_relations = {
+        default_relations = {
             MemoryLinkType.RELATED.value,
             MemoryLinkType.SUPPORTS.value,
             MemoryLinkType.SUMMARIZES.value,
@@ -1036,6 +1037,11 @@ class SQLiteMemoryStore:
             MemoryLinkType.DERIVED_FROM.value,
             MemoryLinkType.REQUIRES.value,
         }
+        allowed_relations = (
+            {relation.value for relation in relations}
+            if relations
+            else default_relations
+        )
         placeholders = ",".join("?" for _ in seed_ids)
         relation_placeholders = ",".join("?" for _ in allowed_relations)
         params: list[object] = [
