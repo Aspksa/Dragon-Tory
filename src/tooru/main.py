@@ -20,6 +20,7 @@ from tooru.api.update import router as update_router
 from tooru.chat.pipeline import ChatPipeline
 from tooru.chat.store import ChatStore
 from tooru.cloud.store import CloudStore
+from tooru.cloud.vault import ToryVault
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
@@ -47,7 +48,12 @@ async def lifespan(app: FastAPI):
     chat_store = ChatStore(settings.chat_db_path)
     chat_store.initialize()
 
-    cloud_store = CloudStore(settings.cloud_dir, settings.cloud_db_path)
+    cloud_vault = ToryVault(settings.cloud_dir / "vault.json")
+    cloud_store = CloudStore(
+        settings.cloud_dir,
+        settings.cloud_db_path,
+        vault=cloud_vault,
+    )
     cloud_store.initialize()
 
     ai_router = AIRouter()
@@ -112,6 +118,7 @@ async def lifespan(app: FastAPI):
     app.state.memory = memory
     app.state.chat_store = chat_store
     app.state.cloud_store = cloud_store
+    app.state.cloud_vault = cloud_vault
     app.state.chat_tasks = {}
     app.state.ai_router = ai_router
     app.state.deepseek_config = {

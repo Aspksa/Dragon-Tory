@@ -142,15 +142,15 @@ def test_confidentiality_and_integrity() -> None:
         )
         assert blocked.status_code == 422
 
-        protected = client.patch(
+        confidential = client.patch(
             f"/v1/cloud/files/{document_id}/passport",
             json={
-                "confidentiality": "highly_protected",
-                "ai_access": "denied",
+                "confidentiality": "confidential",
+                "ai_access": "read",
             },
         )
-        assert protected.status_code == 200
-        assert protected.json()["allowed_ai_access"] == ["denied"]
+        assert confidential.status_code == 200
+        assert "answer" not in confidential.json()["allowed_ai_access"]
 
         verified = client.post(
             f"/v1/cloud/files/{document_id}/verify"

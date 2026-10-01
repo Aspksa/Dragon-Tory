@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from tooru.cloud.vault import ToryVault
+
 AI_ACCESS_LEVELS = {
     "denied",
     "search",
@@ -39,9 +41,16 @@ def utc_now() -> str:
 
 
 class CloudStore:
-    def __init__(self, root_dir: Path, db_path: Path) -> None:
+    def __init__(
+        self,
+        root_dir: Path,
+        db_path: Path,
+        *,
+        vault: ToryVault | None = None,
+    ) -> None:
         self.root_dir = Path(root_dir)
         self.db_path = Path(db_path)
+        self.vault = vault
         self.files_dir = self.root_dir / "files"
         self.trash_dir = self.root_dir / "trash"
         self.versions_dir = self.root_dir / "versions"
@@ -104,6 +113,12 @@ class CloudStore:
             )
             self._ensure_column(db, "documents", "last_integrity_at", "TEXT")
             self._ensure_column(db, "documents", "trashed_at", "TEXT")
+            self._ensure_column(
+                db,
+                "documents",
+                "encrypted",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
 
             db.execute(
                 """
@@ -222,6 +237,10 @@ class CloudStore:
         item = dict(row)
         item["trashed"] = bool(item["trashed"])
         item["favorite"] = bool(item.get("favorite", 0))
+        item["encrypted"] = bool(item.get("encrypted", 0))
+        item["encryption_status"] = (
+            "AES-256-GCM" if item["encrypted"] else "не зашифрован"
+        )
         try:
             item["tags"] = json.loads(item.get("tags_json") or "[]")
         except json.JSONDecodeError:
@@ -599,6 +618,57 @@ class CloudStore:
             )
         return self.get(document_id)
 
+    def _document_storage_paths(
+        self,
+        document_id: str,
+    ) -> list[Path]:
+        item = self.get(document_id, include_trashed=True)
+        paths: list[Path] = []
+        current_base = self.trash_dir if item["trashed"] else self.files_dir
+        current = current_base / item["stored_name"]
+        if current.is_file():
+            paths.append(current)
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT storage_ref
+                FROM document_versions
+                WHERE document_id = ?
+                """,
+                (document_id,),
+            ).fetchall()
+        for row in rows:
+            path = self.root_dir / row["storage_ref"]
+            if path.is_file() and path not in paths:
+                paths.append(path)
+        return paths
+
+    def _set_document_encryption(
+        self,
+        document_id: str,
+        *,
+        enabled: bool,
+    ) -> None:
+        if self.vault is None:
+            raise RuntimeError("Сейф Тори недоступен.")
+        aad = document_id.encode("utf-8")
+        for path in self._document_storage_paths(document_id):
+            if enabled:
+                self.vault.encrypt_file(path, aad=aad)
+            else:
+                self.vault.decrypt_file(path, aad=aad)
+        with self._connect() as db:
+            db.execute(
+                "UPDATE documents SET encrypted = ? WHERE id = ?",
+                (int(enabled), document_id),
+            )
+            self._log(
+                db,
+                "encryption_enabled" if enabled else "encryption_disabled",
+                document_id=document_id,
+                details="AES-256-GCM" if enabled else "plaintext",
+            )
+
     def update_passport(
         self,
         document_id: str,
@@ -634,6 +704,12 @@ class CloudStore:
         elif not next_project:
             raise ValueError("Для связи с проектом требуется project_id.")
 
+        wants_encryption = next_confidentiality == "highly_protected"
+        if wants_encryption and not current["encrypted"]:
+            self._set_document_encryption(document_id, enabled=True)
+        elif not wants_encryption and current["encrypted"]:
+            self._set_document_encryption(document_id, enabled=False)
+
         if next_ai_access == "denied":
             index_status = "blocked"
         elif (
@@ -662,6 +738,11 @@ class CloudStore:
                     document_id,
                 ),
             )
+            if next_ai_access == "denied":
+                db.execute(
+                    "DELETE FROM document_chunks WHERE document_id = ?",
+                    (document_id,),
+                )
             self._log(
                 db,
                 "passport_updated",
@@ -672,6 +753,37 @@ class CloudStore:
                 ),
             )
         return self.get(document_id)
+
+    def materialize_plaintext(
+        self,
+        document_id: str,
+        *,
+        include_trashed: bool = False,
+    ) -> tuple[Path, Path | None]:
+        item = self.get(
+            document_id,
+            include_trashed=include_trashed,
+        )
+        source = self.content_path(
+            document_id,
+            include_trashed=include_trashed,
+        )
+        if not item["encrypted"]:
+            return source, None
+        if self.vault is None:
+            raise PermissionError("Сейф Тори недоступен.")
+        destination = self.incoming_dir / (
+            f"{uuid4().hex}{Path(item['name']).suffix}.plain"
+        )
+        try:
+            self.vault.materialize(
+                source,
+                destination,
+                aad=document_id.encode("utf-8"),
+            )
+        except RuntimeError as exc:
+            raise PermissionError(str(exc)) from exc
+        return destination, destination
 
     def content_path(
         self,
@@ -688,13 +800,17 @@ class CloudStore:
 
     def verify_integrity(self, document_id: str) -> dict[str, Any]:
         item = self.get(document_id)
-        path = self.content_path(document_id)
+        path, cleanup = self.materialize_plaintext(document_id)
         digest = hashlib.sha256()
         size_bytes = 0
-        with path.open("rb") as source:
-            for chunk in iter(lambda: source.read(1024 * 1024), b""):
-                size_bytes += len(chunk)
-                digest.update(chunk)
+        try:
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    size_bytes += len(chunk)
+                    digest.update(chunk)
+        finally:
+            if cleanup is not None:
+                cleanup.unlink(missing_ok=True)
 
         actual_sha256 = digest.hexdigest()
         ok = (
@@ -763,6 +879,17 @@ class CloudStore:
         new_version = int(current["version"]) + 1
         destination = self.files_dir / current["stored_name"]
         now = utc_now()
+
+        if current["encrypted"]:
+            if self.vault is None:
+                raise PermissionError("Сейф Тори недоступен.")
+            try:
+                self.vault.encrypt_file(
+                    temp_path,
+                    aad=document_id.encode("utf-8"),
+                )
+            except RuntimeError as exc:
+                raise PermissionError(str(exc)) from exc
 
         with self._connect() as db:
             self._archive_current(db, current)

@@ -7,6 +7,7 @@ from urllib.parse import unquote
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi.background import BackgroundTask
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -49,6 +50,10 @@ class AskDocumentRequest(BaseModel):
     question: str = Field(min_length=2, max_length=4_000)
 
 
+class VaultPassphrase(BaseModel):
+    passphrase: str = Field(min_length=12, max_length=1_024)
+
+
 class DocumentUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     folder_id: str | None = Field(default=None, max_length=128)
@@ -56,6 +61,19 @@ class DocumentUpdate(BaseModel):
     favorite: bool | None = None
     description: str | None = Field(default=None, max_length=5_000)
     tags: list[str] | None = Field(default=None, max_length=50)
+
+
+def _require_local(request: Request) -> None:
+    client = request.client.host if request.client else ""
+    if client not in {"127.0.0.1", "::1", "localhost", "testclient"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Сейф Тори можно разблокировать только локально.",
+        )
+
+
+def _cleanup_temp(path: Path) -> None:
+    path.unlink(missing_ok=True)
 
 
 def _safe_filename(value: str) -> str:
@@ -104,6 +122,41 @@ async def _receive_file(
     except Exception:
         temp.unlink(missing_ok=True)
         raise
+
+
+@router.get("/vault/status")
+def vault_status(request: Request) -> dict:
+    return request.app.state.cloud_vault.status()
+
+
+@router.post("/vault/setup")
+def vault_setup(payload: VaultPassphrase, request: Request) -> dict:
+    _require_local(request)
+    try:
+        return request.app.state.cloud_vault.setup(payload.passphrase)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/vault/unlock")
+def vault_unlock(payload: VaultPassphrase, request: Request) -> dict:
+    _require_local(request)
+    try:
+        return request.app.state.cloud_vault.unlock(payload.passphrase)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/vault/lock")
+def vault_lock(request: Request) -> dict:
+    _require_local(request)
+    return request.app.state.cloud_vault.lock()
 
 
 @router.get("/files")
@@ -258,18 +311,27 @@ def preview_file(document_id: str, request: Request) -> dict:
     store = request.app.state.cloud_store
     try:
         item = store.get(document_id)
-        path = store.content_path(document_id)
-        preview = preview_document(
-            path,
-            name=item["name"],
-            content_type=item["content_type"],
-        )
+        path, cleanup = store.materialize_plaintext(document_id)
+        try:
+            preview = preview_document(
+                path,
+                name=item["name"],
+                content_type=item["content_type"],
+            )
+        finally:
+            if cleanup is not None:
+                cleanup.unlink(missing_ok=True)
         return {
             "document_id": document_id,
             "name": item["name"],
             "version": item["version"],
             **preview,
         }
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=str(exc),
+        ) from exc
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -295,12 +357,16 @@ def index_file(document_id: str, request: Request) -> dict:
                     "в цифровом паспорте."
                 ),
             )
-        path = store.content_path(document_id)
-        extracted = extract_document(
-            path,
-            name=item["name"],
-            content_type=item["content_type"],
-        )
+        path, cleanup = store.materialize_plaintext(document_id)
+        try:
+            extracted = extract_document(
+                path,
+                name=item["name"],
+                content_type=item["content_type"],
+            )
+        finally:
+            if cleanup is not None:
+                cleanup.unlink(missing_ok=True)
         chunks = [
             {
                 "label": chunk.label,
@@ -338,7 +404,7 @@ def index_file(document_id: str, request: Request) -> dict:
         ) from exc
     except PermissionError as exc:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_423_LOCKED,
             detail=str(exc),
         ) from exc
 
@@ -477,6 +543,11 @@ def update_passport(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+    except (PermissionError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/files/{document_id}/versions")
@@ -526,6 +597,11 @@ async def add_version(
             size_bytes=size_bytes,
             sha256=sha256,
         )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=str(exc),
+        ) from exc
     finally:
         temp.unlink(missing_ok=True)
 
@@ -570,6 +646,11 @@ def document_activity(document_id: str, request: Request) -> dict:
 def verify_file(document_id: str, request: Request) -> dict:
     try:
         return request.app.state.cloud_store.verify_integrity(document_id)
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=str(exc),
+        ) from exc
     except (KeyError, FileNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -582,16 +663,27 @@ def download_file(document_id: str, request: Request) -> FileResponse:
     store = request.app.state.cloud_store
     try:
         item = store.get(document_id)
-        path = store.content_path(document_id)
+        path, cleanup = store.materialize_plaintext(document_id)
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=str(exc),
+        ) from exc
     except (KeyError, FileNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Файл документа не найден.",
         ) from exc
+    background = (
+        BackgroundTask(_cleanup_temp, cleanup)
+        if cleanup is not None
+        else None
+    )
     return FileResponse(
         path,
         media_type=item["content_type"],
         filename=item["name"],
+        background=background,
     )
 
 

@@ -196,6 +196,7 @@
             <option value="size">По размеру</option>
             <option value="created">По дате создания</option>
           </select>
+          <button id="cloudVault" class="secondary">🔐 Сейф Тори</button>
           <button id="cloudContentSearch" class="secondary">⌕ По содержимому</button>
           <button id="cloudNewFolder" class="secondary">＋ Папка</button>
           <button id="cloudUploadButton" class="primary">＋ Загрузить</button>
@@ -359,6 +360,7 @@
           <div><div class="label">Создан</div><div id="passportCreated" class="passport-value">—</div></div>
           <div><div class="label">Изменён</div><div id="passportUpdated" class="passport-value">—</div></div>
           <div><div class="label">Хранение</div><div class="passport-value">Мой диск Тори</div></div>
+          <div><div class="label">Шифрование</div><div id="passportEncryption" class="passport-value">—</div></div>
           <div><div class="label">Источник</div><div id="passportSource" class="passport-value">—</div></div>
         </div>
 
@@ -428,6 +430,38 @@
         <div id="passportDetails" class="cloud-details" hidden></div>
       </div>
     </div>
+
+    <div id="vaultModal" class="passport-backdrop" hidden>
+      <div class="passport-panel" role="dialog" aria-modal="true" aria-labelledby="vaultTitle">
+        <div class="passport-head">
+          <div>
+            <h3 id="vaultTitle">🔐 Сейф Тори</h3>
+            <div class="muted">Шифрование особо защищённых документов</div>
+          </div>
+          <button id="vaultClose" class="icon-btn" title="Закрыть">✕</button>
+        </div>
+        <div class="cloud-note">
+          Используется AES-256-GCM. Парольная фраза не сохраняется на диске:
+          из неё выводится ключ, который находится только в памяти до блокировки
+          или перезапуска приложения.
+        </div>
+        <div class="spacer"></div>
+        <div class="field">
+          <label>Парольная фраза Сейфа Тори</label>
+          <input id="vaultPassphrase" type="password" autocomplete="off" placeholder="Не менее 12 символов">
+        </div>
+        <div class="row">
+          <button id="vaultSetup" class="primary">Настроить сейф</button>
+          <button id="vaultUnlock" class="primary">Разблокировать</button>
+          <button id="vaultLock" class="secondary">Заблокировать</button>
+        </div>
+        <div id="vaultStatus" class="statusbar">Проверка…</div>
+        <div class="cloud-note">
+          Если парольная фраза потеряна, расшифровать защищённые документы
+          невозможно. Dragon Tory намеренно не хранит её и не может восстановить.
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -459,7 +493,7 @@ let draggedCloudDocument=null;
 const aiAccessNames={denied:"ИИ запрещён",search:"Поиск по паспорту",read:"Чтение",answer:"Для ответов",memory:"Ответы + память",full:"Полный анализ"};
 const indexNames={blocked:"Заблокирован",not_indexed:"Не индексирован",needs_indexing:"Требуется индексация",ready:"Готов"};
 const confidentialityNames={ordinary:"Обычный",personal:"Личный",confidential:"Конфиденциальный",highly_protected:"Особо защищённый"};
-const securityHints={ordinary:"Обычный: специальных ограничений нет; допуск ИИ задаёте вручную.",personal:"Личный: документ относится к вашему личному диску. ИИ по умолчанию запрещён, но вы можете разрешить его вручную.",confidential:"Конфиденциальный: запрещены ответы по содержимому, долговременная память и полный облачный анализ. Разрешены только запрет, поиск по паспорту и чтение.",highly_protected:"Особо защищённый: ИИ-доступ принудительно запрещён."};
+const securityHints={ordinary:"Обычный: специальных ограничений нет; допуск ИИ задаёте вручную.",personal:"Личный: документ относится к вашему личному диску. ИИ по умолчанию запрещён, но вы можете разрешить его вручную.",confidential:"Конфиденциальный: запрещены ответы по содержимому, долговременная память и полный облачный анализ. Разрешены только запрет, поиск по паспорту и чтение.",highly_protected:"Особо защищённый: ИИ-доступ принудительно запрещён, а файл шифруется AES-256-GCM. Для включения и открытия нужен разблокированный Сейф Тори."};
 function cloudIcon(name){
   const ext=(String(name).split(".").pop()||"").toLowerCase();
   if(["png","jpg","jpeg","gif","webp","svg"].includes(ext))return"🖼️";
@@ -594,7 +628,7 @@ async function openPassport(documentId){
     $("passportName").textContent=d.name;$("passportDocumentName").value=d.name;$("passportDescription").value=d.description||"";$("passportTags").value=(d.tags||[]).join(", ");$("passportFavorite").checked=!!d.favorite;
     $("passportId").textContent=d.id;$("passportVersion").textContent="v"+d.version;$("passportSize").textContent=fmtBytes(d.size_bytes);$("passportType").textContent=d.content_type||"—";$("passportSha").textContent=d.sha256;
     $("passportIndex").textContent=indexNames[d.ai_index_status]||d.ai_index_status;$("passportIntegrity").textContent=d.last_integrity_at?"Проверялся "+fmtChatDate(d.last_integrity_at):"Не проверялась";
-    $("passportCreated").textContent=fmtChatDate(d.created_at);$("passportUpdated").textContent=fmtChatDate(d.updated_at);$("passportSource").textContent=d.source||"—";
+    $("passportCreated").textContent=fmtChatDate(d.created_at);$("passportUpdated").textContent=fmtChatDate(d.updated_at);$("passportSource").textContent=d.source||"—";$("passportEncryption").textContent=d.encryption_status||"не зашифрован";
     $("passportAiAccess").value=d.ai_access;$("passportConfidentiality").value=d.confidentiality;$("passportScope").value=d.scope;applyConfidentialityPolicy();
     $("passportProject").value=d.project_id||"";$("passportProject").disabled=d.scope!=="project";
     $("passportDownload").href="/v1/cloud/files/"+encodeURIComponent(d.id)+"/content";
@@ -654,6 +688,29 @@ async function askPassportDocument(){
     box.append(q,answer,sources);$("passportStatus").textContent="Ответ сформирован по v"+d.version+" документа.";
   }catch(e){$("passportStatus").textContent="Тоору не может ответить: "+e.message}
 }
+async function loadVaultStatus(){
+  try{
+    const d=await api("/v1/cloud/vault/status");
+    $("vaultSetup").disabled=d.configured;
+    $("vaultUnlock").disabled=!d.configured||d.unlocked;
+    $("vaultLock").disabled=!d.unlocked;
+    $("vaultStatus").textContent=d.configured?(d.unlocked?"Сейф разблокирован · "+d.encryption:"Сейф настроен, но заблокирован."):"Сейф ещё не настроен.";
+    return d;
+  }catch(e){$("vaultStatus").textContent="Ошибка сейфа: "+e.message}
+}
+async function openVault(){
+  $("vaultModal").hidden=false;$("vaultPassphrase").value="";await loadVaultStatus();$("vaultPassphrase").focus();
+}
+function closeVault(){$("vaultModal").hidden=true;$("vaultPassphrase").value=""}
+async function setupVault(){
+  const passphrase=$("vaultPassphrase").value;if(passphrase.length<12){$("vaultStatus").textContent="Нужно не менее 12 символов.";return}
+  try{await api("/v1/cloud/vault/setup",{method:"POST",body:JSON.stringify({passphrase})});$("vaultPassphrase").value="";await loadVaultStatus()}catch(e){$("vaultStatus").textContent=e.message}
+}
+async function unlockVault(){
+  const passphrase=$("vaultPassphrase").value;if(passphrase.length<12){$("vaultStatus").textContent="Введите парольную фразу.";return}
+  try{await api("/v1/cloud/vault/unlock",{method:"POST",body:JSON.stringify({passphrase})});$("vaultPassphrase").value="";await loadVaultStatus()}catch(e){$("vaultStatus").textContent=e.message}
+}
+async function lockVault(){try{await api("/v1/cloud/vault/lock",{method:"POST"});await loadVaultStatus()}catch(e){$("vaultStatus").textContent=e.message}}
 async function searchCloudContent(){
   const query=prompt("Что найти внутри изученных документов?");if(!query||!query.trim())return;
   try{
@@ -684,7 +741,7 @@ async function trashPassport(){
   if(!activePassportId||!confirm("Переместить документ в корзину?"))return;
   try{await api("/v1/cloud/files/"+encodeURIComponent(activePassportId),{method:"DELETE"});closePassport();await loadCloud()}catch(e){$("passportStatus").textContent="Ошибка: "+e.message}
 }
-$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);$("cloudNewFolder").onclick=createCloudFolder;$("cloudContentSearch").onclick=searchCloudContent;
+$("cloudUploadButton").onclick=()=>$("cloudFileInput").click();$("cloudFileInput").onchange=e=>uploadCloudFiles(e.target.files);$("cloudNewFolder").onclick=createCloudFolder;$("cloudContentSearch").onclick=searchCloudContent;$("cloudVault").onclick=openVault;
 $("cloudRoot").onclick=()=>{cloudCurrentFolder=null;cloudFolderStack=[];cloudTrashMode=false;cloudFavoritesOnly=false;loadCloud()};
 $("cloudFavorites").onclick=()=>{cloudFavoritesOnly=!cloudFavoritesOnly;cloudTrashMode=false;loadCloud()};
 $("cloudTrash").onclick=()=>{cloudTrashMode=true;cloudFavoritesOnly=false;loadCloud()};$("cloudSort").onchange=loadCloud;
@@ -694,7 +751,7 @@ $("cloudDropZone").onclick=()=>$("cloudFileInput").click();$("cloudDropZone").on
 $("cloudDropZone").addEventListener("drop",e=>uploadCloudFiles(e.dataTransfer.files));$("cloudSearch").addEventListener("input",()=>{clearTimeout(cloudSearchTimer);cloudSearchTimer=setTimeout(loadCloud,250)});
 $("passportClose").onclick=closePassport;$("passportSave").onclick=savePassport;$("passportVerify").onclick=verifyPassportIntegrity;$("passportPreview").onclick=previewPassportDocument;$("passportIndexNow").onclick=indexPassportDocument;$("passportAsk").onclick=askPassportDocument;$("passportVersions").onclick=showPassportVersions;$("passportActivity").onclick=showPassportActivity;$("passportNewVersion").onclick=()=>$("passportVersionInput").click();$("passportVersionInput").onchange=e=>{const file=e.target.files[0];e.target.value="";uploadNewPassportVersion(file)};$("passportTrash").onclick=trashPassport;
 $("passportConfidentiality").onchange=applyConfidentialityPolicy;$("passportScope").onchange=()=>{$("passportProject").disabled=$("passportScope").value!=="project";if($("passportScope").value!=="project")$("passportProject").value=""};
-$("passportModal").addEventListener("click",e=>{if(e.target===$("passportModal"))closePassport()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("passportModal").hidden)closePassport()});
+$("passportModal").addEventListener("click",e=>{if(e.target===$("passportModal"))closePassport()});$("vaultClose").onclick=closeVault;$("vaultSetup").onclick=setupVault;$("vaultUnlock").onclick=unlockVault;$("vaultLock").onclick=lockVault;$("vaultModal").addEventListener("click",e=>{if(e.target===$("vaultModal"))closeVault()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("passportModal").hidden)closePassport();if(e.key==="Escape"&&!$("vaultModal").hidden)closeVault()});
 
 function fmtChatDate(value){if(!value)return"";const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleString()}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]))}
