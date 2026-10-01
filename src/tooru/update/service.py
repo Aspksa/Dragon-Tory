@@ -57,6 +57,12 @@ class UpdateService:
         self.updater_script = (
             self.project_root / "scripts" / "windows" / "update.ps1"
         )
+        self.launcher_script = (
+            self.project_root
+            / "scripts"
+            / "windows"
+            / "update-launcher.ps1"
+        )
 
     def status(self) -> dict[str, Any]:
         state = self._read_state()
@@ -207,6 +213,11 @@ class UpdateService:
         }
         self._write_state(state)
 
+        if not self.launcher_script.is_file():
+            raise UpdateError(
+                f"Не найден launcher updater: {self.launcher_script}"
+            )
+
         args = [
             self._powershell_executable(),
             "-NoLogo",
@@ -215,7 +226,7 @@ class UpdateService:
             "-ExecutionPolicy",
             "Bypass",
             "-File",
-            str(self.updater_script),
+            str(self.launcher_script),
             "-ProjectRoot",
             str(self.project_root),
             "-Repository",
@@ -224,37 +235,112 @@ class UpdateService:
             self.branch,
             "-ServerPid",
             str(os.getpid()),
+            "-UpdaterScript",
+            str(self.updater_script),
         ]
-        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
         self.launch_log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with self.launch_log_path.open("w", encoding="utf-8") as log:
-                log.write(
-                    "Dragon Tory: запуск системного Windows PowerShell updater.\n"
-                )
-                log.flush()
-                process = subprocess.Popen(
-                    args,
-                    cwd=self.project_root,
-                    stdin=subprocess.DEVNULL,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    creationflags=flags,
-                    close_fds=True,
-                )
-                time.sleep(1.0)
-                exit_code = process.poll()
-        except OSError as exc:
+            result = subprocess.run(
+                args,
+                cwd=self.project_root,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                creationflags=flags,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
             self._write_launch_failure(state, exc)
             raise UpdateError(str(exc)) from exc
 
-        if exit_code is not None:
-            current_after_exit = self._read_state()
-            phase = current_after_exit.get("phase")
-            if phase == "success":
-                return self.status()
+        launch_text = (
+            "Dragon Tory: запуск независимого Windows updater.\n"
+            f"Код launcher: {result.returncode}\n"
+            f"STDOUT: {result.stdout.strip()}\n"
+            f"STDERR: {result.stderr.strip()}\n"
+        )
+        self.launch_log_path.write_text(
+            launch_text,
+            encoding="utf-8",
+        )
+
+        if result.returncode != 0:
+            error = (
+                "Не удалось запустить независимый updater. "
+                + self._launch_log_tail()
+            )
+            failed = {
+                **state,
+                "phase": "failed",
+                "message": "Не удалось запустить процесс обновления.",
+                "error": error[:2000],
+                "progress_percent": 0,
+                "heartbeat_at": self._now(),
+            }
+            self._write_state(failed)
+            self._append_history_from_state(failed, success=False)
+            raise UpdateError(error)
+
+        match = re.search(r"(?m)^\s*(\d+)\s*$", result.stdout)
+        if not match:
+            error = (
+                "Launcher не вернул PID updater. "
+                + self._launch_log_tail()
+            )
+            failed = {
+                **state,
+                "phase": "failed",
+                "message": "Не удалось определить процесс обновления.",
+                "error": error[:2000],
+                "progress_percent": 0,
+                "heartbeat_at": self._now(),
+            }
+            self._write_state(failed)
+            self._append_history_from_state(failed, success=False)
+            raise UpdateError(error)
+
+        updater_pid = int(match.group(1))
+        time.sleep(0.5)
+        current_after_launch = self._read_state()
+        if current_after_launch.get("phase") not in self.RUNNING_PHASES:
+            current_after_launch = state
+
+        current_after_launch["updater_pid"] = updater_pid
+        current_after_launch["message"] = current_after_launch.get(
+            "message"
+        ) or "Процесс обновления запущен."
+        self._write_state(current_after_launch)
+
+        if not psutil.pid_exists(updater_pid):
+            latest = self._read_state()
+            if latest.get("phase") not in {
+                "success",
+                "failed",
+                "error",
+            }:
+                latest.update(
+                    {
+                        "phase": "failed",
+                        "message": "Updater завершился сразу после запуска.",
+                        "error": self._launch_log_tail(),
+                        "progress_percent": 0,
+                        "heartbeat_at": self._now(),
+                    }
+                )
+                self._write_state(latest)
+                self._append_history_from_state(
+                    latest,
+                    success=False,
+                )
+            raise UpdateError(
+                latest.get("error")
+                or "Updater завершился сразу после запуска."
+            )
+
+        return self.status()
 
             error = (
                 "PowerShell updater завершился до начала установки "
