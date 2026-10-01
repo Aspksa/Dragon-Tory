@@ -12,10 +12,8 @@ from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
 from tooru.api.memory import router as memory_router
-from tooru.api.settings import (
-    remove_legacy_claude_settings,
-    router as settings_router,
-)
+from tooru.api.settings import remove_legacy_claude_settings
+from tooru.api.settings import router as settings_router
 from tooru.api.update import router as update_router
 from tooru.chat.pipeline import ChatPipeline
 from tooru.core.config import get_settings
