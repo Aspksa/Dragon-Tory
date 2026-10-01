@@ -11,6 +11,8 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Центр диагностики" in response.text
     assert "Настройки" in response.text
     assert "Чат" in response.text
+    assert "Обновление" in response.text
+    assert 'id="installUpdate"' in response.text
 
 
 def test_diagnostics_status_is_available() -> None:
@@ -37,3 +39,13 @@ def test_chat_requires_configured_provider() -> None:
         )
 
     assert response.status_code == 503
+
+
+def test_update_status_endpoint_is_available() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/update/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["local_version"] == "00.00.03"
+    assert payload["repository"] == "Aspksa/Dragon-Tory"
