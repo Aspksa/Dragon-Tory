@@ -774,6 +774,8 @@ function formatEntitySummary(entities){
   if(entities.vin&&entities.vin.length)parts.push("VIN: "+entities.vin.join(", "));
   if(entities.references&&entities.references.length)parts.push("Номера: "+entities.references.join(", "));
   if(entities.dates&&entities.dates.length)parts.push("Даты: "+entities.dates.join(", "));
+  if(entities.work_dates&&entities.work_dates.length)parts.push("Даты работы: "+entities.work_dates.join(", "));
+  if(entities.work_date_conflict)parts.push("⚠ Конфликт дат работы: имя файла и тело документа расходятся.");
   if(entities.amounts&&entities.amounts.length)parts.push("Суммы: "+entities.amounts.slice(0,12).map(x=>x.value+" "+x.currency).join(", "));
   if(entities.emails&&entities.emails.length)parts.push("E-mail: "+entities.emails.join(", "));
   if(entities.iban&&entities.iban.length)parts.push("IBAN: "+entities.iban.join(", "));
@@ -1376,6 +1378,7 @@ function homeObsOperationLabel(value){
     document_selected:"Документ выбран",
     garage_record_changed:"Изменение гаража",
     weekend_work_changed:"Работа в выходной",
+    web_research:"Интернет-поиск",
     ai_contract:"ИИ-договор"
   }[value]||String(value||"операция").replaceAll("_"," "));
 }
