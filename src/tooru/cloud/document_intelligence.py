@@ -19,6 +19,7 @@ from tooru.cloud.intelligence import (
     UnsupportedDocumentError,
     extract_document,
 )
+from tooru.cloud.memo_organizer import ensure_service_memo_schema
 from tooru.cloud.store import CloudStore
 from tooru.observability.context import current_observation, observation_context
 
@@ -234,6 +235,7 @@ class DocumentIntelligence:
                 ON document_intelligence(kind, analyzed_at DESC)
                 """
             )
+            ensure_service_memo_schema(db)
 
     @staticmethod
     def _find_libreoffice() -> str | None:
