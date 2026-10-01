@@ -69,6 +69,21 @@
 
 Статус слоя: `GET /v1/memory/grey-matter/status`.
 
+### Adaptive Grey Matter 02.00.00
+
+Версия 00.00.35 добавляет адаптацию поверх Grey Matter:
+
+- автоматический выбор retrieval-стратегии;
+- historical `as_of` truth;
+- калибровку confidence по реальным подтверждениям;
+- кластеры противоречий;
+- обучаемые веса причинных связей и temporal causality;
+- Guardian-gated entity merge;
+- безопасное забывание и укрепление памяти;
+- benchmark 1k / 10k / 100k воспоминаний.
+
+Подробнее: `docs/ADAPTIVE_GREY_MATTER.md`.
+
 ## Document Intelligence v2
 
 Версия 00.00.33 усиливает локальное понимание документов:

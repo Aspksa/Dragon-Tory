@@ -39,6 +39,21 @@ mode is selected with TOORU_MEMORY_EMBEDDING_PROVIDER=fastembed; the compact
 multilingual MiniLM model is the default semantic model when no model name is
 provided. OpenAI-compatible embedding endpoints remain supported.
 
+## Adaptive Grey Matter
+
+Version 00.00.35 adds adaptive retrieval and calibration:
+
+- MemorySearch.strategy supports auto/balanced/lexical/semantic/graph/temporal/causal;
+- MemorySearch.as_of evaluates temporal truth at a historical point;
+- truth-feedback stores predicted trust for later Brier/ECE calibration;
+- contradiction clusters preserve active and superseded competing facts;
+- causal links validate event ordering and can learn link strength;
+- entity merge requires Guardian approval before SAME_ENTITY finalization;
+- background maintenance performs conservative reinforcement/decay/archive;
+- manual scale benchmark supports 1k, 10k and 100k corpora.
+
+See docs/ADAPTIVE_GREY_MATTER.md.
+
 ## Grey Matter / metacognition
 
 Cognitive Core V adds a higher layer over Memory Engine without bypassing its

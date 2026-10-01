@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
+from tooru.memory.adaptive import select_retrieval_strategy
 from tooru.memory.embedding import EmbeddingProvider, cosine_similarity
 from tooru.memory.extractor import HeuristicMemoryExtractor
 from tooru.memory.models import (
@@ -21,12 +22,14 @@ from tooru.memory.models import (
     MemoryLinkType,
     MemoryMaintenanceReport,
     MemoryRecallHit,
+    MemoryRetrievalStrategy,
     MemoryRevision,
     MemoryScope,
     MemorySearch,
     MemorySyncRequest,
     MemorySyncResponse,
     MemoryTruthAssessment,
+    MemoryTruthStatus,
     MemoryUpdate,
 )
 from tooru.memory.reranker import HybridReranker, lexical_similarity
@@ -157,13 +160,21 @@ class MemoryEngine:
         *,
         track_usage: bool = True,
     ) -> list[MemoryRecallHit]:
+        strategy = select_retrieval_strategy(request)
+        primary_limit = max(500, request.limit * 50)
+        lexical_limit = max(200, request.limit * 20)
+        if strategy is MemoryRetrievalStrategy.LEXICAL:
+            lexical_limit = max(500, request.limit * 50)
+        elif strategy is MemoryRetrievalStrategy.SEMANTIC:
+            primary_limit = max(800, request.limit * 80)
+
         primary_candidates = self.store.candidates(
             request,
-            limit=max(500, request.limit * 50),
+            limit=primary_limit,
         )
         lexical_candidates = self.store.lexical_candidates(
             request,
-            limit=max(200, request.limit * 20),
+            limit=lexical_limit,
         )
         lexical_rank = {
             item.id: 1.0 / rank
@@ -173,10 +184,12 @@ class MemoryEngine:
             item.id
             for item in [*lexical_candidates[:20], *primary_candidates[:20]]
         ]
+        graph_relations = self._graph_relations(strategy)
         graph_candidates = self.store.graph_candidates(
             request,
             seed_ids,
             limit=max(100, request.limit * 20),
+            relations=graph_relations,
         )
         graph_rank = {
             item.id: weight
@@ -219,6 +232,7 @@ class MemoryEngine:
                 cosine_similarity(query_vector, vectors.get(item.id, [])),
                 retrieval_score=lexical_rank.get(item.id, 0.0),
                 graph_score=graph_rank.get(item.id, 0.0),
+                strategy=strategy,
             )
             for item in candidates
         ]
@@ -226,8 +240,16 @@ class MemoryEngine:
 
         shortlist = hits[: max(100, request.limit * 10)]
         rescored: list[MemoryRecallHit] = []
+        temporal_priority: dict[str, int] = {}
+        as_of = self._parse_as_of(request.as_of)
         for hit in shortlist:
-            assessment = self.truth_engine.assess(hit.memory)
+            assessment = self.truth_engine.assess(
+                hit.memory,
+                at=as_of,
+            )
+            temporal_priority[hit.memory.id] = self._temporal_priority(
+                assessment.temporal_status
+            )
             rescored.append(
                 self.reranker.score(
                     request.query,
@@ -236,9 +258,19 @@ class MemoryEngine:
                     retrieval_score=hit.retrieval_score,
                     graph_score=hit.graph_score,
                     truth_score=assessment.trust_score,
+                    strategy=strategy,
                 )
             )
-        rescored.sort(key=lambda hit: hit.score, reverse=True)
+        if as_of is not None:
+            rescored.sort(
+                key=lambda hit: (
+                    temporal_priority.get(hit.memory.id, 0),
+                    hit.score,
+                ),
+                reverse=True,
+            )
+        else:
+            rescored.sort(key=lambda hit: hit.score, reverse=True)
         selected = rescored[: request.limit]
         if track_usage:
             self.store.touch_recall([hit.memory.id for hit in selected])
@@ -650,6 +682,58 @@ class MemoryEngine:
             rendered = rendered[: request.max_chars].rsplit("\n", 1)[0]
             rendered += "\n</tooru_memory>"
         return rendered, total
+
+    @staticmethod
+    def _temporal_priority(status: MemoryTruthStatus) -> int:
+        return {
+            MemoryTruthStatus.CURRENT: 4,
+            MemoryTruthStatus.UNDATED: 3,
+            MemoryTruthStatus.HISTORICAL: 2,
+            MemoryTruthStatus.FUTURE: 1,
+            MemoryTruthStatus.SUPERSEDED: 0,
+        }[status]
+
+    @staticmethod
+    def _graph_relations(
+        strategy: MemoryRetrievalStrategy,
+    ) -> set[MemoryLinkType] | None:
+        if strategy is MemoryRetrievalStrategy.CAUSAL:
+            return {
+                MemoryLinkType.CAUSES,
+                MemoryLinkType.REQUIRES,
+                MemoryLinkType.DEPENDS_ON,
+                MemoryLinkType.DERIVED_FROM,
+            }
+        if strategy is MemoryRetrievalStrategy.TEMPORAL:
+            return {
+                MemoryLinkType.TEMPORAL_SUCCESSOR,
+                MemoryLinkType.TEMPORAL_PREDECESSOR,
+                MemoryLinkType.SUPERSEDES,
+                MemoryLinkType.CORRECTS,
+                MemoryLinkType.SUPPORTS,
+            }
+        if strategy is MemoryRetrievalStrategy.GRAPH:
+            return {
+                MemoryLinkType.RELATED,
+                MemoryLinkType.SAME_ENTITY,
+                MemoryLinkType.PART_OF,
+                MemoryLinkType.DEPENDS_ON,
+                MemoryLinkType.SUPPORTS,
+                MemoryLinkType.SUMMARIZES,
+            }
+        return None
+
+    @staticmethod
+    def _parse_as_of(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            moment = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        return moment.astimezone(UTC)
 
     @staticmethod
     def _normalize(text: str) -> str:
