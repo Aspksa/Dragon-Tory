@@ -223,6 +223,38 @@ class ServiceMemoOrganizer:
         return ServiceMemoOrganizer._fact()
 
     @staticmethod
+    def _all_matches(
+        chunks,
+        pattern: re.Pattern[str],
+        *,
+        group: int = 1,
+        limit: int = 50,
+    ) -> list[dict[str, str]]:
+        result: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for chunk in chunks:
+            for match in pattern.finditer(chunk.text):
+                value = match.group(group).strip()
+                key = (value.casefold(), chunk.label.casefold())
+                if key in seen:
+                    continue
+                seen.add(key)
+                result.append(
+                    {
+                        "value": value,
+                        "source": chunk.label,
+                        "snippet": _snippet(
+                            chunk.text,
+                            match.start(),
+                            match.end(),
+                        ),
+                    }
+                )
+                if len(result) >= limit:
+                    return result
+        return result
+
+    @staticmethod
     def _lines_with(
         chunks,
         pattern: re.Pattern[str],
@@ -582,6 +614,7 @@ class ServiceMemoOrganizer:
         facts: dict[str, Any],
         name: str,
         document_year: str,
+        chunks,
     ) -> tuple[list[dict[str, Any]], list[str]]:
         discrepancies: list[dict[str, Any]] = []
         review: list[str] = []
@@ -601,6 +634,39 @@ class ServiceMemoOrganizer:
                 }
             )
 
+        date_candidates = ServiceMemoOrganizer._all_matches(
+            chunks,
+            _DOC_DATE_RE,
+        )
+        distinct_dates = sorted({item["value"] for item in date_candidates})
+        if len(distinct_dates) > 1:
+            discrepancies.append(
+                {
+                    "field": "document_date",
+                    "values": date_candidates,
+                    "reason": (
+                        "В разных фрагментах найдены разные значения даты "
+                        "самой служебной записки."
+                    ),
+                }
+            )
+
+        number_candidates = ServiceMemoOrganizer._all_matches(
+            chunks,
+            _NUMBER_RE,
+        )
+        distinct_numbers = sorted({item["value"] for item in number_candidates})
+        if len(distinct_numbers) > 1:
+            discrepancies.append(
+                {
+                    "field": "document_number",
+                    "values": number_candidates,
+                    "reason": (
+                        "В разных фрагментах найдены разные номера записки."
+                    ),
+                }
+            )
+
         amounts = facts["amounts_and_vat"]["value"]
         if isinstance(amounts, dict):
             unique = {
@@ -608,8 +674,36 @@ class ServiceMemoOrganizer:
                 for item in amounts.get("amounts", [])
             }
             if len(unique) > 1:
+                discrepancies.append(
+                    {
+                        "field": "amounts",
+                        "values": sorted(unique),
+                        "evidence": facts["amounts_and_vat"].get("evidence") or [],
+                        "reason": (
+                            "Найдено несколько разных сумм; сохранены все "
+                            "значения для проверки их назначения."
+                        ),
+                    }
+                )
                 review.append(
                     "В записке найдено несколько разных сумм; проверьте назначение каждой."
+                )
+
+        employees = facts["employees_and_roles"]["value"]
+        if isinstance(employees, list) and len(set(employees)) > 1:
+            review.append(
+                "В записке несколько сотрудников; файл сохранён один раз, связи оставлены в карточке."
+            )
+
+        vehicles = facts["vehicles"]["value"]
+        if isinstance(vehicles, dict):
+            vehicle_count = sum(
+                len(vehicles.get(key) or [])
+                for key in ("vin", "plate_numbers", "inventory_numbers")
+            )
+            if vehicle_count > 1:
+                review.append(
+                    "В записке несколько единиц техники/номеров; файл сохранён один раз, все связи сохранены."
                 )
 
         dates = facts["event_dates_and_periods"]["value"]
@@ -784,6 +878,7 @@ class ServiceMemoOrganizer:
             facts=facts,
             name=item["name"],
             document_year=year,
+            chunks=chunks,
         )
         if year_source == "filename":
             review.append("Год определён по названию файла.")
