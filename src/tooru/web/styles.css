@@ -228,3 +228,42 @@
     .home-dashboard.reduced-glow::before,.home-dashboard.reduced-glow::after{opacity:.025}
     @media(max-width:980px){.home-task-list{grid-template-columns:1fr 1fr}.home-brain{height:660px}}
     @media(max-width:680px){.home-task-list{grid-template-columns:1fr}.home-brain{height:560px;min-height:560px}}
+
+
+/* 00.00.25 · Live observability */
+.home-bento{grid-template-areas:"brain" "observability" "tasks"}
+.home-observability{grid-area:observability;padding:16px}
+.home-observability-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.home-obs-kpi{padding:10px 11px;border:1px solid #e3eaf2;border-radius:12px;background:rgba(249,251,253,.92)}
+.home-obs-kpi b{display:block;color:#263b59;font:800 14px Consolas,"Cascadia Code",monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-obs-kpi span{display:block;margin-top:4px;color:#8493a6;font-size:8.5px}
+.home-obs-current{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid #dfe8f2;border-radius:13px;background:linear-gradient(90deg,#f7fbff,#fbfdfd);margin-bottom:12px}
+.home-obs-current.running{border-color:#b9d6f4;background:linear-gradient(90deg,#f1f7ff,#f5fbfa)}
+.home-obs-current.error{border-color:#efc9c9;background:#fff8f8}
+.home-obs-current>div{min-width:0;display:grid;gap:2px}
+.home-obs-current b{color:#34465e;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-obs-current span{color:#8493a6;font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-obs-live-dot{width:8px;height:8px;border-radius:50%;background:#9aa8b9;flex:0 0 auto}
+.home-obs-current.running .home-obs-live-dot{background:#42ba92;box-shadow:0 0 0 4px rgba(66,186,146,.10),0 0 14px rgba(66,186,146,.35);animation:homeObsPulse 1.35s ease-in-out infinite}
+.home-obs-current.error .home-obs-live-dot{background:#d26060}
+.home-obs-section-head{display:flex;justify-content:space-between;gap:10px;margin:4px 0 8px;color:#78889d;font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+.home-trace-list{display:grid;gap:8px}
+.home-trace{border:1px solid #e2e9f1;border-radius:13px;background:rgba(250,252,254,.94);padding:10px 11px}
+.home-trace-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
+.home-trace-title{min-width:0;color:#43546b;font-size:10.5px;font-weight:780;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-trace-meta{color:#8b99aa;font:600 8.5px Consolas,"Cascadia Code",monospace;white-space:nowrap}
+.home-trace-flow{display:flex;align-items:stretch;gap:5px;overflow-x:auto;padding-bottom:2px}
+.home-trace-step{min-width:110px;max-width:180px;padding:7px 8px;border:1px solid #e3e9f0;border-radius:10px;background:#fff}
+.home-trace-step.success{border-color:#cfe7dd;background:#f8fcfa}
+.home-trace-step.running{border-color:#bfd8f3;background:#f5f9ff}
+.home-trace-step.blocked,.home-trace-step.pending{border-color:#ead7b7;background:#fffaf2}
+.home-trace-step.error{border-color:#efcccc;background:#fff8f8}
+.home-trace-step strong{display:block;color:#44566f;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-trace-step span{display:block;margin-top:3px;color:#8997a8;font-size:8px;line-height:1.35}
+.home-trace-arrow{display:grid;place-items:center;color:#a5b2c1;font-size:11px;flex:0 0 auto}
+.home-trace-empty{padding:12px;border:1px dashed #dbe4ee;border-radius:12px;color:#8a98a9;font-size:9.5px;text-align:center}
+.brain-node.active .node-ring{stroke:#3d83df;stroke-width:2}
+.brain-node.active .node-core{fill:#347ddd;filter:drop-shadow(0 0 13px rgba(52,125,221,.48));animation:homeObsPulse 1.35s ease-in-out infinite}
+@keyframes homeObsPulse{0%,100%{opacity:.72}50%{opacity:1}}
+@media(max-width:980px){.home-observability-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:680px){.home-observability-kpis{grid-template-columns:1fr 1fr}.home-trace-step{min-width:104px}}
