@@ -2,6 +2,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from typing import ClassVar
+from uuid import uuid4
 
 from tooru.memory.intelligence import MemoryIntelligence
 from tooru.memory.models import (
@@ -554,6 +555,7 @@ class MemoryGuardian:
             return
         try:
             context = current_observation()
+            trace_id = context.trace_id or uuid4().hex
             outcome = guardian_decision.outcome.value
             event_status = {
                 "applied": "success",
@@ -568,7 +570,7 @@ class MemoryGuardian:
                 operation=decision.action.value,
                 status=event_status,
                 module=context.module or "memory",
-                trace_id=context.trace_id,
+                trace_id=trace_id,
                 source_type=context.source_type,
                 source_id=context.source_id,
                 document_id=context.document_id,
@@ -593,7 +595,7 @@ class MemoryGuardian:
                     operation=decision.action.value,
                     status="success",
                     module=context.module or "memory",
-                    trace_id=context.trace_id,
+                    trace_id=trace_id,
                     source_type=context.source_type,
                     source_id=context.source_id,
                     document_id=context.document_id,
