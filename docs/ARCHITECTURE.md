@@ -18,7 +18,7 @@ and isolated when providers change.
 7. Web UI — desktop/browser interface.
 8. Mobile clients — planned clients using the same backend contracts.
 
-## Memory Engine v5.1 / Cognitive Core II
+## Memory Engine v5.2 / Cognitive Core III
 
 Capabilities:
 - hybrid semantic and lexical recall;
@@ -41,6 +41,9 @@ Additional cognitive layers:
 - Episodic Memory — successful task/result episodes.
 - Temporal Truth — observed/event/validity timestamps.
 - Provenance — evidence records linked to durable memory.
+- Truth Engine — explainable confidence/evidence/temporal/conflict assessment.
+- Graph Retrieval — one-hop expansion over typed memory relationships.
+- Temporal Conflict Resolver — distinguishes contradiction from succession in time.
 
 See docs/MEMORY_ENGINE.md.
 
