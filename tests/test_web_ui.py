@@ -47,7 +47,20 @@ def test_web_ui_contains_main_sections() -> None:
     assert ".passport-backdrop[hidden]{display:none!important}" in response.text
     assert 'id="passportVerify"' in response.text
     assert "Мой диск Тори · личный документ" in response.text
-    assert "Цифровой паспорт" in response.text
+    assert "Центр документа Тори" in response.text
+    assert 'data-module="contracts"' in response.text
+    assert 'data-module="invoices"' in response.text
+    assert 'data-module="offers"' in response.text
+    assert 'data-module="memos"' in response.text
+    assert 'id="documentModule"' in response.text
+    assert 'id="documentModuleUpload"' in response.text
+    assert 'id="documentModuleUploadQueue"' in response.text
+    assert 'id="cloudUploadQueue"' in response.text
+    assert 'id="passportSaveTop"' in response.text
+    assert 'data-passport-target="overview"' in response.text
+    assert 'data-passport-target="dna"' in response.text
+    assert 'data-passport-target="security"' in response.text
+    assert 'data-passport-target="actions"' in response.text
     assert "DeepSeek" in response.text
     assert 'id="newChat"' in response.text
     assert 'id="chatSearch"' in response.text
@@ -131,3 +144,12 @@ def test_chat_rejects_unknown_response_mode() -> None:
         )
 
     assert response.status_code == 422
+
+
+def test_document_modules_endpoint_is_available() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/cloud/intelligence/modules")
+
+    assert response.status_code == 200
+    modules = {item["id"] for item in response.json()["items"]}
+    assert modules == {"contracts", "invoices", "offers", "memos"}

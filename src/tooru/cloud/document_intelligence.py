@@ -66,6 +66,21 @@ _KIND_RULES = {
         "invoice",
         "payment due",
     ),
+    "оферта": (
+        "оферта",
+        "публичная оферта",
+        "коммерческое предложение",
+        "offer",
+        "proposal",
+    ),
+    "служебная записка": (
+        "служебная записка",
+        "докладная записка",
+        "memo",
+        "memorandum",
+        "кому:",
+        "от кого:",
+    ),
     "чек": ("кассовый чек", "receipt", "итого", "total"),
     "страхование": (
         "страхов",
@@ -585,6 +600,155 @@ class DocumentIntelligence:
         result = self._decode_row(row)
         result["current_version"] = int(document["version"]) == target
         return result
+
+    DOCUMENT_MODULES = {
+        "contracts": {
+            "title": "Договоры",
+            "icon": "📑",
+            "kinds": {"договор"},
+            "ai_focus": [
+                "стороны и реквизиты",
+                "срок действия и продление",
+                "обязательства и ответственность",
+                "суммы, платежи и штрафы",
+                "существенные изменения между версиями",
+            ],
+        },
+        "invoices": {
+            "title": "Счета",
+            "icon": "🧾",
+            "kinds": {"счёт"},
+            "ai_focus": [
+                "номер и поставщик",
+                "сумма и валюта",
+                "срок оплаты",
+                "связанный договор или заказ",
+                "дубликаты и повторные начисления",
+            ],
+        },
+        "offers": {
+            "title": "Оферты",
+            "icon": "🤝",
+            "kinds": {"оферта"},
+            "ai_focus": [
+                "предмет предложения",
+                "цена и условия",
+                "срок действия предложения",
+                "условия акцепта",
+                "отличия от договора и предыдущей оферты",
+            ],
+        },
+        "memos": {
+            "title": "Служебные записки",
+            "icon": "📝",
+            "kinds": {"служебная записка"},
+            "ai_focus": [
+                "автор и адресат",
+                "тема и поручение",
+                "срок исполнения",
+                "решения и следующие действия",
+                "связанные документы и проекты",
+            ],
+        },
+    }
+
+    def modules_overview(self) -> list[dict[str, Any]]:
+        result = []
+        for module_id, config in self.DOCUMENT_MODULES.items():
+            result.append(
+                {
+                    "id": module_id,
+                    "title": config["title"],
+                    "icon": config["icon"],
+                    "count": len(self.module_items(module_id, limit=10_000)),
+                    "ai_focus": config["ai_focus"],
+                }
+            )
+        return result
+
+    def module_items(
+        self,
+        module_id: str,
+        *,
+        limit: int = 300,
+    ) -> list[dict[str, Any]]:
+        config = self.DOCUMENT_MODULES.get(module_id)
+        if config is None:
+            raise KeyError(module_id)
+        kinds = {value.casefold() for value in config["kinds"]}
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT d.*, dna.kind AS dna_kind,
+                       i.kind AS intelligence_kind,
+                       i.confidence AS intelligence_confidence,
+                       i.deadlines_json,
+                       i.entities_json,
+                       i.analyzed_at
+                FROM documents d
+                LEFT JOIN document_dna dna ON dna.document_id = d.id
+                LEFT JOIN document_intelligence i
+                  ON i.document_id = d.id AND i.version = d.version
+                WHERE d.trashed = 0
+                ORDER BY d.updated_at DESC
+                """
+            ).fetchall()
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            effective_kind = (
+                str(row["dna_kind"] or row["intelligence_kind"] or "")
+                .strip()
+                .casefold()
+            )
+            if effective_kind not in kinds:
+                continue
+            document = self.cloud_store._row(row)
+            deadlines = (
+                json.loads(row["deadlines_json"])
+                if row["deadlines_json"]
+                else []
+            )
+            entities = (
+                json.loads(row["entities_json"])
+                if row["entities_json"]
+                else {}
+            )
+            document.update(
+                {
+                    "module_id": module_id,
+                    "module_title": config["title"],
+                    "effective_kind": effective_kind,
+                    "intelligence_confidence": row[
+                        "intelligence_confidence"
+                    ],
+                    "deadlines": deadlines,
+                    "entities": entities,
+                    "analyzed_at": row["analyzed_at"],
+                }
+            )
+            items.append(document)
+            if len(items) >= limit:
+                break
+        return items
+
+    def module_profile(self, module_id: str) -> dict[str, Any]:
+        config = self.DOCUMENT_MODULES.get(module_id)
+        if config is None:
+            raise KeyError(module_id)
+        items = self.module_items(module_id, limit=10_000)
+        with_deadlines = sum(bool(item["deadlines"]) for item in items)
+        analyzed = sum(item["analyzed_at"] is not None for item in items)
+        return {
+            "id": module_id,
+            "title": config["title"],
+            "icon": config["icon"],
+            "ai_focus": config["ai_focus"],
+            "count": len(items),
+            "analyzed": analyzed,
+            "with_deadlines": with_deadlines,
+            "needs_analysis": len(items) - analyzed,
+            "items": items,
+        }
 
     def smart_collections(self) -> list[dict[str, Any]]:
         with self._connect() as db:

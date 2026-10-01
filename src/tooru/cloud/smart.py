@@ -582,6 +582,8 @@ class SmartDrive:
         self,
         document_id: str,
         payload: dict[str, Any],
+        *,
+        actor: str = "user",
     ) -> dict[str, Any]:
         self.ensure_document(document_id)
         current = self.get_dna(document_id)
@@ -623,10 +625,102 @@ class SmartDrive:
         self.record_provenance(
             document_id,
             "dna_updated",
-            actor="user",
+            actor=actor,
             details=values,
         )
         return self.get_dna(document_id)
+
+    def apply_intelligence_defaults(
+        self,
+        document_id: str,
+        analysis: dict[str, Any],
+        *,
+        confidence_threshold: float = 0.75,
+    ) -> dict[str, Any]:
+        self.ensure_document(document_id)
+        confidence = float(analysis.get("confidence") or 0.0)
+        if confidence < confidence_threshold:
+            return {
+                "applied": False,
+                "reason": "low_confidence",
+                "confidence": confidence,
+                "fields": [],
+            }
+
+        dna = self.get_dna(document_id)
+        payload: dict[str, Any] = {}
+        fields: list[str] = []
+
+        if not str(dna.get("kind") or "").strip() and analysis.get("kind"):
+            payload["kind"] = str(analysis["kind"])
+            fields.append("kind")
+
+        entities = analysis.get("entities") or {}
+        references = entities.get("references") or []
+        if (
+            not str(dna.get("external_ref") or "").strip()
+            and len(references) == 1
+        ):
+            payload["external_ref"] = str(references[0])
+            fields.append("external_ref")
+
+        deadlines = analysis.get("deadlines") or []
+        if not dna.get("important_date") and len(deadlines) == 1:
+            payload["important_date"] = deadlines[0].get("date")
+            fields.append("important_date")
+
+        if payload:
+            self.update_dna(
+                document_id,
+                payload,
+                actor="tooru-local",
+            )
+
+        document = self.cloud_store.get(document_id)
+        suggested_tags = [
+            str(tag).strip()
+            for tag in analysis.get("suggested_tags") or []
+            if str(tag).strip()
+        ]
+        merged_tags = list(document.get("tags", []))
+        seen = {tag.casefold() for tag in merged_tags}
+        added_tags = []
+        for tag in suggested_tags:
+            if tag.casefold() in seen:
+                continue
+            seen.add(tag.casefold())
+            merged_tags.append(tag)
+            added_tags.append(tag)
+            if len(merged_tags) >= 50:
+                break
+
+        if added_tags:
+            self.cloud_store.update_document(
+                document_id,
+                tags=merged_tags,
+            )
+            fields.append("tags")
+
+        if fields:
+            self.record_provenance(
+                document_id,
+                "intelligence_safe_autofill",
+                actor="tooru-local",
+                details={
+                    "fields": fields,
+                    "confidence": confidence,
+                    "kind": analysis.get("kind"),
+                    "added_tags": added_tags,
+                    "manual_values_overwritten": False,
+                },
+            )
+        return {
+            "applied": bool(fields),
+            "reason": "applied" if fields else "nothing_empty",
+            "confidence": confidence,
+            "fields": fields,
+            "added_tags": added_tags,
+        }
 
     def record_provenance(
         self,

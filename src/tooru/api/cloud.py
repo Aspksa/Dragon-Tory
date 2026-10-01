@@ -785,6 +785,37 @@ def download_file(document_id: str, request: Request) -> FileResponse:
     )
 
 
+@router.get("/files/{document_id}/open")
+def open_file_inline(document_id: str, request: Request) -> FileResponse:
+    store = request.app.state.cloud_store
+    try:
+        item = store.get(document_id)
+        path, cleanup = store.materialize_plaintext(document_id)
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=str(exc),
+        ) from exc
+    except (KeyError, FileNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Файл документа не найден.",
+        ) from exc
+
+    background = (
+        BackgroundTask(_cleanup_temp, cleanup)
+        if cleanup is not None
+        else None
+    )
+    return FileResponse(
+        path,
+        media_type=item["content_type"],
+        filename=item["name"],
+        content_disposition_type="inline",
+        background=background,
+    )
+
+
 @router.delete("/files/{document_id}")
 def trash_file(document_id: str, request: Request) -> dict:
     try:

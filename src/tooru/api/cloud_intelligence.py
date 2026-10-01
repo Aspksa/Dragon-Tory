@@ -107,6 +107,11 @@ def analyze_document(document_id: str, request: Request) -> dict[str, Any]:
                 "ИИ-договор не разрешает локальный анализ содержимого."
             )
         result = _service(request).analyze(document_id)
+        automation = _smart(request).apply_intelligence_defaults(
+            document_id,
+            result,
+        )
+        result["automation"] = automation
         _smart(request).record_provenance(
             document_id,
             "document_intelligence_analyzed",
@@ -149,12 +154,17 @@ def analyze_pending(
                 )
                 continue
             result = service.analyze(document_id)
+            automation = smart.apply_intelligence_defaults(
+                document_id,
+                result,
+            )
             analyzed.append(
                 {
                     "document_id": document_id,
                     "name": document["name"],
                     "kind": result["kind"],
                     "ocr_used": result["ocr_used"],
+                    "automation": automation,
                 }
             )
             smart.record_provenance(
@@ -237,6 +247,19 @@ def apply_suggestions(
             "document_id": document_id,
             **result,
         }
+    except Exception as exc:
+        raise _error(exc) from exc
+
+
+@router.get("/modules")
+def document_modules(request: Request) -> dict[str, Any]:
+    return {"items": _service(request).modules_overview()}
+
+
+@router.get("/modules/{module_id}")
+def document_module(module_id: str, request: Request) -> dict[str, Any]:
+    try:
+        return _service(request).module_profile(module_id)
     except Exception as exc:
         raise _error(exc) from exc
 

@@ -162,3 +162,38 @@ def test_ocr_status_is_local_and_never_implies_external_ai(
     assert status["local_only"] is True
     assert status["external_ai_used"] is False
     assert isinstance(status["available"], bool)
+
+
+def test_specialized_document_modules_are_separate(tmp_path: Path) -> None:
+    store, smart, intelligence = _stack(tmp_path)
+
+    offer = _upload(
+        store,
+        "offer.txt",
+        "Публичная оферта. Цена EUR 300. Действует до 01.12.2027.".encode(),
+    )
+    memo = _upload(
+        store,
+        "memo.txt",
+        "Служебная записка\nКому: Руководителю\nОт кого: Отдел ИТ\n"
+        "Исполнить до 15.12.2027.".encode(),
+    )
+    for document in (offer, memo):
+        store.update_passport(
+            document["id"],
+            ai_access="read",
+            confidentiality="personal",
+        )
+        smart.reconcile_contract(document["id"])
+        result = intelligence.analyze(document["id"])
+        smart.apply_intelligence_defaults(document["id"], result)
+
+    offers = intelligence.module_profile("offers")
+    memos = intelligence.module_profile("memos")
+    invoices = intelligence.module_profile("invoices")
+
+    assert {item["id"] for item in offers["items"]} == {offer["id"]}
+    assert {item["id"] for item in memos["items"]} == {memo["id"]}
+    assert invoices["count"] == 0
+    assert offers["ai_focus"]
+    assert memos["ai_focus"]

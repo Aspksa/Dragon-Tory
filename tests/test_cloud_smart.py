@@ -221,3 +221,37 @@ def test_dna_and_timeline_are_separate_from_file_bytes(tmp_path: Path) -> None:
         item["event"] == "dna_updated"
         for item in smart.timeline(document["id"])
     )
+
+
+def test_intelligence_autofill_never_overwrites_manual_dna(tmp_path: Path) -> None:
+    store, smart = _stack(tmp_path)
+    document = _upload(store, "manual.txt", b"manual content")
+    smart.update_dna(
+        document["id"],
+        {
+            "kind": "мой ручной тип",
+            "external_ref": "MANUAL-REF",
+            "important_date": "2030-01-01",
+        },
+    )
+
+    result = smart.apply_intelligence_defaults(
+        document["id"],
+        {
+            "kind": "договор",
+            "confidence": 0.98,
+            "entities": {"references": ["AUTO-42"]},
+            "deadlines": [{"date": "2027-11-14"}],
+            "suggested_tags": ["договор", "2027"],
+        },
+    )
+
+    dna = smart.get_dna(document["id"])
+    assert dna["kind"] == "мой ручной тип"
+    assert dna["external_ref"] == "MANUAL-REF"
+    assert dna["important_date"] == "2030-01-01"
+    assert "договор" in store.get(document["id"])["tags"]
+    assert result["applied"] is True
+    assert "kind" not in result["fields"]
+    assert "external_ref" not in result["fields"]
+    assert "important_date" not in result["fields"]
