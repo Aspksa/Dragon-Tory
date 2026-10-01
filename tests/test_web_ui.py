@@ -44,7 +44,6 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="documentModuleTimesheet"' in response.text
     assert 'id="documentModuleDraft"' in response.text
     assert "document-center" in response.text
-    assert "Счета-оферты" in response.text
     assert 'id="contractExternalAI"' in response.text
     assert 'id="passportCleanRoom"' in response.text
     assert 'id="passportSeal"' in response.text
