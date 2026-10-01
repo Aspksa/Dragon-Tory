@@ -61,7 +61,7 @@ class CognitiveReasoning:
         r"\b("
         r"проанализ|исслед|проверь|сравни|спроектир|разработ|реализ|"
         r"исправ|оптимиз|рефактор|интегрир|мигрир|автотест|архитект|"
-        r"создай проект|собери проект|документ|договор|табел|гараж|"
+        r"создай проект|собери проект|"
         r"analy[sz]|implement|refactor|debug|design|architecture|migrat"
         r")",
         re.IGNORECASE,
@@ -110,7 +110,6 @@ class CognitiveReasoning:
             )
         )
         return action_count >= 2
-
 
     async def plan(
         self,
@@ -240,7 +239,6 @@ class CognitiveReasoning:
                 used_fallback=True,
             )
 
-
     async def learn_from_experience(
         self,
         *,
@@ -345,7 +343,6 @@ class CognitiveReasoning:
         except Exception as exc:
             return "learning:error=" + type(exc).__name__
 
-
     async def _propose_rule(
         self,
         *,
@@ -359,7 +356,8 @@ class CognitiveReasoning:
             "Не превращай единичные детали, имена, суммы и случайные факты в "
             "универсальное правило. Правило должно описывать полезный процесс. "
             "Верни только JSON с полями should_create, key, content, "
-            "confidence, reason."
+            "confidence, reason. "
+            + UNTRUSTED_CONTENT_POLICY
         )
         response = await self.router.generate(
             AI_PROVIDER,
