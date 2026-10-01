@@ -13,6 +13,8 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="checkMemoryHealth"' in response.text
     assert 'id="mHealth"' in response.text
     assert "Настройки" in response.text
+    assert 'id="moduleRegistryList"' in response.text
+    assert 'id="moduleRegistryCount"' in response.text
     assert "Чат" in response.text
     assert "Мой диск Тори" in response.text
     assert 'id="cloudNewFolder"' in response.text
@@ -62,12 +64,11 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="passportVerify"' in response.text
     assert "Мой диск Тори · личный документ" in response.text
     assert "Центр документа Тори" in response.text
-    assert 'data-module="contracts"' in response.text
-    assert 'data-module="invoice_offers"' in response.text
-    assert 'data-module="memos"' in response.text
-    assert 'data-module="orders"' in response.text
-    assert 'data-module="directives"' in response.text
+    assert 'id="diskModules"' in response.text
+    assert 'class="nav module-nav"' not in response.text
     assert 'id="documentModule"' in response.text
+    assert 'id="documentModuleBack"' in response.text
+    assert 'id="documentModuleAddRecord"' in response.text
     assert 'id="documentModuleUpload"' in response.text
     assert 'id="documentModuleUploadQueue"' in response.text
     assert 'id="cloudUploadQueue"' in response.text
@@ -191,3 +192,55 @@ def test_counterparty_directory_endpoint_is_available() -> None:
         item["id"] == counterparty_id
         for item in listed.json()["items"]
     )
+
+
+def test_module_version_registry_endpoint_is_available() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/settings/modules")
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    ids = {item["id"] for item in items}
+    assert {
+        "drive",
+        "memos",
+        "invoice_offers",
+        "contracts",
+        "orders",
+        "directives",
+        "employees",
+        "garage",
+        "timesheet",
+        "memory",
+        "updater",
+    } <= ids
+    assert all(item["version"] for item in items)
+    assert all(item["description"] for item in items)
+    assert all(item["last_update"] for item in items)
+
+
+def test_employee_and_garage_endpoints_are_available() -> None:
+    with TestClient(app) as client:
+        employee = client.post(
+            "/v1/cloud/smart/employees",
+            json={
+                "full_name": "Петров Пётр Петрович",
+                "personnel_number": "T-002",
+                "position": "Водитель",
+            },
+        )
+        assert employee.status_code == 201
+        employee_id = employee.json()["id"]
+
+        vehicle = client.post(
+            "/v1/cloud/smart/garage",
+            json={
+                "garage_number": "21",
+                "plate_number": "В321ВВ77",
+                "make_model": "ГАЗ",
+                "driver_employee_id": employee_id,
+            },
+        )
+
+    assert vehicle.status_code == 201
+    assert vehicle.json()["driver_name"] == "Петров Пётр Петрович"

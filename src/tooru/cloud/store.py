@@ -297,6 +297,71 @@ class CloudStore:
         if row is None:
             raise ValueError("Папка не найдена.")
 
+    def ensure_folder_path(
+        self,
+        parts: list[str],
+    ) -> dict[str, Any] | None:
+        parent_id: str | None = None
+        current: dict[str, Any] | None = None
+        for raw_name in parts:
+            name = raw_name.strip()
+            if not name:
+                continue
+            existing = next(
+                (
+                    item
+                    for item in self.list_folders(parent_id=parent_id)
+                    if item["name"].casefold() == name.casefold()
+                ),
+                None,
+            )
+            current = existing or self.create_folder(
+                name,
+                parent_id=parent_id,
+            )
+            parent_id = current["id"]
+        return current
+
+    def register_generated_text(
+        self,
+        *,
+        name: str,
+        content: str,
+        folder_id: str | None = None,
+        source: str = "tooru-generated",
+    ) -> dict[str, Any]:
+        raw = content.encode("utf-8")
+        temp_path = self.incoming_dir / (
+            "generated-" + uuid4().hex + ".tmp"
+        )
+        temp_path.write_bytes(raw)
+        item = self.register_upload(
+            temp_path,
+            name=name,
+            content_type="text/markdown; charset=utf-8",
+            size_bytes=len(raw),
+            sha256=hashlib.sha256(raw).hexdigest(),
+            folder_id=folder_id,
+        )
+        with self._connect() as db:
+            db.execute(
+                """
+                UPDATE documents
+                SET source = ?
+                WHERE id = ?
+                """,
+                (source[:120], item["id"]),
+            )
+            db.execute(
+                """
+                UPDATE document_versions
+                SET source = ?
+                WHERE document_id = ? AND version = 1
+                """,
+                (source[:120], item["id"]),
+            )
+        return self.get(item["id"])
+
     def create_folder(
         self,
         name: str,

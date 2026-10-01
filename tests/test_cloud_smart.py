@@ -357,3 +357,35 @@ def test_weekend_work_timesheet_is_built_from_service_memos(
     assert timesheet["count"] == 1
     assert timesheet["total_hours"] == 8
     assert timesheet["items"][0]["employee_name"] == "Иванов И.И."
+
+
+def test_employee_and_garage_directories_link_driver(
+    tmp_path: Path,
+) -> None:
+    _, smart = _stack(tmp_path)
+    employee = smart.create_employee(
+        {
+            "full_name": "Иванов Иван Иванович",
+            "personnel_number": "T-001",
+            "position": "Водитель",
+            "department": "Транспортный отдел",
+            "driver_license": "77 00 123456",
+        }
+    )
+    vehicle = smart.create_vehicle(
+        {
+            "garage_number": "12",
+            "plate_number": "А123АА77",
+            "vin": "JF1SJABC1GH123456",
+            "make_model": "Subaru Forester",
+            "driver_employee_id": employee["id"],
+        }
+    )
+
+    assert employee["position"] == "Водитель"
+    assert vehicle["driver_employee_id"] == employee["id"]
+    assert vehicle["driver_name"] == "Иванов Иван Иванович"
+
+    listed = smart.list_vehicles(query="Иванов")
+    assert len(listed) == 1
+    assert listed[0]["vin"] == "JF1SJABC1GH123456"

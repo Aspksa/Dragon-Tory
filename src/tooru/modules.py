@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+from typing import Any
+
+MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
+    {
+        "id": "drive",
+        "title": "Мой диск",
+        "version": "01.04.00",
+        "area": "documents",
+        "description": "Единое файловое пространство, папки, паспорта, ДНК, версии, поиск и связи.",
+        "last_update": "Рабочие модули перенесены внутрь диска; интерфейс очищен.",
+        "depends_on": [],
+    },
+    {
+        "id": "memos",
+        "title": "Служебные записки",
+        "version": "01.03.00",
+        "area": "documents",
+        "description": "Служебные записки, включая работу в выходной день и подготовку данных табеля.",
+        "last_update": "ИИ-образцы, автосохранение и структура год/месяц.",
+        "depends_on": ["drive", "employees", "timesheet"],
+    },
+    {
+        "id": "invoice_offers",
+        "title": "Счета-оферты",
+        "version": "01.02.00",
+        "area": "documents",
+        "description": "Счёт и краткие договорные условия в одном самостоятельном документе.",
+        "last_update": "Контрагенты, реквизиты, суммы, сроки и условия.",
+        "depends_on": ["drive"],
+    },
+    {
+        "id": "contracts",
+        "title": "Договоры",
+        "version": "01.03.00",
+        "area": "documents",
+        "description": "Договоры по контрагентам с реквизитами, суммами, сроками и версиями.",
+        "last_update": "Несколько договоров на одного контрагента и карточка реквизитов.",
+        "depends_on": ["drive"],
+    },
+    {
+        "id": "orders",
+        "title": "Приказы",
+        "version": "01.02.00",
+        "area": "documents",
+        "description": "Эталонные приказы предприятия и подготовка новых проектов в корпоративном стиле.",
+        "last_update": "Reference-based ИИ: структура, стиль и формулировки по разрешённым образцам.",
+        "depends_on": ["drive", "employees"],
+    },
+    {
+        "id": "directives",
+        "title": "Распоряжения",
+        "version": "01.02.00",
+        "area": "documents",
+        "description": "Эталонные распоряжения и подготовка новых проектов в стиле предприятия.",
+        "last_update": "Reference-based ИИ по разрешённым образцам.",
+        "depends_on": ["drive", "employees"],
+    },
+    {
+        "id": "employees",
+        "title": "Сотрудники",
+        "version": "01.00.00",
+        "area": "reference",
+        "description": "Справочник сотрудников, должностей, подразделений и рабочих реквизитов.",
+        "last_update": "Новый модуль для документов, приказов и табеля.",
+        "depends_on": [],
+    },
+    {
+        "id": "garage",
+        "title": "Гараж",
+        "version": "01.00.00",
+        "area": "reference",
+        "description": "Справочник автомобилей, водителей, гаражных номеров, госномеров и VIN.",
+        "last_update": "Новый модуль для транспортных документов и служебных записок.",
+        "depends_on": ["employees"],
+    },
+    {
+        "id": "timesheet",
+        "title": "Табель",
+        "version": "01.02.00",
+        "area": "work",
+        "description": "Свод рабочих часов, включая работу в выходной день из служебных записок.",
+        "last_update": "Связь с сотрудниками и автосбор из документов.",
+        "depends_on": ["employees", "memos"],
+    },
+    {
+        "id": "memory",
+        "title": "Память Тоору",
+        "version": "01.03.00",
+        "area": "system",
+        "description": "Раздельная личная и проектная долговременная память, Guardian, поиск и обслуживание.",
+        "last_update": "Разделена маршрутизация personal/project и добавлена глубокая диагностика.",
+        "depends_on": [],
+    },
+    {
+        "id": "updater",
+        "title": "Обновление",
+        "version": "01.03.00",
+        "area": "system",
+        "description": "GitHub self-update, резервная копия, проверка, перезапуск и история.",
+        "last_update": "Исправлена гонка PID/state и ложные ошибки после успешного обновления.",
+        "depends_on": [],
+    },
+)
+
+
+def module_registry() -> list[dict[str, Any]]:
+    return [dict(item) for item in MODULE_REGISTRY]

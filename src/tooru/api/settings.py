@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from tooru.ai.base import AIRequest
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
+from tooru.modules import module_registry
 
 router = APIRouter(prefix="/v1/settings", tags=["settings"])
 
@@ -88,6 +89,11 @@ def remove_legacy_claude_settings(path: Path) -> None:
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text("\n".join(filtered) + "\n", encoding="utf-8")
     os.replace(temp, path)
+
+
+@router.get("/modules")
+def get_module_registry() -> dict:
+    return {"items": module_registry()}
 
 
 @router.get(

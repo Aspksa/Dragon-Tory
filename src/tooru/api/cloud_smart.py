@@ -71,6 +71,28 @@ class CounterpartyUpsert(BaseModel):
     notes: str = Field(default="", max_length=5_000)
 
 
+class EmployeeUpsert(BaseModel):
+    full_name: str = Field(min_length=1, max_length=300)
+    personnel_number: str = Field(default="", max_length=80)
+    position: str = Field(default="", max_length=300)
+    department: str = Field(default="", max_length=300)
+    phone: str = Field(default="", max_length=120)
+    email: str = Field(default="", max_length=300)
+    driver_license: str = Field(default="", max_length=120)
+    notes: str = Field(default="", max_length=5_000)
+    active: bool = True
+
+
+class VehicleUpsert(BaseModel):
+    garage_number: str = Field(default="", max_length=100)
+    plate_number: str = Field(default="", max_length=100)
+    vin: str = Field(default="", max_length=64)
+    make_model: str = Field(default="", max_length=300)
+    driver_employee_id: str | None = Field(default=None, max_length=128)
+    notes: str = Field(default="", max_length=5_000)
+    active: bool = True
+
+
 class AIContractUpdate(BaseModel):
     metadata_search: bool | None = None
     content_read: bool | None = None
@@ -178,6 +200,86 @@ def _ephemeral_chunks(
         if cleanup is not None:
             cleanup.unlink(missing_ok=True)
     return item, _rank_chunks(chunks, question, limit=limit)
+
+
+@router.get("/employees")
+def list_employees(
+    request: Request,
+    query: str = Query(default="", max_length=300),
+    limit: int = Query(default=500, ge=1, le=1_000),
+) -> dict[str, Any]:
+    return {
+        "items": _smart(request).list_employees(
+            query=query,
+            limit=limit,
+        )
+    }
+
+
+@router.post("/employees", status_code=status.HTTP_201_CREATED)
+def create_employee(
+    payload: EmployeeUpsert,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        return _smart(request).create_employee(payload.model_dump())
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.put("/employees/{employee_id}")
+def update_employee(
+    employee_id: str,
+    payload: EmployeeUpsert,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        return _smart(request).update_employee(
+            employee_id,
+            payload.model_dump(),
+        )
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.get("/garage")
+def list_garage(
+    request: Request,
+    query: str = Query(default="", max_length=300),
+    limit: int = Query(default=500, ge=1, le=1_000),
+) -> dict[str, Any]:
+    return {
+        "items": _smart(request).list_vehicles(
+            query=query,
+            limit=limit,
+        )
+    }
+
+
+@router.post("/garage", status_code=status.HTTP_201_CREATED)
+def create_vehicle(
+    payload: VehicleUpsert,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        return _smart(request).create_vehicle(payload.model_dump())
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.put("/garage/{vehicle_id}")
+def update_vehicle(
+    vehicle_id: str,
+    payload: VehicleUpsert,
+    request: Request,
+) -> dict[str, Any]:
+    try:
+        return _smart(request).update_vehicle(
+            vehicle_id,
+            payload.model_dump(),
+        )
+    except Exception as exc:
+        raise _http_error(exc) from exc
 
 
 @router.get("/counterparties")

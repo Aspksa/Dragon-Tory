@@ -5,6 +5,10 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from tooru.chat.store import ChatNotFoundError
+from tooru.chat.workflows import (
+    create_weekend_work_document,
+    is_weekend_work_request,
+)
 from tooru.memory.models import ConversationMessage
 
 router = APIRouter(prefix="/v1/chat", tags=["chat"])
@@ -38,6 +42,8 @@ class ChatResponse(BaseModel):
     model: str
     context_memories: int
     memory_status: str
+    created_document_id: str | None = None
+    created_document_path: str | None = None
 
 
 def _friendly_ai_error(exc: Exception) -> str:
@@ -163,6 +169,54 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         content=payload.message,
     )
     store.auto_title(chat_id, payload.message)
+
+    if is_weekend_work_request(payload.message):
+        try:
+            created = await create_weekend_work_document(
+                request=request,
+                message=payload.message,
+            )
+            answer = (
+                created["draft"]
+                + "\n\n---\n"
+                + "✅ Документ создан и сохранён.\n"
+                + f"Путь: {created['path']}\n"
+                + f"Tory Document ID: {created['document_id']}\n"
+                + (
+                    f"Эталонов предприятия использовано: "
+                    f"{len(created['references'])}.\n"
+                )
+                + (
+                    "Часы для табеля: "
+                    + (
+                        str(created["work_hours"])
+                        if created["work_hours"] is not None
+                        else "[нужно заполнить]"
+                    )
+                )
+            )
+            store.add_message(
+                chat_id,
+                role="assistant",
+                content=answer,
+            )
+            chat_item = store.get(chat_id)
+            return ChatResponse(
+                chat_id=chat_id,
+                title=chat_item["title"],
+                answer=answer,
+                provider=created["provider"],
+                model=created["model"],
+                context_memories=0,
+                memory_status="workflow:weekend-work",
+                created_document_id=created["document_id"],
+                created_document_path=created["path"],
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Не удалось создать документ: {exc}",
+            ) from exc
 
     request_id = payload.request_id or str(uuid.uuid4())
     return await _run_generation(

@@ -251,6 +251,65 @@ class SmartDrive:
 
             db.execute(
                 """
+                CREATE TABLE IF NOT EXISTS employees (
+                    id TEXT PRIMARY KEY,
+                    personnel_number TEXT NOT NULL DEFAULT '',
+                    full_name TEXT NOT NULL,
+                    position TEXT NOT NULL DEFAULT '',
+                    department TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    driver_license TEXT NOT NULL DEFAULT '',
+                    notes TEXT NOT NULL DEFAULT '',
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_employees_name
+                ON employees(full_name COLLATE NOCASE)
+                """
+            )
+            db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_employees_personnel
+                ON employees(personnel_number)
+                """
+            )
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS garage_vehicles (
+                    id TEXT PRIMARY KEY,
+                    garage_number TEXT NOT NULL DEFAULT '',
+                    plate_number TEXT NOT NULL DEFAULT '',
+                    vin TEXT NOT NULL DEFAULT '',
+                    make_model TEXT NOT NULL DEFAULT '',
+                    driver_employee_id TEXT,
+                    notes TEXT NOT NULL DEFAULT '',
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_garage_plate
+                ON garage_vehicles(plate_number COLLATE NOCASE)
+                """
+            )
+            db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_garage_vin
+                ON garage_vehicles(vin COLLATE NOCASE)
+                """
+            )
+
+            db.execute(
+                """
                 CREATE TABLE IF NOT EXISTS document_ai_contract (
                     document_id TEXT PRIMARY KEY,
                     metadata_search INTEGER NOT NULL DEFAULT 0,
@@ -708,6 +767,290 @@ class SmartDrive:
             actor="system",
         )
         return True
+
+    @staticmethod
+    def _clean_employee_payload(
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        full_name = str(payload.get("full_name") or "").strip()[:300]
+        if not full_name:
+            raise ValueError("Укажите ФИО сотрудника.")
+        return {
+            "full_name": full_name,
+            "personnel_number": str(
+                payload.get("personnel_number") or ""
+            ).strip()[:80],
+            "position": str(payload.get("position") or "").strip()[:300],
+            "department": str(
+                payload.get("department") or ""
+            ).strip()[:300],
+            "phone": str(payload.get("phone") or "").strip()[:120],
+            "email": str(payload.get("email") or "").strip()[:300],
+            "driver_license": str(
+                payload.get("driver_license") or ""
+            ).strip()[:120],
+            "notes": str(payload.get("notes") or "").strip()[:5_000],
+            "active": bool(payload.get("active", True)),
+        }
+
+    def create_employee(self, payload: dict[str, Any]) -> dict[str, Any]:
+        values = self._clean_employee_payload(payload)
+        employee_id = "TORY-EMP-" + uuid4().hex.upper()
+        now = utc_now()
+        with self._connect() as db:
+            db.execute(
+                """
+                INSERT INTO employees (
+                    id, personnel_number, full_name, position,
+                    department, phone, email, driver_license,
+                    notes, active, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    employee_id,
+                    values["personnel_number"],
+                    values["full_name"],
+                    values["position"],
+                    values["department"],
+                    values["phone"],
+                    values["email"],
+                    values["driver_license"],
+                    values["notes"],
+                    int(values["active"]),
+                    now,
+                    now,
+                ),
+            )
+        return self.get_employee(employee_id)
+
+    def update_employee(
+        self,
+        employee_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        current = self.get_employee(employee_id)
+        merged = {**current, **payload}
+        values = self._clean_employee_payload(merged)
+        with self._connect() as db:
+            result = db.execute(
+                """
+                UPDATE employees
+                SET personnel_number = ?, full_name = ?, position = ?,
+                    department = ?, phone = ?, email = ?,
+                    driver_license = ?, notes = ?, active = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    values["personnel_number"],
+                    values["full_name"],
+                    values["position"],
+                    values["department"],
+                    values["phone"],
+                    values["email"],
+                    values["driver_license"],
+                    values["notes"],
+                    int(values["active"]),
+                    utc_now(),
+                    employee_id,
+                ),
+            )
+            if result.rowcount < 1:
+                raise KeyError(employee_id)
+        return self.get_employee(employee_id)
+
+    def get_employee(self, employee_id: str) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM employees WHERE id = ?",
+                (employee_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(employee_id)
+        result = dict(row)
+        result["active"] = bool(result["active"])
+        return result
+
+    def list_employees(
+        self,
+        *,
+        query: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        pattern = f"%{query.strip()}%"
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT *
+                FROM employees
+                WHERE (? = '' OR full_name LIKE ? OR position LIKE ?
+                       OR department LIKE ? OR personnel_number LIKE ?)
+                ORDER BY active DESC, full_name COLLATE NOCASE
+                LIMIT ?
+                """,
+                (
+                    query.strip(),
+                    pattern,
+                    pattern,
+                    pattern,
+                    pattern,
+                    max(1, min(limit, 1_000)),
+                ),
+            ).fetchall()
+        result = [dict(row) for row in rows]
+        for item in result:
+            item["active"] = bool(item["active"])
+        return result
+
+    @staticmethod
+    def _clean_vehicle_payload(
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "garage_number": str(
+                payload.get("garage_number") or ""
+            ).strip()[:100],
+            "plate_number": str(
+                payload.get("plate_number") or ""
+            ).strip()[:100],
+            "vin": str(payload.get("vin") or "").strip().upper()[:64],
+            "make_model": str(
+                payload.get("make_model") or ""
+            ).strip()[:300],
+            "driver_employee_id": (
+                str(payload.get("driver_employee_id")).strip()
+                if payload.get("driver_employee_id")
+                else None
+            ),
+            "notes": str(payload.get("notes") or "").strip()[:5_000],
+            "active": bool(payload.get("active", True)),
+        }
+
+    def create_vehicle(self, payload: dict[str, Any]) -> dict[str, Any]:
+        values = self._clean_vehicle_payload(payload)
+        if not (
+            values["garage_number"]
+            or values["plate_number"]
+            or values["vin"]
+            or values["make_model"]
+        ):
+            raise ValueError("Укажите данные автомобиля.")
+        if values["driver_employee_id"]:
+            self.get_employee(values["driver_employee_id"])
+        vehicle_id = "TORY-CAR-" + uuid4().hex.upper()
+        now = utc_now()
+        with self._connect() as db:
+            db.execute(
+                """
+                INSERT INTO garage_vehicles (
+                    id, garage_number, plate_number, vin, make_model,
+                    driver_employee_id, notes, active,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    vehicle_id,
+                    values["garage_number"],
+                    values["plate_number"],
+                    values["vin"],
+                    values["make_model"],
+                    values["driver_employee_id"],
+                    values["notes"],
+                    int(values["active"]),
+                    now,
+                    now,
+                ),
+            )
+        return self.get_vehicle(vehicle_id)
+
+    def update_vehicle(
+        self,
+        vehicle_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        current = self.get_vehicle(vehicle_id)
+        merged = {**current, **payload}
+        values = self._clean_vehicle_payload(merged)
+        if values["driver_employee_id"]:
+            self.get_employee(values["driver_employee_id"])
+        with self._connect() as db:
+            result = db.execute(
+                """
+                UPDATE garage_vehicles
+                SET garage_number = ?, plate_number = ?, vin = ?,
+                    make_model = ?, driver_employee_id = ?, notes = ?,
+                    active = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    values["garage_number"],
+                    values["plate_number"],
+                    values["vin"],
+                    values["make_model"],
+                    values["driver_employee_id"],
+                    values["notes"],
+                    int(values["active"]),
+                    utc_now(),
+                    vehicle_id,
+                ),
+            )
+            if result.rowcount < 1:
+                raise KeyError(vehicle_id)
+        return self.get_vehicle(vehicle_id)
+
+    def get_vehicle(self, vehicle_id: str) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                """
+                SELECT v.*, e.full_name AS driver_name
+                FROM garage_vehicles v
+                LEFT JOIN employees e ON e.id = v.driver_employee_id
+                WHERE v.id = ?
+                """,
+                (vehicle_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(vehicle_id)
+        result = dict(row)
+        result["active"] = bool(result["active"])
+        return result
+
+    def list_vehicles(
+        self,
+        *,
+        query: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        pattern = f"%{query.strip()}%"
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT v.*, e.full_name AS driver_name
+                FROM garage_vehicles v
+                LEFT JOIN employees e ON e.id = v.driver_employee_id
+                WHERE (? = '' OR v.garage_number LIKE ?
+                       OR v.plate_number LIKE ? OR v.vin LIKE ?
+                       OR v.make_model LIKE ? OR e.full_name LIKE ?)
+                ORDER BY v.active DESC, v.garage_number COLLATE NOCASE,
+                         v.plate_number COLLATE NOCASE
+                LIMIT ?
+                """,
+                (
+                    query.strip(),
+                    pattern,
+                    pattern,
+                    pattern,
+                    pattern,
+                    pattern,
+                    max(1, min(limit, 1_000)),
+                ),
+            ).fetchall()
+        result = [dict(row) for row in rows]
+        for item in result:
+            item["active"] = bool(item["active"])
+        return result
 
     @staticmethod
     def _clean_counterparty_payload(
