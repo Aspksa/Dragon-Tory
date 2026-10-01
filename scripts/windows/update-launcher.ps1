@@ -27,13 +27,6 @@ if (-not (Test-Path -LiteralPath $systemPowerShell -PathType Leaf)) {
     $systemPowerShell = "powershell.exe"
 }
 
-$logsDir = Join-Path $ProjectRoot "logs"
-New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
-$childOut = Join-Path $logsDir "update-child.stdout.log"
-$childErr = Join-Path $logsDir "update-child.stderr.log"
-Remove-Item -LiteralPath $childOut -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $childErr -Force -ErrorAction SilentlyContinue
-
 $command = "& {0} -ProjectRoot {1} -Repository {2} -Branch {3} -ServerPid {4}" -f @(
     (Quote-PowerShellLiteral $UpdaterScript),
     (Quote-PowerShellLiteral $ProjectRoot),
@@ -47,6 +40,6 @@ $encoded = [Convert]::ToBase64String(
 )
 
 $argumentLine = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $encoded"
-$process = Start-Process -FilePath $systemPowerShell -ArgumentList $argumentLine -WorkingDirectory $ProjectRoot -WindowStyle Hidden -RedirectStandardOutput $childOut -RedirectStandardError $childErr -PassThru
+$process = Start-Process -FilePath $systemPowerShell -ArgumentList $argumentLine -WorkingDirectory $ProjectRoot -WindowStyle Hidden -PassThru
 Write-Output $process.Id
 exit 0
