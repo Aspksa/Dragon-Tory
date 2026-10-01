@@ -11,6 +11,8 @@ on:
       - "src/tooru/cloud/**"
       - "src/tooru/observability/**"
       - "src/tooru/timesheet/**"
+      - "src/tooru/internet/**"
+      - "src/tooru/internet/**"
       - "src/tooru/api/observability.py"
       - "src/tooru/web/**"
       - "src/tooru/version.py"
