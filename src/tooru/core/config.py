@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     deepseek_base_url: str = "https://foundation-models.api.cloud.ru/v1"
     deepseek_model: str = "deepseek-ai/DeepSeek-V4-Flash"
+    deepseek_timeout_seconds: float = 45.0
+    deepseek_max_attempts: int = 3
+    deepseek_retry_base_seconds: float = 0.6
+    deepseek_retry_max_seconds: float = 5.0
+    deepseek_circuit_breaker_failures: int = 5
+    deepseek_circuit_breaker_cooldown_seconds: float = 30.0
+
+    allow_remote_api: bool = False
 
     update_repository: str = "Aspksa/Dragon-Tory"
     update_branch: str = "main"
