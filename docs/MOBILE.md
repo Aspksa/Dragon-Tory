@@ -35,4 +35,4 @@ A mobile app can keep a local SQLite cache and an outgoing operation queue:
 
 The current development server binds to `127.0.0.1`. Before exposing Dragon Tory to mobile devices over the internet, authentication must be added and `owner_id` must come from the authenticated identity, never directly from an untrusted client.
 
-API keys for Claude, DeepSeek or Cloud.ru must stay on the backend and must never be embedded in Android or iOS applications.
+API keys for DeepSeek or Cloud.ru must stay on the backend and must never be embedded in Android or iOS applications.
