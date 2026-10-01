@@ -899,6 +899,8 @@ let homeLastDiag=null;
 let homeLastUpdate=null;
 let homeRecentChats=[];
 let homeUpdateHistory=[];
+let homeObservability=null;
+let homeObsLoading=false;
 let homeBrainReady=false;
 let homeBrainPan={x:0,y:0,scale:1,dragging:false,lastX:0,lastY:0};
 let homeCy=null;
@@ -932,7 +934,18 @@ function homeUptime(seconds){
 function homePercentPart(part,total){return total?Math.max(0,Math.min(100,(Number(part||0)/Number(total))*100)):0}
 function homeStatusClass(ok,attention=false){return ok?"online":attention?"attention":""}
 function homeModuleById(id){return homeModules.find(x=>x.id===id)||null}
+function homeActiveModules(){
+  const active=(homeObservability&&homeObservability.active)||[];
+  const result=new Set();
+  active.forEach(item=>{
+    const module=item.module==="documents"?"drive":item.module;
+    if(module)result.add(module);
+    if(item.category==="ai")result.add("deepseek");
+  });
+  return result;
+}
 function homeNodeStatus(id){
+  if(homeActiveModules().has(id))return"active";
   if(id==="deepseek")return homeLastDiag&&homeLastDiag.ai.configured?"online":"attention";
   if(id==="memory")return homeLastDiag&&homeLastDiag.memory_engine.health&&homeLastDiag.memory_engine.health.status==="ok"?"online":"attention";
   if(id==="guardian")return homeLastDiag&&Number(homeLastDiag.guardian.queued_dead||0)>0?"attention":"online";
@@ -1034,6 +1047,7 @@ function renderHomeBrain(){
         "shadow-blur":22,"shadow-color":"#5c86c7","shadow-opacity":.12,"shadow-offset-x":0,"shadow-offset-y":6
       }},
       {selector:'node[status = "online"]',style:{"border-color":"#5bbf9d","shadow-color":"#52b99a","shadow-opacity":.18}},
+      {selector:'node[status = "active"]',style:{"background-color":"#eef6ff","border-color":"#3d83df","border-width":4,"shadow-color":"#3d83df","shadow-opacity":.32,"shadow-blur":30}},
       {selector:'node[status = "attention"]',style:{"border-color":"#d5a35b","shadow-color":"#d5a35b","shadow-opacity":.18}},
       {selector:'node[kind = "center"]',style:{
         width:106,height:106,"background-color":"#edf4ff","border-width":3,"border-color":"#5c83ca",
@@ -1111,6 +1125,110 @@ function renderHomeTasks(){
   if(homeRecentChats.length){const chat=homeRecentChats[0];box.append(homeTask("Последний чат",chat.title||"Новый чат",(chat.message_count||0)+" сообщ.",false))}
   else box.append(homeTask("Чат","История пока пуста","—",false));
 }
+function homeObsDuration(value){
+  const ms=Number(value||0);if(!Number.isFinite(ms)||ms<=0)return"—";
+  return ms<1000?Math.round(ms)+" ms":(ms/1000).toFixed(ms<10000?1:0)+" s";
+}
+function homeObsModuleLabel(value){
+  return({chat:"Чат",memory:"Память",drive:"Мой диск",contracts:"Договоры",invoice_offers:"Счета-оферты",orders:"Приказы",directives:"Распоряжения",memos:"Служебные записки",garage:"Гараж",timesheet:"Табель",settings:"Настройки"}[value]||value||"Система");
+}
+function homeObsStepLabel(item){
+  return({source:"Источник",analysis:"Анализ",ai:"AI",guardian:"Guardian",memory:"Память",policy:"Политика"}[item.category]||item.stage||item.category||"Шаг");
+}
+function homeObsOperationLabel(value){
+  return({
+    chat_response:"Ответ пользователю",
+    memory_extract:"Извлечение памяти",
+    memory_review:"Проверка памяти",
+    local_document_analysis:"Локальный разбор",
+    module_document_analysis:"Анализ модулем",
+    document_deep_summary:"DeepSeek-анализ",
+    document_qa:"Вопрос по документу",
+    document_compare:"Сравнение документов",
+    document_version_compare:"Сравнение версий",
+    clean_room_answer:"Чистая комната",
+    administrative_draft:"Проект документа",
+    weekend_work_draft:"Служебная записка",
+    deepseek_connection_test:"Проверка DeepSeek",
+    create:"Создание",
+    update:"Обновление",
+    source_received:"Источник",
+    module_document_selected:"Документ выбран",
+    document_selected:"Документ выбран",
+    garage_record_changed:"Изменение гаража",
+    weekend_work_changed:"Работа в выходной",
+    ai_contract:"ИИ-договор"
+  }[value]||String(value||"операция").replaceAll("_"," "));
+}
+function refreshHomeBrainStatuses(){
+  if(homeCy&&!homeCy.destroyed()){
+    homeCy.nodes().forEach(node=>node.data("status",homeNodeStatus(node.id())));
+  }else{
+    document.querySelectorAll("#homeBrainViewport .brain-node").forEach(node=>{
+      const id=node.dataset.nodeId||"";
+      const center=node.classList.contains("center");
+      node.setAttribute("class","brain-node "+homeNodeStatus(id)+(center?" center":""));
+    });
+  }
+}
+function renderHomeObservability(data){
+  homeObservability=data||{active:[],stats:{},chains:[]};
+  const stats=homeObservability.stats||{},active=homeObservability.active||[],current=homeObservability.current||null;
+  $("homeObsActive").textContent=active.length;
+  $("homeObsLatency").textContent=homeObsDuration(stats.ai_avg_ms);
+  $("homeObsRetries").textContent=stats.ai_retries||0;
+  $("homeObsBlocked").textContent=stats.guardian_blocked||0;
+  $("homeObsMemory").textContent=stats.memory_writes||0;
+  $("homeObsStamp").textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  const state=$("homeObsState"),currentBox=$("homeObsCurrent"),brainState=$("homeBrainActivity");
+  currentBox.classList.remove("running","error");
+  if(current){
+    const label=homeObsModuleLabel(current.module)+" · "+homeObsOperationLabel(current.operation);
+    state.textContent="Тоору сейчас: "+label;
+    brainState.textContent="live · "+label;
+    currentBox.classList.add(current.status==="error"?"error":"running");
+    currentBox.querySelector("b").textContent=label;
+    const source=current.document_id?("Document ID: "+current.document_id):(current.source_id?("Источник: "+current.source_id):"Выполняется локально");
+    currentBox.querySelector("span").textContent=source;
+  }else{
+    state.textContent="Сейчас активных анализов нет";
+    brainState.textContent="перетаскивание · колесо = масштаб · клик = детали";
+    currentBox.querySelector("b").textContent="Тоору ожидает задачу";
+    currentBox.querySelector("span").textContent="Активных анализов сейчас нет.";
+  }
+  const box=$("homeTraceList");box.innerHTML="";
+  const chains=homeObservability.chains||[];
+  if(!chains.length){const empty=document.createElement("div");empty.className="home-trace-empty";empty.textContent="События появятся после работы чата, документов, Guardian или памяти.";box.append(empty)}
+  chains.slice(0,8).forEach(chain=>{
+    const row=document.createElement("div");row.className="home-trace";
+    const head=document.createElement("div");head.className="home-trace-head";
+    const title=document.createElement("div");title.className="home-trace-title";title.textContent=homeObsModuleLabel(chain.module)+(chain.document_id?" · "+chain.document_id:"");
+    const meta=document.createElement("span");meta.className="home-trace-meta";meta.textContent=chain.status+" · "+new Date(chain.started_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    head.append(title,meta);row.append(head);
+    const flow=document.createElement("div");flow.className="home-trace-flow";
+    (chain.steps||[]).forEach((step,index)=>{
+      if(index){const arrow=document.createElement("span");arrow.className="home-trace-arrow";arrow.textContent="→";flow.append(arrow)}
+      const card=document.createElement("div");card.className="home-trace-step "+(step.status||"");
+      const strong=document.createElement("strong");strong.textContent=homeObsStepLabel(step)+" · "+homeObsOperationLabel(step.operation);
+      const sub=document.createElement("span");
+      const details=[];
+      if(step.provider)details.push(step.provider);
+      if(Number(step.retry_count||0)>0)details.push("retry "+step.retry_count);
+      if(Number(step.duration_ms||0)>0)details.push(homeObsDuration(step.duration_ms));
+      if(step.memory_id)details.push("Memory "+String(step.memory_id).slice(0,10));
+      sub.textContent=details.join(" · ")||(step.message||step.status||"готово");
+      card.append(strong,sub);flow.append(card);
+    });
+    row.append(flow);box.append(row);
+  });
+  refreshHomeBrainStatuses();
+}
+async function refreshHomeObservability(){
+  if(homeObsLoading)return;homeObsLoading=true;
+  try{renderHomeObservability(await api("/v1/observability/summary?limit=50&hours=24"))}
+  catch(e){$("homeObsState").textContent="Наблюдаемость временно недоступна: "+e.message}
+  finally{homeObsLoading=false}
+}
 async function loadHomeDashboard(){
   initHomeBrain();
   try{
@@ -1120,7 +1238,7 @@ async function loadHomeDashboard(){
       api("/v1/chats?limit=5"),
       api("/v1/update/history?limit=5")
     ]);
-    homeModules=modules.items||[];homeLastUpdate=update;homeRecentChats=chats.items||[];homeUpdateHistory=history.items||[];renderHomeBrain();renderHomeTasks();
+    homeModules=modules.items||[];homeLastUpdate=update;homeRecentChats=chats.items||[];homeUpdateHistory=history.items||[];renderHomeBrain();renderHomeTasks();refreshHomeObservability();
   }catch(e){const box=$("homeTaskList");if(box){box.innerHTML="";box.append(homeTask("Дашборд","Часть данных недоступна: "+e.message,"!",true))}}
 }
 function updateHomeDashboard(d){
@@ -1200,5 +1318,5 @@ function startUpdatePolling(){
 $("checkUpdate").onclick=checkForUpdate;
 $("installUpdate").onclick=installUpdate;
 
-loadHomeDashboard();refreshDiag();setInterval(refreshDiag,3000);
+loadHomeDashboard();refreshDiag();setInterval(refreshDiag,3000);setInterval(()=>{if($("home").classList.contains("active"))refreshHomeObservability()},1800);
 updateStatus();setTimeout(checkForUpdate,1200);setInterval(checkForUpdate,600000);
