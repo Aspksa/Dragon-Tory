@@ -1,3 +1,4 @@
+import base64
 import json
 from pathlib import Path
 
@@ -187,3 +188,35 @@ def test_history_hides_reconciled_pid_race_failure(tmp_path: Path) -> None:
 
     assert len(items) == 1
     assert items[0]["result"] == "success"
+
+
+
+def test_remote_version_is_read_from_exact_remote_commit(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    service = make_service(tmp_path)
+    remote_sha = "a" * 40
+    calls: list[str] = []
+
+    def fake_get_json(url: str) -> dict:
+        calls.append(url)
+        if "/commits/" in url:
+            return {"sha": remote_sha}
+        if "/contents/src/tooru/version.py" in url:
+            payload = base64.b64encode(
+                b'__version__ = "0.0.24"\n'
+            ).decode("ascii")
+            return {"content": payload}
+        raise AssertionError(url)
+
+    monkeypatch.setattr(service, "_get_json", fake_get_json)
+
+    info = service._remote_info()
+
+    assert info["sha"] == remote_sha
+    assert info["version"] == "00.00.24"
+    assert any(
+        f"version.py?ref={remote_sha}" in url
+        for url in calls
+    )
