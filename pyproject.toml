@@ -30,6 +30,7 @@ dependencies = [
   "ebooklib>=0.19,<1.0",
   "PyMuPDF>=1.25,<2.0",
   "cryptography>=43,<49",
+  "fastembed>=0.7,<1.0",
 ]
 
 [project.optional-dependencies]

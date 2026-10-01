@@ -87,6 +87,7 @@ class HybridReranker:
             retrieval_score=round(retrieval, 6),
             graph_score=round(graph, 6),
             truth_score=round(truth, 6),
+            uncertainty_score=round(1.0 - truth, 6),
             importance_score=memory.importance,
             confidence_score=memory.confidence,
             recency_score=round(recency, 6),

@@ -34,6 +34,9 @@ class ResultVerification(BaseModel):
     issues: list[str] = Field(default_factory=list, max_length=20)
     unmet_criteria: list[str] = Field(default_factory=list, max_length=20)
     contradictions: list[str] = Field(default_factory=list, max_length=20)
+    alternative_explanations: list[str] = Field(default_factory=list, max_length=12)
+    counterfactual_checks: list[str] = Field(default_factory=list, max_length=12)
+    uncertainty: float = Field(default=0.0, ge=0.0, le=1.0)
     revised_answer: str | None = Field(default=None, max_length=20_000)
     used_fallback: bool = False
 
@@ -191,10 +194,16 @@ class CognitiveReasoning:
             "Не добавляй неизвестные факты. Если ответ неполный или содержит "
             "исправимую ошибку, верни revised_answer с полностью исправленным "
             "ответом. Если доказательств недостаточно, укажи это как issue. "
+            "Перед финальным решением обязательно проверь хотя бы одну разумную "
+            "альтернативу и один контрфактический сценарий: что изменится, если "
+            "главная предпосылка неверна. Не выдумывай альтернативы без опоры "
+            "на задачу или контекст. "
             + UNTRUSTED_CONTENT_POLICY
             + "\nВерни только JSON: "
             '{"passed":true,"score":0.0,"issues":[],"unmet_criteria":[],'
-            '"contradictions":[],"revised_answer":null}'
+            '"contradictions":[],"alternative_explanations":[],'
+            '"counterfactual_checks":[],"uncertainty":0.0,'
+            '"revised_answer":null}'
         )
         payload = {
             "task": task,
@@ -235,6 +244,9 @@ class CognitiveReasoning:
                 issues=["Автоматическая проверка результата недоступна."],
                 unmet_criteria=[],
                 contradictions=[],
+                alternative_explanations=[],
+                counterfactual_checks=[],
+                uncertainty=1.0,
                 revised_answer=None,
                 used_fallback=True,
             )
@@ -281,7 +293,7 @@ class CognitiveReasoning:
                     scope=MemoryScope.PROJECT,
                     project_id=PROJECT_ID,
                     query=task,
-                    kind=MemoryKind.INSTRUCTION,
+                    kind=MemoryKind.SKILL,
                     tags=["experience-rule"],
                     limit=5,
                 ),
@@ -317,14 +329,14 @@ class CognitiveReasoning:
                 owner_id="local-user",
                 scope=MemoryScope.PROJECT,
                 project_id=PROJECT_ID,
-                kind=MemoryKind.INSTRUCTION,
+                kind=MemoryKind.SKILL,
                 key=self._rule_key(candidate.key),
                 content=candidate.content.strip(),
                 source="experience-learning",
                 source_ref="episode:" + episode_id,
                 confidence=candidate.confidence,
                 importance=0.82,
-                tags=["experience-rule", "learned-candidate"],
+                tags=["experience-rule", "learned-candidate", "skill-memory"],
                 session_id=session_id,
             )
             guarded = self.guardian.ingest_structured(

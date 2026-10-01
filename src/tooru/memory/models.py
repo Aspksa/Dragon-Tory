@@ -23,6 +23,8 @@ class MemoryKind(StrEnum):
     INSTRUCTION = "instruction"
     RELATIONSHIP = "relationship"
     SUMMARY = "summary"
+    SKILL = "skill"
+    LESSON = "lesson"
 
 
 class MemoryStatus(StrEnum):
@@ -40,6 +42,13 @@ class MemoryLinkType(StrEnum):
     SUPPORTS = "supports"
     TEMPORAL_SUCCESSOR = "temporal_successor"
     TEMPORAL_PREDECESSOR = "temporal_predecessor"
+    SAME_ENTITY = "same_entity"
+    CAUSES = "causes"
+    DEPENDS_ON = "depends_on"
+    PART_OF = "part_of"
+    CORRECTS = "corrects"
+    DERIVED_FROM = "derived_from"
+    REQUIRES = "requires"
 
 
 class MemoryTruthStatus(StrEnum):
@@ -48,6 +57,12 @@ class MemoryTruthStatus(StrEnum):
     FUTURE = "future"
     UNDATED = "undated"
     SUPERSEDED = "superseded"
+
+
+class MemoryUncertaintyLevel(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
 class MemoryIntelligenceAction(StrEnum):
@@ -176,6 +191,7 @@ class MemoryRecallHit(BaseModel):
     retrieval_score: float = 0.0
     graph_score: float = 0.0
     truth_score: float = 0.5
+    uncertainty_score: float = 0.5
     importance_score: float
     confidence_score: float
     recency_score: float
@@ -232,12 +248,87 @@ class MemoryTruthAssessment(BaseModel):
     feedback_score: float = Field(ge=0.0, le=1.0)
     temporal_score: float = Field(ge=0.0, le=1.0)
     support_score: float = Field(ge=0.0, le=1.0)
+    source_reliability_score: float = Field(default=0.5, ge=0.0, le=1.0)
     conflict_penalty: float = Field(ge=0.0, le=1.0)
     evidence_count: int = Field(ge=0)
     support_count: int = Field(ge=0)
     conflict_count: int = Field(ge=0)
     temporal_status: MemoryTruthStatus
-    reasons: list[str] = Field(default_factory=list, max_length=20)
+    reasons: list[str] = Field(default_factory=list, max_length=30)
+
+
+class MemoryUncertaintyAssessment(BaseModel):
+    memory_id: str
+    level: MemoryUncertaintyLevel
+    uncertainty_score: float = Field(ge=0.0, le=1.0)
+    trust_score: float = Field(ge=0.0, le=1.0)
+    conflict_count: int = Field(ge=0)
+    evidence_count: int = Field(ge=0)
+    alternatives: list[str] = Field(default_factory=list, max_length=20)
+    reasons: list[str] = Field(default_factory=list, max_length=30)
+
+
+class SourceReliability(BaseModel):
+    source_type: str = Field(min_length=1, max_length=100)
+    source_ref: str | None = Field(default=None, max_length=500)
+    reliability: float = Field(ge=0.0, le=1.0)
+    confirmations: int = Field(default=0, ge=0)
+    contradictions: int = Field(default=0, ge=0)
+    updated_at: str
+
+
+class EntityAlias(BaseModel):
+    id: str
+    owner_id: str
+    scope: MemoryScope
+    project_id: str | None = None
+    canonical_memory_id: str
+    alias: str
+    normalized_alias: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    created_at: str
+
+
+class EntityResolution(BaseModel):
+    query: str
+    canonical_memory_id: str | None = None
+    canonical_content: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    matched_aliases: list[str] = Field(default_factory=list, max_length=50)
+    candidate_ids: list[str] = Field(default_factory=list, max_length=50)
+
+
+class GraphPathNode(BaseModel):
+    memory_id: str
+    content: str
+    kind: MemoryKind
+    depth: int = Field(ge=0)
+    via: MemoryLinkType | None = None
+    score: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class GoalProgress(BaseModel):
+    goal_id: str
+    content: str
+    completion: float = Field(ge=0.0, le=1.0)
+    completed_tasks: int = Field(ge=0)
+    open_tasks: int = Field(ge=0)
+    blocked_tasks: int = Field(ge=0)
+    task_ids: list[str] = Field(default_factory=list, max_length=200)
+    next_actions: list[str] = Field(default_factory=list, max_length=50)
+
+
+class GreyMatterReport(BaseModel):
+    scope: MemoryScope
+    project_id: str | None = None
+    memories_scanned: int = Field(ge=0)
+    entity_links_created: int = Field(ge=0)
+    hierarchy_links_created: int = Field(ge=0)
+    causal_links_created: int = Field(ge=0)
+    summaries_created: int = Field(ge=0)
+    skills_found: int = Field(ge=0)
+    goals_found: int = Field(ge=0)
+    low_confidence_items: int = Field(ge=0)
 
 
 class MemoryFeedback(BaseModel):

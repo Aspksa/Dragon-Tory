@@ -53,6 +53,10 @@ class MemoryTruthEngine:
             else 0.5
         )
         support_score = min(1.0, len(supports) / 3.0)
+        source_reliability_score = self._source_reliability(
+            memory,
+            evidence,
+        )
         temporal_status, temporal_score = self._temporal_state(
             memory,
             at=at or datetime.now(UTC),
@@ -60,11 +64,12 @@ class MemoryTruthEngine:
         conflict_penalty = min(0.30, 0.15 * len(conflicts))
 
         trust = (
-            0.50 * confidence_score
-            + 0.25 * evidence_score
+            0.38 * confidence_score
+            + 0.22 * evidence_score
             + 0.10 * feedback_score
             + 0.10 * temporal_score
             + 0.05 * support_score
+            + 0.15 * source_reliability_score
             - conflict_penalty
         )
         trust = max(0.0, min(1.0, trust))
@@ -79,6 +84,9 @@ class MemoryTruthEngine:
         if conflicts:
             reasons.append(f"conflicts:{len(conflicts)}")
         reasons.append(f"temporal:{temporal_status.value}")
+        reasons.append(
+            f"source-reliability:{source_reliability_score:.3f}"
+        )
         if memory.pinned:
             reasons.append("pinned")
         if feedback_total:
@@ -94,6 +102,7 @@ class MemoryTruthEngine:
             feedback_score=round(feedback_score, 6),
             temporal_score=round(temporal_score, 6),
             support_score=round(support_score, 6),
+            source_reliability_score=round(source_reliability_score, 6),
             conflict_penalty=round(conflict_penalty, 6),
             evidence_count=len(evidence),
             support_count=len(supports),
@@ -101,6 +110,48 @@ class MemoryTruthEngine:
             temporal_status=temporal_status,
             reasons=reasons,
         )
+
+    def _source_reliability(self, memory: MemoryItem, evidence) -> float:
+        defaults = {
+            "user": 0.95,
+            "document": 0.90,
+            "service-memo": 0.90,
+            "tooru-module-study": 0.82,
+            "memory-guardian": 0.80,
+            "chat-outcome": 0.72,
+            "experience-learning": 0.70,
+            "unknown": 0.50,
+        }
+        scores: list[float] = []
+        for proof in evidence:
+            learned = self.store.source_reliability(
+                proof.source_type,
+                proof.source_ref,
+            )
+            if learned is None:
+                learned = self.store.source_reliability(
+                    proof.source_type,
+                    None,
+                )
+            scores.append(
+                learned.reliability
+                if learned is not None
+                else defaults.get(proof.source_type, 0.60)
+            )
+        if not scores:
+            learned = self.store.source_reliability(
+                memory.source,
+                memory.source_ref,
+            )
+            if learned is None:
+                learned = self.store.source_reliability(
+                    memory.source,
+                    None,
+                )
+            if learned is not None:
+                return learned.reliability
+            return defaults.get(memory.source, 0.60)
+        return sum(scores) / len(scores)
 
     @classmethod
     def temporal_relation(

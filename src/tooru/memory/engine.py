@@ -352,6 +352,8 @@ class MemoryEngine:
             MemoryKind.NOTE: "Заметки",
             MemoryKind.INSTRUCTION: "Правила",
             MemoryKind.RELATIONSHIP: "Связи",
+            MemoryKind.SKILL: "Навыки",
+            MemoryKind.LESSON: "Уроки",
         }
         sections: list[str] = []
         for kind, items in grouped.items():
@@ -619,7 +621,10 @@ class MemoryEngine:
                     continue
                 seen.add(memory.id)
                 section_lines.append(
-                    f"- [{memory.kind.value}; score={hit.score:.3f}; truth={hit.truth_score:.3f}] {memory.content}"
+                    f"- [{memory.kind.value}; score={hit.score:.3f}; "
+                    f"truth={hit.truth_score:.3f}; "
+                    f"uncertainty={hit.uncertainty_score:.3f}] "
+                    f"{memory.content}"
                 )
                 total += 1
             if section_lines:

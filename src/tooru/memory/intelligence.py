@@ -435,6 +435,7 @@ class MemoryIntelligence:
             MemoryKind.DECISION,
             MemoryKind.INSTRUCTION,
             MemoryKind.GOAL,
+            MemoryKind.SKILL,
         }
         return any(
             decision.action is MemoryIntelligenceAction.UPDATE
@@ -510,7 +511,10 @@ are unlikely to help future work.
 
 Allowed actions: ignore, create, update.
 Allowed kinds: fact, preference, decision, task, event, episode, goal, entity,
-note, instruction, relationship, summary.
+note, instruction, relationship, summary, skill, lesson.
+
+Use skill only for a reusable procedure learned from repeated verified outcomes.
+Use lesson for a durable error/correction insight that should inform later checks.
 
 Use update only when target_memory_id exactly identifies an existing memory that
 the new information genuinely changes. Do not invent IDs. Create stable short
@@ -535,7 +539,7 @@ Return JSON only:
   {
     "action":"ignore|create|update",
     "content":"concise durable statement",
-    "kind":"fact|preference|decision|task|event|episode|goal|entity|note|instruction|relationship|summary",
+    "kind":"fact|preference|decision|task|event|episode|goal|entity|note|instruction|relationship|summary|skill|lesson",
     "key":"stable.key.or.null",
     "importance":0.0,
     "confidence":0.0,

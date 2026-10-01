@@ -197,5 +197,5 @@ async def test_verified_repeated_experience_creates_guardian_candidate(
     assert status == "learning:rule-pending=1"
     assert guardian.status().queued_pending == 1
     queued = guardian.queue_items(limit=10)
-    assert queued[0].decision.kind is MemoryKind.INSTRUCTION
+    assert queued[0].decision.kind is MemoryKind.SKILL
     assert queued[0].decision.key == "experience.contract_review"

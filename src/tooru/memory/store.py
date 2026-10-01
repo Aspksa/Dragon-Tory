@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from tooru.memory.models import (
     ConversationMessage,
+    EntityAlias,
     MemoryCreate,
     MemoryDelete,
     MemoryEvidence,
@@ -32,6 +33,7 @@ from tooru.memory.models import (
     MemorySyncRequest,
     MemorySyncResponse,
     MemoryUpdate,
+    SourceReliability,
 )
 
 
@@ -53,6 +55,8 @@ class SQLiteMemoryStore:
         "memory_maintenance_runs",
         "memory_guardian_events",
         "memory_guardian_queue",
+        "memory_source_reliability",
+        "memory_entity_aliases",
     }
 
     SELECT_COLUMNS = """
@@ -187,6 +191,48 @@ class SQLiteMemoryStore:
                 """
             )
             self._migrate_evidence_schema(conn)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_source_reliability (
+                    source_type TEXT NOT NULL,
+                    source_ref TEXT NOT NULL DEFAULT '',
+                    reliability REAL NOT NULL,
+                    confirmations INTEGER NOT NULL DEFAULT 0,
+                    contradictions INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(source_type, source_ref)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memory_entity_aliases (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    project_id TEXT,
+                    canonical_memory_id TEXT NOT NULL,
+                    alias TEXT NOT NULL,
+                    normalized_alias TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(
+                        owner_id, scope, project_id,
+                        canonical_memory_id, normalized_alias
+                    ),
+                    FOREIGN KEY(canonical_memory_id)
+                        REFERENCES memory_items(id) ON DELETE CASCADE
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_memory_entity_alias_lookup
+                ON memory_entity_aliases(
+                    owner_id, scope, project_id, normalized_alias
+                )
+                """
+            )
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory_maintenance_runs (
@@ -961,6 +1007,13 @@ class SQLiteMemoryStore:
             MemoryLinkType.SUMMARIZES.value,
             MemoryLinkType.TEMPORAL_SUCCESSOR.value,
             MemoryLinkType.TEMPORAL_PREDECESSOR.value,
+            MemoryLinkType.SAME_ENTITY.value,
+            MemoryLinkType.CAUSES.value,
+            MemoryLinkType.DEPENDS_ON.value,
+            MemoryLinkType.PART_OF.value,
+            MemoryLinkType.CORRECTS.value,
+            MemoryLinkType.DERIVED_FROM.value,
+            MemoryLinkType.REQUIRES.value,
         }
         placeholders = ",".join("?" for _ in seed_ids)
         relation_placeholders = ",".join("?" for _ in allowed_relations)
@@ -999,6 +1052,55 @@ class SQLiteMemoryStore:
                     weights.get(source_id, 0.0),
                     weight,
                 )
+        first_hop = dict(weights)
+        if first_hop:
+            hop_ids = list(first_hop)[:200]
+            hop_placeholders = ",".join("?" for _ in hop_ids)
+            hop_params: list[object] = [
+                *hop_ids,
+                *hop_ids,
+                *sorted(allowed_relations),
+            ]
+            with self._connect() as conn:
+                hop_rows = conn.execute(
+                    f"""
+                    SELECT source_id, target_id, relation, weight
+                    FROM memory_links
+                    WHERE (
+                        source_id IN ({hop_placeholders})
+                        OR target_id IN ({hop_placeholders})
+                    )
+                      AND relation IN ({relation_placeholders})
+                    """,
+                    hop_params,
+                ).fetchall()
+            first_ids = set(hop_ids)
+            for row in hop_rows:
+                source_id = str(row["source_id"])
+                target_id = str(row["target_id"])
+                edge_weight = float(row["weight"])
+                if source_id in first_ids:
+                    neighbor_id = target_id
+                    parent_id = source_id
+                elif target_id in first_ids:
+                    neighbor_id = source_id
+                    parent_id = target_id
+                else:
+                    continue
+                if neighbor_id in seeds:
+                    continue
+                propagated = (
+                    first_hop.get(parent_id, 0.0)
+                    * edge_weight
+                    * 0.65
+                )
+                if propagated <= 0:
+                    continue
+                weights[neighbor_id] = max(
+                    weights.get(neighbor_id, 0.0),
+                    propagated,
+                )
+
         if not weights:
             return []
 
@@ -1052,6 +1154,232 @@ class SQLiteMemoryStore:
             for memory_id in ordered_ids
             if memory_id in items
         ]
+
+    def scope_items(
+        self,
+        *,
+        owner_id: str,
+        scope: MemoryScope,
+        project_id: str | None,
+        kinds: set[MemoryKind] | None = None,
+        include_archived: bool = False,
+        limit: int = 2000,
+    ) -> list[MemoryItem]:
+        params: list[object] = [owner_id, scope.value]
+        clauses = [
+            "owner_id = ?",
+            "scope = ?",
+            "deleted_at IS NULL",
+        ]
+        if scope is MemoryScope.PROJECT:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        else:
+            clauses.append("project_id IS NULL")
+        if not include_archived:
+            clauses.append("status = 'active'")
+        if kinds:
+            placeholders = ",".join("?" for _ in kinds)
+            clauses.append(f"kind IN ({placeholders})")
+            params.extend(sorted(kind.value for kind in kinds))
+        params.append(max(1, min(limit, 10_000)))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT {self.SELECT_COLUMNS}
+                FROM memory_items
+                WHERE {" AND ".join(clauses)}
+                ORDER BY pinned DESC, importance DESC, updated_at DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [self._row_to_item(row) for row in rows]
+
+    def source_reliability(
+        self,
+        source_type: str,
+        source_ref: str | None = None,
+    ) -> SourceReliability | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT source_type, source_ref, reliability,
+                       confirmations, contradictions, updated_at
+                FROM memory_source_reliability
+                WHERE source_type = ? AND source_ref = ?
+                """,
+                (source_type, source_ref or ""),
+            ).fetchone()
+        if row is None:
+            return None
+        return SourceReliability(
+            source_type=row["source_type"],
+            source_ref=row["source_ref"] or None,
+            reliability=float(row["reliability"]),
+            confirmations=int(row["confirmations"]),
+            contradictions=int(row["contradictions"]),
+            updated_at=row["updated_at"],
+        )
+
+    def update_source_reliability(
+        self,
+        source_type: str,
+        *,
+        source_ref: str | None = None,
+        confirmed: bool,
+        base_reliability: float = 0.5,
+    ) -> SourceReliability:
+        current = self.source_reliability(source_type, source_ref)
+        confirmations = current.confirmations if current else 0
+        contradictions = current.contradictions if current else 0
+        if confirmed:
+            confirmations += 1
+        else:
+            contradictions += 1
+        total = confirmations + contradictions
+        observed = confirmations / total if total else base_reliability
+        reliability = max(
+            0.05,
+            min(
+                0.99,
+                (base_reliability * 2.0 + observed * total) / (2.0 + total),
+            ),
+        )
+        updated_at = self._now()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO memory_source_reliability (
+                    source_type, source_ref, reliability,
+                    confirmations, contradictions, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source_type, source_ref) DO UPDATE SET
+                    reliability = excluded.reliability,
+                    confirmations = excluded.confirmations,
+                    contradictions = excluded.contradictions,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    source_type,
+                    source_ref or "",
+                    reliability,
+                    confirmations,
+                    contradictions,
+                    updated_at,
+                ),
+            )
+        result = self.source_reliability(source_type, source_ref)
+        if result is None:
+            raise RuntimeError("failed to persist source reliability")
+        return result
+
+    def add_entity_alias(
+        self,
+        *,
+        owner_id: str,
+        scope: MemoryScope,
+        project_id: str | None,
+        canonical_memory_id: str,
+        alias: str,
+        normalized_alias: str,
+        confidence: float,
+    ) -> EntityAlias:
+        canonical = self.get(canonical_memory_id, owner_id)
+        if canonical.scope is not scope or canonical.project_id != project_id:
+            raise MemoryConflictError(
+                "entity alias scope does not match canonical memory"
+            )
+        item = EntityAlias(
+            id=str(uuid4()),
+            owner_id=owner_id,
+            scope=scope,
+            project_id=project_id,
+            canonical_memory_id=canonical_memory_id,
+            alias=alias,
+            normalized_alias=normalized_alias,
+            confidence=confidence,
+            created_at=self._now(),
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO memory_entity_aliases (
+                    id, owner_id, scope, project_id, canonical_memory_id,
+                    alias, normalized_alias, confidence, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(
+                    owner_id, scope, project_id,
+                    canonical_memory_id, normalized_alias
+                ) DO UPDATE SET
+                    alias = excluded.alias,
+                    confidence = MAX(confidence, excluded.confidence)
+                """,
+                (
+                    item.id,
+                    item.owner_id,
+                    item.scope.value,
+                    item.project_id,
+                    item.canonical_memory_id,
+                    item.alias,
+                    item.normalized_alias,
+                    item.confidence,
+                    item.created_at,
+                ),
+            )
+            row = conn.execute(
+                """
+                SELECT *
+                FROM memory_entity_aliases
+                WHERE owner_id = ? AND scope = ?
+                  AND project_id IS ?
+                  AND canonical_memory_id = ?
+                  AND normalized_alias = ?
+                """,
+                (
+                    owner_id,
+                    scope.value,
+                    project_id,
+                    canonical_memory_id,
+                    normalized_alias,
+                ),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("failed to persist entity alias")
+        return self._row_to_entity_alias(row)
+
+    def entity_aliases(
+        self,
+        *,
+        owner_id: str,
+        scope: MemoryScope,
+        project_id: str | None,
+        normalized_alias: str | None = None,
+        limit: int = 200,
+    ) -> list[EntityAlias]:
+        params: list[object] = [owner_id, scope.value]
+        clauses = ["owner_id = ?", "scope = ?"]
+        if scope is MemoryScope.PROJECT:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        else:
+            clauses.append("project_id IS NULL")
+        if normalized_alias is not None:
+            clauses.append("normalized_alias = ?")
+            params.append(normalized_alias)
+        params.append(max(1, min(limit, 1000)))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT *
+                FROM memory_entity_aliases
+                WHERE {" AND ".join(clauses)}
+                ORDER BY confidence DESC, created_at DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [self._row_to_entity_alias(row) for row in rows]
 
     def add_evidence(
         self,
@@ -2032,6 +2360,20 @@ class SQLiteMemoryStore:
             last_error=row["last_error"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _row_to_entity_alias(row: sqlite3.Row) -> EntityAlias:
+        return EntityAlias(
+            id=row["id"],
+            owner_id=row["owner_id"],
+            scope=MemoryScope(row["scope"]),
+            project_id=row["project_id"],
+            canonical_memory_id=row["canonical_memory_id"],
+            alias=row["alias"],
+            normalized_alias=row["normalized_alias"],
+            confidence=float(row["confidence"]),
+            created_at=row["created_at"],
         )
 
     @staticmethod

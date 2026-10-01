@@ -50,6 +50,41 @@ class HashEmbeddingProvider:
         return vector
 
 
+class FastEmbedProvider:
+    """Optional local multilingual semantic embeddings without PyTorch."""
+
+    name = "fastembed"
+
+    def __init__(
+        self,
+        model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        dimensions: int = 384,
+        cache_dir: str | None = None,
+    ):
+        try:
+            from fastembed import TextEmbedding
+        except ImportError as exc:
+            raise RuntimeError(
+                "FastEmbed is not installed. Reinstall Dragon Tory runtime "
+                "dependencies before enabling semantic memory."
+            ) from exc
+        kwargs = {"model_name": model}
+        if cache_dir:
+            kwargs["cache_dir"] = cache_dir
+        self._model = TextEmbedding(**kwargs)
+        self.model = model
+        self.dimensions = dimensions
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for vector in self._model.embed(texts):
+            values = [float(value) for value in vector.tolist()]
+            if values:
+                self.dimensions = len(values)
+            vectors.append(values)
+        return vectors
+
+
 class OpenAICompatibleEmbeddingProvider:
     """Embedding client for OpenAI-compatible /embeddings endpoints."""
 
@@ -108,6 +143,20 @@ def build_embedding_provider(settings) -> EmbeddingProvider:
     provider = settings.memory_embedding_provider.lower().strip()
     if provider == "hash":
         return HashEmbeddingProvider(settings.memory_embedding_dimensions)
+
+    if provider == "fastembed":
+        return FastEmbedProvider(
+            model=(
+                settings.memory_embedding_model
+                or "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+            ),
+            dimensions=settings.memory_embedding_dimensions,
+            cache_dir=(
+                str(settings.memory_embedding_cache_dir)
+                if settings.memory_embedding_cache_dir
+                else None
+            ),
+        )
 
     if provider == "openai_compatible":
         missing = [

@@ -22,6 +22,7 @@ class MemoryAutomation:
         archive_max_access_count: int,
         auto_consolidate_threshold: int,
         consolidate_cooldown_hours: int,
+        grey_matter=None,
     ):
         self.engine = engine
         self.interval_seconds = max(60, interval_seconds)
@@ -30,6 +31,7 @@ class MemoryAutomation:
         self.archive_max_access_count = archive_max_access_count
         self.auto_consolidate_threshold = auto_consolidate_threshold
         self.consolidate_cooldown_hours = consolidate_cooldown_hours
+        self.grey_matter = grey_matter
 
         self.latest_report: MemoryMaintenanceReport | None = None
         self.run_count = 0
@@ -79,6 +81,32 @@ class MemoryAutomation:
                     self.auto_consolidate_threshold,
                     self.consolidate_cooldown_hours,
                 )
+                if self.grey_matter is not None:
+                    for (
+                        owner_id,
+                        scope,
+                        project_id,
+                        _count,
+                        _last_summary_at,
+                    ) in self.engine.store.maintenance_scopes():
+                        try:
+                            await asyncio.to_thread(
+                                self.grey_matter.consolidate_scope,
+                                owner_id=owner_id,
+                                scope=scope,
+                                project_id=project_id,
+                                limit=500,
+                                create_summary=False,
+                            )
+                        except Exception as exc:  # noqa: BLE001 - sleep cycle is best-effort
+                            logger.warning(
+                                "Grey Matter sleep consolidation skipped for "
+                                "%s/%s/%s: %s",
+                                owner_id,
+                                scope.value,
+                                project_id,
+                                exc,
+                            )
                 self.latest_report = report
                 self.run_count += 1
                 return report

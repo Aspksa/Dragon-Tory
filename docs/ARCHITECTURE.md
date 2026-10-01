@@ -10,7 +10,7 @@ and isolated when providers change.
 ## Layers
 
 1. API — FastAPI backend.
-2. Memory Engine v5 — structured, versioned, self-maintaining long-term memory with FTS5 hybrid retrieval.
+2. Memory Engine v6 — structured, versioned, self-maintaining long-term memory with hybrid semantic/lexical/graph retrieval.
 3. Memory Intelligence — decides what deserves durable memory.
 4. Tooru Memory Guardian — hidden risk/policy controller for automatic memory writes.
 5. AI provider registry — internal DeepSeek connection layer.
@@ -18,7 +18,7 @@ and isolated when providers change.
 7. Web UI — desktop/browser interface.
 8. Mobile clients — planned clients using the same backend contracts.
 
-## Memory Engine v5.2 / Cognitive Core IV
+## Memory Engine v6 / Cognitive Core V
 
 Capabilities:
 - hybrid semantic and lexical recall;
@@ -48,6 +48,18 @@ Additional cognitive layers:
 - Result Verifier — checks the answer against the task, plan and available context.
 - Experience Learning — proposes reusable rules only from repeated verified outcomes.
 - Guardian Gate — learned rules remain high-impact candidates until reviewed.
+- Grey Matter — metacognitive layer above Memory Engine.
+- Semantic Memory — optional local multilingual FastEmbed vectors.
+- Entity Resolution — canonical entities plus aliases and SAME_ENTITY links.
+- Causal Memory — typed CAUSES / REQUIRES chains.
+- Uncertainty Engine — explicit uncertainty and competing facts.
+- Hierarchical Memory — summary/PART_OF hierarchy.
+- Goal Graph — GOAL/TASK progress and DEPENDS_ON dependencies.
+- Multi-hop Retrieval — typed graph traversal beyond direct neighbors.
+- Source Reliability — learned source reputation integrated into Truth Engine.
+- Correction Learning — LESSON memory from user corrections.
+- Counterfactual Verification — alternative explanations and assumption checks.
+- Skill Memory — reviewed reusable procedures learned from verified outcomes.
 
 See docs/MEMORY_ENGINE.md.
 
