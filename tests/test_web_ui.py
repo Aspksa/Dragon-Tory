@@ -18,6 +18,10 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Чат" in response.text
     assert "Мой диск Тори" in response.text
     assert 'id="homeGlobalStatus"' in response.text
+    assert 'id="homeBrainCy"' in response.text
+    assert 'id="homeBrainTooltip"' in response.text
+    assert 'id="documentModuleStudy"' in response.text
+    assert "/assets/cytoscape.min.js" in response.text
     assert 'id="homeBrainSvg"' in response.text
     assert 'id="homeBrainViewport"' in response.text
     assert 'id="homeNodeDrawer"' in response.text
@@ -259,3 +263,12 @@ def test_employee_and_garage_endpoints_are_available() -> None:
 
     assert vehicle.status_code == 201
     assert vehicle.json()["driver_name"] == "Петров Пётр Петрович"
+
+
+def test_cytoscape_is_bundled_locally() -> None:
+    with TestClient(app) as client:
+        response = client.get("/assets/cytoscape.min.js")
+
+    assert response.status_code == 200
+    assert "cytoscape" in response.text.lower()
+    assert "javascript" in response.headers["content-type"]

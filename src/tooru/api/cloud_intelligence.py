@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from tooru.ai.base import AIRequest
 from tooru.cloud.document_intelligence import OCRUnavailableError
 from tooru.cloud.intelligence import UnsupportedDocumentError
+from tooru.cloud.module_learning import ModuleLearningService
 
 router = APIRouter(
     prefix="/v1/cloud/intelligence",
@@ -264,6 +265,23 @@ def document_modules(request: Request) -> dict[str, Any]:
 def document_module(module_id: str, request: Request) -> dict[str, Any]:
     try:
         return _service(request).module_profile(module_id)
+    except Exception as exc:
+        raise _error(exc) from exc
+
+
+@router.post("/modules/{module_id}/study")
+async def study_module(
+    module_id: str,
+    request: Request,
+) -> dict[str, Any]:
+    service = ModuleLearningService(
+        memory=request.app.state.memory,
+        smart=request.app.state.cloud_smart,
+        intelligence=request.app.state.document_intelligence,
+        ai_router=request.app.state.ai_router,
+    )
+    try:
+        return await service.study(module_id)
     except Exception as exc:
         raise _error(exc) from exc
 

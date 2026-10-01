@@ -40,7 +40,7 @@ where = ["src"]
 version = {attr = "tooru.version.__version__"}
 
 [tool.setuptools.package-data]
-tooru = ["web/*.html"]
+tooru = ["web/*.html", "web/vendor/*.js", "web/vendor/*.txt"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
