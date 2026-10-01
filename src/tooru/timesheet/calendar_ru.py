@@ -200,8 +200,15 @@ def production_calendar(
                 "weekday_name": _WEEKDAY_NAMES[current.weekday()],
                 "is_workday": not nonworking,
                 "is_weekend": weekend and not working_override,
-                "is_holiday": bool(holiday_name or shifted_holiday),
-                "is_transferred": transfer_source or transfer_target,
+                "is_holiday": bool(holiday_name),
+                "is_shifted_day_off": bool(
+                    shifted_holiday or transfer_target
+                ),
+                "is_transferred": (
+                    transfer_source
+                    or transfer_target
+                    or bool(shifted_holiday)
+                ),
                 "is_short_day": short_day,
                 "planned_code": "Я" if not nonworking else "В",
                 "planned_hours": (
