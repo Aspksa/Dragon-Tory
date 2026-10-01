@@ -353,6 +353,66 @@ RELEASE_NOTES: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "00.00.34": {
+        "title": "Cognitive Core V: Grey Matter",
+        "modules": [
+            {
+                "id": "grey_matter",
+                "title": "Серое вещество",
+                "version": "01.00.00",
+                "changes": [
+                    "Добавлен локальный semantic embedding provider FastEmbed с multilingual-моделью и безопасным hash fallback.",
+                    "Иерархическая память строит PART_OF связи от фактов/эпизодов/задач к консолидационным summary.",
+                    "Entity Resolution хранит алиасы и SAME_ENTITY связи без смешивания personal/project scope.",
+                    "Causal Memory хранит цепочки причина → проблема → действие → результат.",
+                    "Uncertainty Engine различает низкую/среднюю/высокую неопределённость и показывает альтернативные конфликтующие факты.",
+                    "Memory Consolidation v2 запускает фоновый Grey Matter sleep-cycle без бесконтрольного создания новых summary.",
+                    "Goal & Task Memory поддерживает прогресс цели, task state и DEPENDS_ON зависимости.",
+                    "Multi-hop retrieval проходит до двух шагов в обычном recall и до шести шагов через Grey Matter API.",
+                    "Source Reliability обучается на подтверждениях/опровержениях источника и участвует в Truth Engine.",
+                    "Correction Learning сохраняет уроки из явных исправлений пользователя через Guardian.",
+                    "Counterfactual Verifier проверяет альтернативные объяснения, контрфактический сценарий и явную uncertainty.",
+                    "Skill Memory хранит повторяемые проверенные рабочие процедуры как отдельный защищённый тип skill.",
+                ],
+            },
+            {
+                "id": "memory",
+                "title": "Память Тоору",
+                "version": "03.00.00",
+                "changes": [
+                    "Добавлены типы skill и lesson и новые графовые связи причинности, сущностей, целей и исправлений.",
+                    "Truth Engine учитывает обучаемую надёжность источника.",
+                    "Recall выдаёт uncertainty_score и использует двухшаговое typed graph expansion.",
+                    "SQLite получил таблицы source reliability и entity aliases с обратной совместимостью.",
+                ],
+            },
+            {
+                "id": "reasoning",
+                "title": "Мышление Тоору",
+                "version": "02.00.00",
+                "changes": [
+                    "Result Verifier получил alternative_explanations, counterfactual_checks и uncertainty.",
+                    "Experience Learning создаёт skill-кандидаты, которые требуют Guardian review.",
+                ],
+            },
+            {
+                "id": "dashboard",
+                "title": "Главная / Системный мозг",
+                "version": "01.10.00",
+                "changes": [
+                    "Реестр модулей теперь содержит отдельный Grey Matter слой для будущей визуализации мозга.",
+                ],
+            },
+            {
+                "id": "updater",
+                "title": "Обновление",
+                "version": "01.05.00",
+                "changes": [
+                    "00.00.34 добавляет только совместимые SQLite-таблицы и не удаляет существующую память.",
+                ],
+            },
+        ],
+    },
 }
 
 
