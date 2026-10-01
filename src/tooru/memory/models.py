@@ -191,6 +191,7 @@ class MemoryRecallHit(BaseModel):
     retrieval_score: float = 0.0
     graph_score: float = 0.0
     truth_score: float = 0.5
+    uncertainty_score: float = 0.5
     importance_score: float
     confidence_score: float
     recency_score: float
