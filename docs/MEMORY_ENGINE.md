@@ -61,11 +61,13 @@ scope isolation or Guardian.
 
 Version 00.00.31 adds a deterministic trust assessment for each durable memory.
 The score combines memory confidence, evidence confidence, feedback, temporal
-status, SUPPORTS links and a penalty for CONTRADICTS links. It is intended as
+status, SUPPORTS links, learned source reliability and a penalty for
+CONTRADICTS links. It is intended as
 an explainable retrieval signal, not as an absolute claim that a fact is true.
 
-Graph-assisted retrieval expands lexical/semantic candidates through RELATED,
-SUPPORTS, SUMMARIZES and temporal links before final reranking.
+Graph-assisted retrieval expands lexical/semantic candidates through typed
+memory relationships. Cognitive Core V performs a decayed two-hop expansion in
+ordinary recall, while explicit Grey Matter traversal can go deeper.
 
 `GET /v1/memory/{memory_id}/truth` returns the complete assessment.
 
@@ -133,7 +135,9 @@ The builder:
 - deduplicates memories that appear in both pinned and semantic results;
 - respects a maximum character budget;
 - labels memory kinds and relevance scores;
-- marks only kind=instruction records as behavioral instructions.
+- marks kind=instruction as behavioral instructions;
+- exposes reviewed kind=skill records as reusable procedures that cannot
+  override instructions or system policy.
 
 This is the bridge between long-term memory and the future AI Router. The
 models receive selected context instead of the whole database.
