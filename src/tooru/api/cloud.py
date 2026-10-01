@@ -7,7 +7,7 @@ from urllib.parse import unquote
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from fastapi.background import BackgroundTask
+from starlette.background import BackgroundTask
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
