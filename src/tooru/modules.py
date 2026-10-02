@@ -15,10 +15,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "drive",
         "title": "Мой диск",
-        "version": "01.09.00",
+        "version": "01.10.00",
         "area": "documents",
         "description": "Единое файловое пространство, папки, паспорта, ДНК, версии, поиск и связи.",
-        "last_update": "Document Intelligence v2: chunk-first анализ больших файлов, проверки, evidence и улучшенное сравнение версий.",
+        "last_update": "Chat document pipeline сохраняет fatal study failures в provenance/observability и входит в машинный отчёт самодиагностики.",
         "depends_on": [],
     },
     {
