@@ -16,6 +16,15 @@ class StubCloud:
     def all_active_documents(self, *, limit: int = 5_000) -> list[dict]:
         return list(self.documents[:limit])
 
+    def document_chunks(
+        self,
+        document_id: str,
+        *,
+        query: str = "",
+        limit: int = 10,
+    ) -> list[dict]:
+        return []
+
 
 class StubSmart:
     def __init__(
@@ -25,11 +34,14 @@ class StubSmart:
         employees: list[dict] | None = None,
         counterparties: list[dict] | None = None,
         dna: dict[str, dict] | None = None,
+        permissions: dict[str, bool] | None = None,
     ) -> None:
         self.vehicles = vehicles or []
         self.employees = employees or []
         self.counterparties = counterparties or []
         self.dna = dna or {}
+        self.permissions = permissions or {}
+        self.provenance_events: list[dict] = []
 
     def list_employees(self, *, limit: int = 1_000) -> list[dict]:
         return list(self.employees[:limit])
@@ -59,12 +71,61 @@ class StubSmart:
     def list_relations(self, document_id: str) -> list[dict]:
         return []
 
+    def permission(self, document_id: str, name: str) -> bool:
+        assert name == "content_read"
+        return self.permissions.get(document_id, True)
+
+    def apply_intelligence_defaults(
+        self,
+        document_id: str,
+        result: dict,
+    ) -> dict:
+        return {"document_id": document_id, "applied": True}
+
+    def record_provenance(
+        self,
+        document_id: str,
+        operation: str,
+        *,
+        actor: str,
+        details: dict,
+    ) -> None:
+        self.provenance_events.append(
+            {
+                "document_id": document_id,
+                "operation": operation,
+                "actor": actor,
+                "details": details,
+            }
+        )
+
 
 class StubIntelligence:
-    def __init__(self, analyses: dict[str, dict] | None = None) -> None:
+    def __init__(
+        self,
+        analyses: dict[str, dict] | None = None,
+        pending: list[dict] | None = None,
+    ) -> None:
         self.analyses = analyses or {}
+        self.pending = pending or []
+        self.analyzed: list[str] = []
 
     def get(self, document_id: str) -> dict:
+        if document_id not in self.analyses:
+            raise KeyError(document_id)
+        return dict(self.analyses[document_id])
+
+    def collection_items(
+        self,
+        collection_id: str,
+        *,
+        limit: int = 100,
+    ) -> list[dict]:
+        assert collection_id == "attention:unanalyzed"
+        return list(self.pending[:limit])
+
+    def analyze(self, document_id: str) -> dict:
+        self.analyzed.append(document_id)
         if document_id not in self.analyses:
             raise KeyError(document_id)
         return dict(self.analyses[document_id])
@@ -417,3 +478,142 @@ def test_dismissed_insight_stays_dismissed_across_scan(tmp_path: Path) -> None:
     )
 
     assert updated.status is InsightStatus.DISMISSED
+
+
+def test_auto_analysis_respects_document_ai_contract(tmp_path: Path) -> None:
+    cloud = StubCloud(
+        [
+            {"id": "DOC-ALLOW", "name": "Разрешённый.docx"},
+            {"id": "DOC-DENY", "name": "Закрытый.docx"},
+        ]
+    )
+    smart = StubSmart(
+        permissions={
+            "DOC-ALLOW": True,
+            "DOC-DENY": False,
+        }
+    )
+    intelligence = StubIntelligence(
+        analyses={
+            "DOC-ALLOW": {
+                "version": 1,
+                "kind": "счёт",
+                "ocr_used": False,
+            },
+            "DOC-DENY": {
+                "version": 1,
+                "kind": "договор",
+                "ocr_used": False,
+            },
+        },
+        pending=[
+            {"id": "DOC-ALLOW", "name": "Разрешённый.docx"},
+            {"id": "DOC-DENY", "name": "Закрытый.docx"},
+        ],
+    )
+    service = make_service(
+        tmp_path,
+        cloud=cloud,
+        smart=smart,
+        intelligence=intelligence,
+    )
+
+    report = service.analyze_pending_documents()
+
+    assert report["analyzed"] == 1
+    assert report["skipped"] == 1
+    assert intelligence.analyzed == ["DOC-ALLOW"]
+    assert len(smart.provenance_events) == 1
+    event = smart.provenance_events[0]
+    assert event["operation"] == "cognition_auto_analysis"
+    assert event["details"]["external_ai_used"] is False
+
+
+def test_line_item_price_signal_ignores_price_in_identity(
+    tmp_path: Path,
+) -> None:
+    documents = [
+        {
+            "id": "DOC-1",
+            "name": "Счёт 1",
+            "version": 1,
+            "project_id": "dragon-tory",
+            "created_at": "2026-09-01T00:00:00+00:00",
+        },
+        {
+            "id": "DOC-2",
+            "name": "Счёт 2",
+            "version": 1,
+            "project_id": "dragon-tory",
+            "created_at": "2026-09-15T00:00:00+00:00",
+        },
+    ]
+
+    class ChunkCloud(StubCloud):
+        def document_chunks(
+            self,
+            document_id: str,
+            *,
+            query: str = "",
+            limit: int = 10,
+        ) -> list[dict]:
+            price = "1000 руб" if document_id == "DOC-1" else "1700 руб"
+            return [
+                {
+                    "chunk_no": 1,
+                    "page_no": 1,
+                    "text": f"Фильтр масляный ABC-123 {price}",
+                }
+            ]
+
+    smart = StubSmart(
+        dna={
+            "DOC-1": {"kind": "счёт"},
+            "DOC-2": {"kind": "счёт"},
+        }
+    )
+    intelligence = StubIntelligence(
+        analyses={
+            "DOC-1": {
+                "kind": "счёт",
+                "summary_local": "",
+                "entities": {
+                    "vin": [],
+                    "counterparties": [],
+                    "employees": [],
+                    "amounts": [],
+                },
+                "checks": {"warnings": []},
+                "deadlines": [],
+            },
+            "DOC-2": {
+                "kind": "счёт",
+                "summary_local": "",
+                "entities": {
+                    "vin": [],
+                    "counterparties": [],
+                    "employees": [],
+                    "amounts": [],
+                },
+                "checks": {"warnings": []},
+                "deadlines": [],
+            },
+        }
+    )
+    service = make_service(
+        tmp_path,
+        cloud=ChunkCloud(documents),
+        smart=smart,
+        intelligence=intelligence,
+    )
+
+    service.scan_proactive()
+    rules = {
+        item.rule_id
+        for item in service.store.insights(
+            status=InsightStatus.OPEN,
+            limit=100,
+        )
+    }
+
+    assert "line_item_price_jump" in rules
