@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import platform
+import shutil
 import sqlite3
 import sys
 from collections import Counter
 from dataclasses import asdict
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -425,6 +427,100 @@ def _configuration_report(state) -> dict[str, Any]:
     }
 
 
+def _document_engines_report() -> dict[str, Any]:
+    packages = (
+        "pypdf",
+        "PyMuPDF",
+        "python-docx",
+        "openpyxl",
+        "python-pptx",
+        "odfpy",
+        "striprtf",
+        "xlrd",
+        "pyxlsb",
+        "extract-msg",
+        "ebooklib",
+        "Pillow",
+    )
+    versions: dict[str, str | None] = {}
+    for package in packages:
+        try:
+            versions[package] = version(package)
+        except PackageNotFoundError:
+            versions[package] = None
+
+    tesseract = shutil.which("tesseract")
+    libreoffice = shutil.which("soffice") or shutil.which("libreoffice")
+    return {
+        "tesseract": {
+            "available": bool(tesseract),
+            "executable": Path(tesseract).name if tesseract else None,
+            "used_for": ["scanned PDFs", "images requiring OCR"],
+        },
+        "libreoffice": {
+            "available": bool(libreoffice),
+            "executable": Path(libreoffice).name if libreoffice else None,
+            "used_for": ["legacy .doc", "legacy .ppt", "conversion fallback"],
+        },
+        "python_packages": versions,
+        "format_notes": {
+            "native": [
+                "DOCX",
+                "XLSX",
+                "XLS",
+                "XLSB",
+                "PPTX",
+                "ODT/ODF",
+                "RTF",
+                "HTML",
+                "EML",
+                "MSG",
+                "EPUB",
+                "PDF",
+                "images",
+            ],
+            "legacy_conversion": ["DOC", "PPT"],
+        },
+    }
+
+
+def _implementation_map() -> dict[str, list[str]]:
+    return {
+        "chat": [
+            "src/tooru/api/chat.py",
+            "src/tooru/chat/pipeline.py",
+            "src/tooru/chat/documents.py",
+            "src/tooru/chat/reasoning.py",
+        ],
+        "documents": [
+            "src/tooru/cloud/store.py",
+            "src/tooru/cloud/document_intelligence.py",
+            "src/tooru/cloud/document_analysis_v2.py",
+            "src/tooru/cloud/smart.py",
+        ],
+        "memory": [
+            "src/tooru/memory/engine.py",
+            "src/tooru/memory/store.py",
+            "src/tooru/memory/guardian.py",
+            "src/tooru/memory/intelligence.py",
+            "src/tooru/memory/grey_matter.py",
+        ],
+        "cognition": [
+            "src/tooru/cognition/service.py",
+            "src/tooru/cognition/store.py",
+            "src/tooru/cognition/automation.py",
+        ],
+        "observability": [
+            "src/tooru/observability/store.py",
+            "src/tooru/api/observability.py",
+        ],
+        "report": [
+            "src/tooru/system_report.py",
+            "src/tooru/api/settings.py",
+        ],
+    }
+
+
 def _runtime_report(state) -> dict[str, Any]:
     settings = state.settings
     project_root = Path.cwd().resolve()
@@ -620,6 +716,30 @@ def _diagnostic_findings(report: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
 
+    engines = report.get("document_engines") or {}
+    if not (engines.get("tesseract") or {}).get("available", False):
+        findings.append(
+            {
+                "code": "OCR_ENGINE_UNAVAILABLE",
+                "severity": "low",
+                "message": (
+                    "Tesseract OCR is unavailable; scanned/image documents "
+                    "may require installation before local text extraction."
+                ),
+            }
+        )
+    if not (engines.get("libreoffice") or {}).get("available", False):
+        findings.append(
+            {
+                "code": "LEGACY_OFFICE_ENGINE_UNAVAILABLE",
+                "severity": "low",
+                "message": (
+                    "LibreOffice is unavailable; legacy DOC/PPT conversion "
+                    "may fail."
+                ),
+            }
+        )
+
     documents = report.get("documents") or {}
     status_counts = documents.get("study_status_counts") or {}
     failed = int(status_counts.get("failed") or 0)
@@ -705,8 +825,15 @@ def build_machine_report(app, *, document_limit: int = 1_000) -> dict[str, Any]:
             "redacted_fields": sorted(_REDACTED_KEYS),
         },
         "pipeline_contracts": _pipeline_contracts(),
+        "implementation_map": _implementation_map(),
     }
 
+    report["document_engines"] = _safe_section(
+        errors,
+        "document_engines",
+        _document_engines_report,
+        fallback={},
+    )
     report["runtime"] = _safe_section(
         errors,
         "runtime",
