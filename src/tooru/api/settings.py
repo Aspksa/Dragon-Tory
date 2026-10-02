@@ -2,12 +2,13 @@ import json
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from tooru.ai.base import AIRequest
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.modules import module_registry
+from tooru.system_report import build_machine_report
 
 router = APIRouter(prefix="/v1/settings", tags=["settings"])
 
@@ -94,6 +95,43 @@ def remove_legacy_claude_settings(path: Path) -> None:
 @router.get("/modules")
 def get_module_registry() -> dict:
     return {"items": module_registry()}
+
+
+@router.get("/system-report")
+def get_system_report(request: Request) -> dict:
+    _require_local(request)
+    return build_machine_report(request.app)
+
+
+@router.get("/system-report/download")
+def download_system_report(request: Request) -> Response:
+    _require_local(request)
+    report = build_machine_report(request.app)
+    stamp = (
+        str(report.get("generated_at") or "")
+        .replace("-", "")
+        .replace(":", "")
+        .replace("+", "")
+        .replace(".", "")[:15]
+    )
+    filename = (
+        f"dragon-tory-machine-report-{report['project']['version']}-"
+        f"{stamp or 'snapshot'}.json"
+    )
+    payload = json.dumps(
+        report,
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    )
+    return Response(
+        content=payload,
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get(
