@@ -13,6 +13,15 @@ _DATE_RE = re.compile(
     r")\b"
 )
 _VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b", re.IGNORECASE)
+_PLATE_RE = re.compile(
+    r"(?<![A-ZА-Я0-9])"
+    r"([АВЕКМНОРСТУХABEKMHOPCTYX])\s*"
+    r"(\d{3})\s*"
+    r"([АВЕКМНОРСТУХABEKMHOPCTYX]{2})\s*"
+    r"(\d{2,3})"
+    r"(?![A-ZА-Я0-9])",
+    re.IGNORECASE,
+)
 _REF_RE = re.compile(
     r"\b(?:договор|приказ|распоряжение|оферт[аы]?|contract|invoice|"
     r"сч[её]т|order|заказ|полис|policy)"
@@ -175,6 +184,7 @@ def analyze_chunks(chunks: Iterable[Any]) -> dict[str, Any]:
     injection_findings: list[dict[str, Any]] = []
     totals: list[dict[str, Any]] = []
     vats: list[dict[str, Any]] = []
+    priced_items: list[dict[str, Any]] = []
     pages: set[int] = set()
     tables: set[str] = set()
     cells: set[str] = set()
@@ -202,6 +212,19 @@ def analyze_chunks(chunks: Iterable[Any]) -> dict[str, Any]:
                     raw=match.group(0),
                     excerpt=_excerpt(text, match.start(), match.end()),
                     confidence=0.99,
+                    locator=loc,
+                )
+            )
+
+        for match in _PLATE_RE.finditer(text):
+            plate = "".join(match.groups()).upper().replace(" ", "")
+            evidence.append(
+                _evidence(
+                    evidence_type="plate_number",
+                    value=plate,
+                    raw=match.group(0),
+                    excerpt=_excerpt(text, match.start(), match.end()),
+                    confidence=0.94,
                     locator=loc,
                 )
             )
@@ -269,6 +292,47 @@ def analyze_chunks(chunks: Iterable[Any]) -> dict[str, Any]:
                 total["confidence"] = 0.94
                 totals.append(total)
                 evidence.append(total)
+
+            compact_line = " ".join(line.split())
+            if (
+                amounts_in_line
+                and not _TOTAL_WORD_RE.search(line)
+                and not _VAT_LINE_RE.search(line)
+                and not _NO_VAT_RE.search(line)
+                and len(compact_line) <= 500
+            ):
+                description = _AMOUNT_RE.sub(" ", compact_line)
+                description = re.sub(
+                    r"^\s*(?:\d+[.)]?\s+)?(?:\d+(?:[.,]\d+)?\s*)?",
+                    "",
+                    description,
+                )
+                description = re.sub(r"\s+", " ", description).strip(" -;|")
+                alpha_count = len(
+                    re.findall(r"[A-ZА-ЯЁa-zа-яё]", description)
+                )
+                if alpha_count >= 4 and len(description) >= 5:
+                    price = amounts_in_line[-1]
+                    item_key = re.sub(
+                        r"[^a-zа-яё0-9]+",
+                        " ",
+                        description.casefold(),
+                    ).strip()[:160]
+                    priced = _evidence(
+                        evidence_type="line_item_price",
+                        value=price["value"],
+                        raw=compact_line,
+                        excerpt=compact_line,
+                        confidence=0.68,
+                        locator=loc,
+                        extra={
+                            "currency": price.get("currency"),
+                            "description": description[:300],
+                            "item_key": item_key,
+                        },
+                    )
+                    priced_items.append(priced)
+                    evidence.append(priced)
 
             if _NO_VAT_RE.search(line):
                 vat = _evidence(
@@ -415,6 +479,7 @@ def analyze_chunks(chunks: Iterable[Any]) -> dict[str, Any]:
             "total_candidates": totals[:30],
             "vat_candidates": vats[:30],
             "vat_math": vat_math[:20],
+            "line_item_prices": priced_items[:500],
             "currencies": sorted(
                 {
                     str(item.get("currency"))
