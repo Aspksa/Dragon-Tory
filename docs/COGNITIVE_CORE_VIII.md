@@ -125,6 +125,8 @@ can reopen if the same condition later returns.
 Current local detectors include:
 
 - duplicate VIN/plate identities in active garage cards;
+- VIN ↔ plate conflicts between a document and the matching garage vehicle,
+  with Cyrillic/Latin plate-letter canonicalization to avoid false positives;
 - expired or soon-expiring insurance;
 - warnings produced by Document Intelligence v2;
 - counterparty mismatch between document DNA and extracted text;
@@ -136,8 +138,9 @@ Current local detectors include:
 - duplicate document numbers;
 - frequent repair documents for the same VIN in a 90-day window;
 - unusually high document totals relative to similar documents;
-- large changes in repeated part/work line amounts. These are explicitly
-  described as line-amount signals, not proof of unit-price changes.
+- large changes in repeated part/work line amounts for the same counterparty
+  and currency. These are explicitly described as line-amount signals, not
+  proof of unit-price changes.
 
 ## 5. Learning from corrections
 
@@ -153,14 +156,20 @@ path.
 
 One cycle:
 
-1. evaluates whether enough verified reasoning outcomes exist to adapt policy;
-2. rebuilds the typed work graph;
-3. runs proactive detectors;
-4. resolves stale automatic insights whose condition disappeared;
-5. records cycle state and observability metadata.
+1. locally analyzes a bounded batch of previously unanalyzed documents when
+   their AI contract permits content reading;
+2. evaluates whether enough verified reasoning outcomes exist to adapt policy;
+3. rebuilds the typed work graph;
+4. runs proactive detectors;
+5. resolves stale automatic insights whose condition disappeared;
+6. records cycle state and observability metadata.
 
-The first cycle starts shortly after application startup and never requires a
-manual Chain/Tree/Hybrid button.
+The first cycle starts shortly after application startup. In addition, local
+data changes (new documents, garage cards, counterparties, employees, document
+DNA and document relations) debounce-trigger the same cognition cycle so a new
+invoice or vehicle change does not have to wait for the 15-minute interval.
+Heavy processing runs off the request path and never requires a manual
+Chain/Tree/Hybrid button.
 
 Environment controls:
 
