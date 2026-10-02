@@ -355,6 +355,41 @@ async def upload_chat_document(
             )
         except Exception as exc:  # noqa: BLE001 - keep uploaded file accessible
             error_text = f"{type(exc).__name__}: {str(exc)[:700]}"
+            try:
+                request.app.state.cloud_smart.record_provenance(
+                    document_id,
+                    "chat_document_study_failed",
+                    actor="tooru",
+                    source_ref=resolved_chat_id,
+                    details={
+                        "chat_id": resolved_chat_id,
+                        "version": document.get("version"),
+                        "error_type": type(exc).__name__,
+                        "error": str(exc)[:700],
+                    },
+                )
+            except Exception:  # noqa: BLE001 - failure logging must not hide source error
+                pass
+            try:
+                request.app.state.observability.event(
+                    category="analysis",
+                    stage="analysis",
+                    operation="chat_document_study",
+                    status="error",
+                    module="chat",
+                    source_type="document",
+                    source_id=document_id,
+                    document_id=document_id,
+                    message=error_text,
+                    details={
+                        "chat_id": resolved_chat_id,
+                        "version": document.get("version"),
+                    },
+                )
+            except Exception:  # noqa: BLE001 - observability is best effort
+                pass
+            if request.app.state.settings.cognition_automation_enabled:
+                request.app.state.cognition_automation.trigger()
             answer = (
                 f"📎 Документ «{safe_name}» сохранён в «Мой диск», "
                 "но полностью изучить его пока не удалось.\n"
