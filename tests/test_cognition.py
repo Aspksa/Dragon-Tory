@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+from tooru.chat.reasoning import ReasoningConfig
 from tooru.cognition.models import InsightSeverity, InsightStatus
 from tooru.cognition.service import CognitionService
 from tooru.cognition.store import CognitionStore
-from tooru.chat.reasoning import ReasoningConfig
 
 
 class StubCloud:
