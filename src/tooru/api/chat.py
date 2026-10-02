@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import uuid
+from contextlib import suppress
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -355,7 +356,7 @@ async def upload_chat_document(
             )
         except Exception as exc:  # noqa: BLE001 - keep uploaded file accessible
             error_text = f"{type(exc).__name__}: {str(exc)[:700]}"
-            try:
+            with suppress(Exception):
                 request.app.state.cloud_smart.record_provenance(
                     document_id,
                     "chat_document_study_failed",
@@ -368,9 +369,7 @@ async def upload_chat_document(
                         "error": str(exc)[:700],
                     },
                 )
-            except Exception:  # noqa: BLE001 - failure logging must not hide source error
-                pass
-            try:
+            with suppress(Exception):
                 request.app.state.observability.event(
                     category="analysis",
                     stage="analysis",
@@ -386,8 +385,6 @@ async def upload_chat_document(
                         "version": document.get("version"),
                     },
                 )
-            except Exception:  # noqa: BLE001 - observability is best effort
-                pass
             if request.app.state.settings.cognition_automation_enabled:
                 request.app.state.cognition_automation.trigger()
             answer = (
