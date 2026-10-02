@@ -43,7 +43,7 @@ class CognitionAutomation:
             self.last_result = result
             self.last_error = None
             return result
-        except Exception as exc:  # noqa: BLE001 - background worker must survive
+        except Exception as exc:
             self.failure_count += 1
             self.last_error = f"{type(exc).__name__}: {exc}"
             raise
@@ -55,8 +55,8 @@ class CognitionAutomation:
         while True:
             try:
                 await self.run_once()
-            except Exception:  # noqa: BLE001 - next cycle may recover
-                pass
+            except Exception:
+                self.last_error = self.last_error or "Cognition cycle failed."
             await asyncio.sleep(self.interval_seconds)
 
     def status(self) -> dict:
