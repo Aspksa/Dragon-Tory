@@ -87,7 +87,7 @@ def _line_item_key(value: Any) -> str:
 
 def _stable_id(kind: str, ref: str) -> str:
     digest = hashlib.sha1(
-        f"{kind}:{ref}".encode("utf-8"),
+        f"{kind}:{ref}".encode(),
         usedforsecurity=False,
     ).hexdigest()[:24]
     return f"COG-{kind.upper()}-{digest}"
@@ -104,7 +104,7 @@ def _parse_date(value: Any) -> date | None:
         return None
     for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y"):
         try:
-            return datetime.strptime(text[:10], fmt).date()
+            return datetime.strptime(text[:10], fmt).replace(tzinfo=UTC).date()
         except ValueError:
             continue
     try:
@@ -1092,9 +1092,11 @@ class CognitionService:
                 dna.get("counterparty_id") or dna.get("counterparty")
             )
             number = _norm(dna.get("document_number"))
-            if "договор" in kind or "contract" in kind:
-                if cp_key:
-                    contracts_by_cp.add(cp_key)
+            if (
+                ("договор" in kind or "contract" in kind)
+                and cp_key
+            ):
+                contracts_by_cp.add(cp_key)
             if kind in {"счёт", "счет", "invoice"}:
                 invoice_bundles.append(bundle)
             if number:
@@ -1398,7 +1400,6 @@ class CognitionService:
             high = max(positive)
             if low <= 0 or high / low < 1.50:
                 continue
-            high_entry = max(values, key=lambda item: item[0])
             ratio = high / low
             self._emit_insight(
                 seen,
