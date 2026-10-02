@@ -429,6 +429,7 @@ def test_document_intelligence_extracts_plate_and_line_item_price(
         "СЧЁТ № 77\n"
         "VIN JF1SJABC1GH123456\n"
         "Госномер А001АА25\n"
+        "Резервный госномер C859ЕС\n"
         "Фильтр масляный ABC-123 1 700 RUB\n"
         "Итого 1 700 RUB\n"
     ).encode()
@@ -443,6 +444,7 @@ def test_document_intelligence_extracts_plate_and_line_item_price(
     result = intelligence.analyze(document["id"])
 
     assert "А001АА25" in result["entities"]["plate_number"]
+    assert "C859ЕС" in result["entities"]["plate_number"]
     line_items = [
         item
         for item in result["evidence"]
@@ -453,5 +455,6 @@ def test_document_intelligence_extracts_plate_and_line_item_price(
         item.get("currency") == "RUB"
         and item.get("value") == 1700.0
         and "Фильтр масляный" in str(item.get("description") or "")
+        and "ABC-123" in str(item.get("description") or "")
         for item in line_items
     )
