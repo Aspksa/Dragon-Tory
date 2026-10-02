@@ -923,7 +923,15 @@ class CognitionService:
                     else "Заканчивается страховка автомобиля"
                 ),
                 summary=(
-                    f"{vehicle.get('garage_number') or vehicle.get('plate_number') or vehicle['id']}: "
+                    (
+                        str(vehicle.get("garage_number"))
+                        if vehicle.get("garage_number")
+                        else str(
+                            vehicle.get("plate_number")
+                            or vehicle["id"]
+                        )
+                    )
+                    + ": "
                     + (
                         f"просрочено на {abs(days_left)} дн."
                         if expired
