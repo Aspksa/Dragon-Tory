@@ -1147,6 +1147,8 @@ let homeLastUpdate=null;
 let homeRecentChats=[];
 let homeUpdateHistory=[];
 let homeObservability=null;
+let homeCognition=null;
+let homeCognitionInsights=[];
 let homeObsLoading=false;
 let homeBrainReady=false;
 let homeBrainPan={x:0,y:0,scale:1,dragging:false,lastX:0,lastY:0};
@@ -1196,6 +1198,7 @@ function homeNodeStatus(id){
   if(id==="deepseek")return homeLastDiag&&homeLastDiag.ai.configured?"online":"attention";
   if(id==="memory")return homeLastDiag&&homeLastDiag.memory_engine.health&&homeLastDiag.memory_engine.health.status==="ok"?"online":"attention";
   if(id==="guardian")return homeLastDiag&&Number(homeLastDiag.guardian.queued_dead||0)>0?"attention":"online";
+  if(id==="cognition")return homeCognition&&Number(homeCognition.high_insights||0)>0?"attention":(homeCognition&&homeCognition.automation_running?"active":"online");
   return"online";
 }
 function homeNodeVersion(id){
@@ -1337,6 +1340,7 @@ function homeLiveKpis(id){
   if(id==="guardian"){const g=d.guardian||{};return[["Ожидают",g.queued_pending||0],["Применено",g.queued_applied||0],["Отклонено",g.queued_rejected||0],["Dead-letter",g.queued_dead||0]]}
   if(id==="chat"){const h=d.chat_history||{};return[["Чатов",h.chats||0],["Сообщений",h.messages||0],["База",fmtBytes(h.database_bytes||0)]]}
   if(id==="runtime"){const sys=d.system||{},mem=d.system_memory||{},proc=d.process||{},disk=d.disk||{};return[["CPU",(sys.cpu_percent??0)+"%"],["RAM",(mem.percent??0)+"%"],["Dragon Tory",fmtBytes(proc.rss_bytes||0)],["Температура",sys.cpu_temperature_c==null?"н/д":sys.cpu_temperature_c+"°C"],["Диск свободно",fmtBytes(disk.free_bytes||0)]]}
+  if(id==="cognition"&&homeCognition){const p=homeCognition.policy||{};return[["Опыт",homeCognition.experiences||0],["Открыто",homeCognition.open_insights||0],["Высокий риск",homeCognition.high_insights||0],["Узлы графа",homeCognition.graph_nodes||0],["Связи",homeCognition.graph_edges||0],["Policy","v"+(p.version||1)]]}
   if(id==="updater"&&homeLastUpdate)return[["Локальная",homeLastUpdate.local_version||"—"],["GitHub",homeLastUpdate.remote_version||"—"],["Фаза",homeLastUpdate.phase||"—"],["Прогресс",(homeLastUpdate.progress_percent||0)+"%"]];
   return[];
 }
@@ -1373,6 +1377,8 @@ function renderHomeTasks(){
     const expired=Number(d.garage.insurance_expired||0),upcoming=Number(d.garage.insurance_upcoming||0);
     box.append(homeTask("Гараж · страховка",(expired?"Просрочено: "+expired+" · ":"")+(upcoming?"Заканчивается ≤15 дней: "+upcoming:""),now,expired>0));
   }
+  if(homeCognition){box.append(homeTask("Cognitive Core VIII",(homeCognition.automation_running?"Идёт когнитивный цикл · ":"Автоматика активна · ")+(homeCognition.experiences||0)+" эпизодов · "+(homeCognition.open_insights||0)+" инсайтов",homeCognition.last_cycle_at?new Date(homeCognition.last_cycle_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"learn",Number(homeCognition.high_insights||0)>0));}
+  homeCognitionInsights.slice(0,3).forEach(item=>box.append(homeTask("Тоору заметила · "+(item.title||item.rule_id),item.summary||"Проактивный сигнал",String(item.severity||"info").toUpperCase(),["high","critical"].includes(item.severity))));
   if(homeLastUpdate)box.append(homeTask("Центр обновления",(homeLastUpdate.message||homeLastUpdate.phase||"Готово")+" · "+(homeLastUpdate.local_version||""),homeLastUpdate.running?"live":"state",["failed","error"].includes(homeLastUpdate.phase)));
   if(homeRecentChats.length){const chat=homeRecentChats[0];box.append(homeTask("Последний чат",chat.title||"Новый чат",(chat.message_count||0)+" сообщ.",false))}
   else box.append(homeTask("Чат","История пока пуста","—",false));
@@ -1382,10 +1388,10 @@ function homeObsDuration(value){
   return ms<1000?Math.round(ms)+" ms":(ms/1000).toFixed(ms<10000?1:0)+" s";
 }
 function homeObsModuleLabel(value){
-  return({chat:"Чат",memory:"Память",drive:"Мой диск",contracts:"Договоры",invoice_offers:"Счета-оферты",orders:"Приказы",directives:"Распоряжения",memos:"Служебные записки",garage:"Гараж",timesheet:"Табель",settings:"Настройки"}[value]||value||"Система");
+  return({chat:"Чат",memory:"Память",cognition:"Cognitive Core",drive:"Мой диск",contracts:"Договоры",invoice_offers:"Счета-оферты",orders:"Приказы",directives:"Распоряжения",memos:"Служебные записки",garage:"Гараж",timesheet:"Табель",settings:"Настройки"}[value]||value||"Система");
 }
 function homeObsStepLabel(item){
-  return({source:"Источник",analysis:"Анализ",ai:"AI",guardian:"Guardian",memory:"Память",policy:"Политика"}[item.category]||item.stage||item.category||"Шаг");
+  return({source:"Источник",analysis:"Анализ",ai:"AI",guardian:"Guardian",memory:"Память",policy:"Политика",cognition:"Когнитивный контроль",reasoning:"Мышление"}[item.category]||item.stage||item.category||"Шаг");
 }
 function homeObsOperationLabel(value){
   return({
@@ -1481,16 +1487,28 @@ async function refreshHomeObservability(){
   catch(e){$("homeObsState").textContent="Наблюдаемость временно недоступна: "+e.message}
   finally{homeObsLoading=false}
 }
+async function refreshHomeCognition(){
+  try{
+    const [status,insights]=await Promise.all([
+      api("/v1/cognition/status"),
+      api("/v1/cognition/insights?limit=4")
+    ]);
+    homeCognition=status;homeCognitionInsights=insights.items||[];
+    renderHomeTasks();if(homeModules.length)renderHomeBrain();
+  }catch(e){homeCognition=null;homeCognitionInsights=[]}
+}
 async function loadHomeDashboard(){
   initHomeBrain();
   try{
-    const [modules,update,chats,history]=await Promise.all([
+    const [modules,update,chats,history,cognition,insights]=await Promise.all([
       api("/v1/settings/modules"),
       api("/v1/update/status"),
       api("/v1/chats?limit=5"),
-      api("/v1/update/history?limit=5")
+      api("/v1/update/history?limit=5"),
+      api("/v1/cognition/status"),
+      api("/v1/cognition/insights?limit=4")
     ]);
-    homeModules=modules.items||[];homeLastUpdate=update;homeRecentChats=chats.items||[];homeUpdateHistory=history.items||[];renderHomeBrain();renderHomeTasks();refreshHomeObservability();
+    homeModules=modules.items||[];homeLastUpdate=update;homeRecentChats=chats.items||[];homeUpdateHistory=history.items||[];homeCognition=cognition;homeCognitionInsights=insights.items||[];renderHomeBrain();renderHomeTasks();refreshHomeObservability();
   }catch(e){const box=$("homeTaskList");if(box){box.innerHTML="";box.append(homeTask("Дашборд","Часть данных недоступна: "+e.message,"!",true))}}
 }
 function updateHomeDashboard(d){
@@ -1595,5 +1613,5 @@ function startUpdatePolling(){
 $("checkUpdate").onclick=checkForUpdate;
 $("installUpdate").onclick=installUpdate;
 
-loadHomeDashboard();refreshDiag();setInterval(refreshDiag,3000);setInterval(()=>{if($("home").classList.contains("active"))refreshHomeObservability()},1800);
+loadHomeDashboard();refreshDiag();setInterval(refreshDiag,3000);setInterval(()=>{if($("home").classList.contains("active"))refreshHomeObservability()},1800);setInterval(()=>{if($("home").classList.contains("active"))refreshHomeCognition()},6000);
 updateStatus();setTimeout(checkForUpdate,1200);setInterval(checkForUpdate,600000);
