@@ -60,7 +60,8 @@ _WORK_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 _MONEY_LINE_RE = re.compile(
-    r"(?P<amount>\d[\d\s]{0,12}(?:[,.]\d{1,2})?)\s*"
+    r"(?<![\w-])"
+    r"(?P<amount>(?:\d{1,3}(?:[ .]\d{3})+|\d+)(?:[,.]\d{1,2})?)\s*"
     r"(?P<currency>руб(?:\.|лей)?|₽|RUB)\b",
     re.IGNORECASE,
 )
@@ -83,6 +84,28 @@ def _line_item_key(value: Any) -> str:
         flags=re.IGNORECASE,
     )
     return _norm(text)
+
+
+def _company_key(value: Any) -> str:
+    text = str(value or "").casefold().replace("«", " ").replace("»", " ")
+    text = re.sub(
+        r"\b(?:ооо|ао|пао|зао|оао|ип|llc|ltd|inc)\b",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return _norm(text)
+
+
+def _company_matches(left: Any, right: Any) -> bool:
+    a = _company_key(left)
+    b = _company_key(right)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    short, long = (a, b) if len(a) <= len(b) else (b, a)
+    return short in long and len(short) / max(1, len(long)) >= 0.70
 
 
 def _stable_id(kind: str, ref: str) -> str:
@@ -1213,16 +1236,17 @@ class CognitionService:
                 )
 
             analyzed_cp = [
-                _norm(value)
+                value
                 for value in (analysis.get("entities") or {}).get(
                     "counterparties",
                     [],
                 )
-                if _norm(value)
+                if _company_key(value)
             ]
-            dna_cp = _norm(dna.get("counterparty"))
+            dna_cp = dna.get("counterparty")
             if dna_cp and analyzed_cp and not any(
-                dna_cp in value or value in dna_cp for value in analyzed_cp
+                _company_matches(dna_cp, value)
+                for value in analyzed_cp
             ):
                 self._emit_insight(
                     seen,
