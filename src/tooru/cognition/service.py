@@ -117,6 +117,7 @@ class CognitionService:
         cloud_store,
         smart_drive,
         document_intelligence,
+        memo_organizer=None,
         observability=None,
     ) -> None:
         self.store = store
@@ -125,6 +126,7 @@ class CognitionService:
         self.cloud_store = cloud_store
         self.smart_drive = smart_drive
         self.document_intelligence = document_intelligence
+        self.memo_organizer = memo_organizer
         self.observability = observability
 
     def initialize(self) -> None:
@@ -563,6 +565,111 @@ class CognitionService:
                 if len(items) >= 30:
                     return items
         return items
+
+    def analyze_pending_documents(
+        self,
+        *,
+        limit: int = 12,
+    ) -> dict[str, Any]:
+        bounded = max(1, min(int(limit), 50))
+        try:
+            pending = self.document_intelligence.collection_items(
+                "attention:unanalyzed",
+                limit=bounded,
+            )
+        except Exception as exc:  # noqa: BLE001 - cycle must continue
+            return {
+                "analyzed": 0,
+                "skipped": 0,
+                "error": type(exc).__name__,
+            }
+
+        analyzed = 0
+        skipped = 0
+        details: list[dict[str, Any]] = []
+        for document in pending:
+            document_id = str(document["id"])
+            try:
+                if not self.smart_drive.permission(
+                    document_id,
+                    "content_read",
+                ):
+                    skipped += 1
+                    details.append(
+                        {
+                            "document_id": document_id,
+                            "status": "skipped",
+                            "reason": "content-read-denied",
+                        }
+                    )
+                    continue
+                result = self.document_intelligence.analyze(document_id)
+                automation = self.smart_drive.apply_intelligence_defaults(
+                    document_id,
+                    result,
+                )
+                memo_card = None
+                if (
+                    self.memo_organizer is not None
+                    and str(result.get("kind") or "").casefold()
+                    == "служебная записка"
+                ):
+                    memo_card = self.memo_organizer.process(document_id)
+                self.smart_drive.record_provenance(
+                    document_id,
+                    "cognition_auto_analysis",
+                    actor="tooru-local",
+                    details={
+                        "version": result.get("version"),
+                        "kind": result.get("kind"),
+                        "ocr_used": bool(result.get("ocr_used")),
+                        "external_ai_used": False,
+                        "automation": automation,
+                        "memo_card_created": memo_card is not None,
+                    },
+                )
+                analyzed += 1
+                details.append(
+                    {
+                        "document_id": document_id,
+                        "status": "analyzed",
+                        "kind": result.get("kind"),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 - one file cannot stop cycle
+                skipped += 1
+                details.append(
+                    {
+                        "document_id": document_id,
+                        "status": "skipped",
+                        "reason": f"{type(exc).__name__}: {str(exc)[:240]}",
+                    }
+                )
+
+        if self.observability is not None and (analyzed or skipped):
+            self.observability.event(
+                category="cognition",
+                stage="proactive",
+                operation="pending_document_auto_analysis",
+                status="success",
+                module="cognition",
+                source_type="document",
+                source_id="pending-documents",
+                message=(
+                    f"Automatic local document intake: {analyzed} analyzed, "
+                    f"{skipped} skipped."
+                ),
+                details={
+                    "analyzed": analyzed,
+                    "skipped": skipped,
+                    "external_ai_used": False,
+                },
+            )
+        return {
+            "analyzed": analyzed,
+            "skipped": skipped,
+            "items": details[:50],
+        }
 
     def _collect_documents(self) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
@@ -1375,6 +1482,7 @@ class CognitionService:
         }
 
     def run_cycle(self) -> dict[str, Any]:
+        documents = self.analyze_pending_documents()
         policy = self.adapt_policy()
         graph = self.rebuild_graph()
         insights = self.scan_proactive()
@@ -1382,6 +1490,7 @@ class CognitionService:
         self.store.set_state("last_cycle_at", completed)
         return {
             "completed_at": completed,
+            "documents": documents,
             "policy": policy,
             "graph": graph,
             "insights": insights,
