@@ -587,14 +587,19 @@ def _diagnostic_findings(report: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
 
-    for name in ("memory_automation", "guardian_automation"):
-        item = memory.get(name) or guardian.get(name) or {}
+    automation_states = (
+        ("memory_automation", memory.get("memory_automation") or {}),
+        ("guardian_automation", guardian.get("automation") or {}),
+    )
+    for name, item in automation_states:
         if int(item.get("failure_count") or 0) > 0 or item.get("last_error"):
             findings.append(
                 {
                     "code": name.upper() + "_ERROR",
                     "severity": "medium",
-                    "message": str(item.get("last_error") or "failure_count > 0"),
+                    "message": str(
+                        item.get("last_error") or "failure_count > 0"
+                    ),
                 }
             )
 
@@ -786,7 +791,7 @@ def build_machine_report(app, *, document_limit: int = 1_000) -> dict[str, Any]:
 
     report["collection_errors"] = errors
     report["diagnostic_findings"] = _diagnostic_findings(report)
-    report["summary"] = {
+    report["report_summary"] = {
         "finding_count": len(report["diagnostic_findings"]),
         "high_findings": sum(
             item.get("severity") == "high"
