@@ -1564,6 +1564,34 @@ async function loadSettings(){try{const [d,modules]=await Promise.all([api("/v1/
 $("saveSettings").onclick=()=>withBusyButton("saveSettings","Сохраняю…",async()=>{const key=$("apiKey").value.trim();if(!key){$("settingsStatus").textContent="Вставьте Key Secret.";return}try{$("settingsStatus").textContent="Сохранение…";const d=await api("/v1/settings/ai/deepseek",{method:"POST",body:JSON.stringify({api_key:key})});$("apiKey").value="";$("apiKey").placeholder="Ключ сохранён ••••••••";$("settingsStatus").textContent=d.registered?"Сохранено. DeepSeek активен без перезапуска.":"Сохранено.";await refreshDiag()}catch(e){$("settingsStatus").textContent="Ошибка: "+e.message}});
 $("testSettings").onclick=()=>withBusyButton("testSettings","Проверяю…",async()=>{try{$("settingsStatus").textContent="Проверка API…";const d=await api("/v1/settings/ai/deepseek/test",{method:"POST"});$("settingsStatus").textContent="API работает: "+d.provider+" / "+d.model+" → "+d.response}catch(e){$("settingsStatus").textContent="Ошибка API: "+e.message}});
 
+async function downloadMachineReport(){
+  return withBusyButton("downloadMachineReport","Собираю отчёт…",async()=>{
+    const status=$("machineReportStatus");
+    status.textContent="Собираю снимок всех подсистем…";
+    try{
+      const response=await fetch("/v1/settings/system-report/download",{cache:"no-store"});
+      if(!response.ok){
+        let detail="HTTP "+response.status;
+        try{const payload=await response.json();detail=payload.detail||detail}catch{}
+        throw new Error(detail);
+      }
+      const blob=await response.blob();
+      const disposition=response.headers.get("content-disposition")||"";
+      const match=disposition.match(/filename="([^"]+)"/i);
+      const filename=match?match[1]:"dragon-tory-machine-report.json";
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;link.download=filename;link.style.display="none";
+      document.body.append(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1500);
+      status.textContent="Отчёт собран и передан на скачивание: "+filename;
+    }catch(e){
+      status.textContent="Не удалось собрать отчёт: "+e.message;
+    }
+  });
+}
+$("downloadMachineReport").onclick=downloadMachineReport;
+
 let updateWasStarted=false;
 let updatePollTimer=null;
 const phaseNames={idle:"Готово",checking:"Проверка GitHub…",current:"Актуальная версия",available:"Доступно обновление",starting:"Запуск процесса…",downloading:"Скачивание…",extracting:"Распаковка и сверка…",backing_up:"Резервная копия…",stopping:"Остановка…",installing:"Установка…",restarting:"Перезапуск…",verifying:"Проверка новой версии…",rolling_back:"Автоматический откат…",success:"Обновлено",failed:"Ошибка обновления",error:"Ошибка проверки"};
