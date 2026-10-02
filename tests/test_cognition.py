@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
 from tooru.chat.reasoning import ReasoningConfig
+from tooru.cognition.automation import CognitionAutomation
 from tooru.cognition.models import InsightSeverity, InsightStatus
 from tooru.cognition.service import CognitionService
 from tooru.cognition.store import CognitionStore
@@ -761,3 +763,36 @@ def test_vehicle_vin_plate_conflict_is_proactive_high_signal(
     assert mismatch.confidence >= 0.90
     assert mismatch.evidence[0]["garage_vehicle_id"] == "CAR-1"
     assert mismatch.evidence[0]["other_vehicle_id"] == "CAR-2"
+
+
+def test_cognition_trigger_is_thread_safe_and_debounced() -> None:
+    class CountingService:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run_cycle(self) -> dict:
+            self.calls += 1
+            return {"calls": self.calls}
+
+    async def scenario() -> None:
+        service = CountingService()
+        automation = CognitionAutomation(service, interval_seconds=60)
+        automation.start()
+
+        assert await asyncio.to_thread(
+            automation.trigger,
+            delay_seconds=0.08,
+        )
+        assert await asyncio.to_thread(
+            automation.trigger,
+            delay_seconds=0.08,
+        )
+        assert automation.trigger(delay_seconds=0.08)
+
+        await asyncio.sleep(0.18)
+
+        assert service.calls == 1
+        assert automation.status()["trigger_pending"] is False
+        await automation.stop()
+
+    asyncio.run(scenario())
