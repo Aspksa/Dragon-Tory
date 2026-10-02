@@ -49,6 +49,21 @@ _REQUEST_RE = re.compile(
     r"\b(?:просим|прошу|необходимо|требуется|поручить|обеспечить|согласовать)\w*",
     re.IGNORECASE,
 )
+_PART_LINE_RE = re.compile(
+    r"\b(?:запчаст|детал|фильтр|колодк|ремень|свеч|подшипник|насос|"
+    r"амортизатор|радиатор|аккумулятор|шина|масло|датчик)\w*",
+    re.IGNORECASE,
+)
+_WORK_LINE_RE = re.compile(
+    r"\b(?:ремонт|замен|диагност|мойк|монтаж|демонтаж|обслуживан|"
+    r"регулиров|установк|проверка|работы?)\w*",
+    re.IGNORECASE,
+)
+_MONEY_LINE_RE = re.compile(
+    r"(?P<amount>\d[\d\s]{0,12}(?:[,.]\d{1,2})?)\s*"
+    r"(?P<currency>руб(?:\.|лей)?|₽|RUB)\b",
+    re.IGNORECASE,
+)
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -493,6 +508,62 @@ class CognitionService:
             return "correction:pending"
         return "correction:blocked"
 
+    def _domain_line_items(
+        self,
+        document_id: str,
+    ) -> list[dict[str, Any]]:
+        try:
+            chunks = self.cloud_store.document_chunks(
+                document_id,
+                limit=30,
+            )
+        except (KeyError, PermissionError, ValueError):
+            return []
+        items: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for chunk in chunks:
+            text = str(chunk.get("text") or "")
+            for raw_line in text.splitlines():
+                line = " ".join(raw_line.strip().split())
+                if len(line) < 8 or len(line) > 260:
+                    continue
+                kind = ""
+                if _PART_LINE_RE.search(line):
+                    kind = "part"
+                elif _WORK_LINE_RE.search(line):
+                    kind = "work"
+                if not kind:
+                    continue
+                label = line[:220]
+                key = (kind, _norm(label))
+                if key in seen:
+                    continue
+                seen.add(key)
+                amount = None
+                currency = None
+                money = _MONEY_LINE_RE.search(line)
+                if money:
+                    try:
+                        amount = float(
+                            money.group("amount").replace(" ", "").replace(",", ".")
+                        )
+                    except ValueError:
+                        amount = None
+                    currency = "RUB"
+                items.append(
+                    {
+                        "kind": kind,
+                        "label": label,
+                        "amount": amount,
+                        "currency": currency,
+                        "chunk_no": chunk.get("chunk_no"),
+                        "page_no": chunk.get("page_no"),
+                    }
+                )
+                if len(items) >= 30:
+                    return items
+        return items
+
     def _collect_documents(self) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
         for document in self.cloud_store.all_active_documents(limit=5_000):
@@ -717,6 +788,38 @@ class CognitionService:
                 )
                 add_edge(doc_node, work_node, "DESCRIBES_WORK")
 
+            for line_item in self._domain_line_items(
+                str(document["id"])
+            ):
+                entity_kind = str(line_item["kind"])
+                entity_ref = _norm(line_item["label"])
+                entity_node = add_node(
+                    entity_kind,
+                    entity_ref,
+                    str(line_item["label"]),
+                    {
+                        "amount": line_item.get("amount"),
+                        "currency": line_item.get("currency"),
+                    },
+                )
+                add_edge(
+                    doc_node,
+                    entity_node,
+                    (
+                        "DESCRIBES_PART"
+                        if entity_kind == "part"
+                        else "DESCRIBES_WORK"
+                    ),
+                    confidence=0.72,
+                    evidence=[
+                        {
+                            "chunk_no": line_item.get("chunk_no"),
+                            "page_no": line_item.get("page_no"),
+                            "line": line_item.get("label"),
+                        }
+                    ],
+                )
+
         try:
             legacy_graph = self.smart_drive.graph(limit=2_000)
         except Exception:  # noqa: BLE001
@@ -848,6 +951,10 @@ class CognitionService:
         amounts_by_cp_kind: dict[
             tuple[str, str],
             list[tuple[float, str]],
+        ] = defaultdict(list)
+        line_prices: dict[
+            tuple[str, str],
+            list[tuple[float, str, str]],
         ] = defaultdict(list)
 
         for bundle in bundles:
@@ -982,6 +1089,27 @@ class CognitionService:
                 amounts_by_cp_kind[(cp_key, kind)].append(
                     (float(amount), str(document["id"]))
                 )
+
+            for line_item in self._domain_line_items(
+                str(document["id"])
+            ):
+                amount = line_item.get("amount")
+                currency = str(line_item.get("currency") or "")
+                label_key = _norm(line_item.get("label"))
+                if (
+                    label_key
+                    and isinstance(amount, (int, float))
+                    and float(amount) > 0
+                ):
+                    line_prices[
+                        (str(line_item["kind"]), label_key)
+                    ].append(
+                        (
+                            float(amount),
+                            str(document["id"]),
+                            currency,
+                        )
+                    )
 
             if (
                 "служеб" in kind
@@ -1134,6 +1262,48 @@ class CognitionService:
                     fingerprint_parts=[document_id, "amount-outlier"],
                 )
 
+        for (item_kind, label_key), values in line_prices.items():
+            if len(values) < 2:
+                continue
+            positive = [value for value, _, _ in values if value > 0]
+            if len(positive) < 2:
+                continue
+            low = min(positive)
+            high = max(positive)
+            if low <= 0 or high / low < 1.50:
+                continue
+            high_entry = max(values, key=lambda item: item[0])
+            ratio = high / low
+            self._emit_insight(
+                seen,
+                rule_id="line_item_price_jump",
+                severity=InsightSeverity.MEDIUM,
+                confidence=0.64,
+                title="Сумма одинаковой позиции заметно выросла",
+                summary=(
+                    f"Позиция {label_key[:80]}: максимальная сумма строки "
+                    f"примерно в {ratio:.1f} раза выше минимальной. "
+                    "Тоору помечает это как сигнал, а не как доказанную "
+                    "изменённую цену за единицу."
+                ),
+                refs=[item[1] for item in values],
+                evidence=[
+                    {
+                        "kind": item_kind,
+                        "normalized_label": label_key,
+                        "values": [
+                            {
+                                "amount": item[0],
+                                "document_id": item[1],
+                                "currency": item[2],
+                            }
+                            for item in values
+                        ],
+                    }
+                ],
+                fingerprint_parts=[item_kind, label_key],
+            )
+
         auto_rules = {
             "duplicate_vehicle_identity",
             "insurance_expiry",
@@ -1144,6 +1314,7 @@ class CognitionService:
             "duplicate_document_number",
             "frequent_vehicle_repairs",
             "document_amount_outlier",
+            "line_item_price_jump",
         }
         for insight in self.store.insights(
             status=InsightStatus.OPEN,
