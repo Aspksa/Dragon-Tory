@@ -34,7 +34,7 @@ _PLATE_RE = re.compile(
     r"([АВЕКМНОРСТУХABEKMHOPCTYX])\s*"
     r"(\d{3})\s*"
     r"([АВЕКМНОРСТУХABEKMHOPCTYX]{2})\s*"
-    r"(\d{2,3})"
+    r"(\d{2,3})?"
     r"(?![A-ZА-Я0-9])",
     re.IGNORECASE,
 )
@@ -587,7 +587,10 @@ class DocumentIntelligence:
     def _entities(text: str) -> dict[str, Any]:
         vins = _unique(_VIN_RE.findall(text), limit=30)
         plates = _unique(
-            ["".join(match.groups()).upper() for match in _PLATE_RE.finditer(text)],
+            [
+                "".join(part or "" for part in match.groups()).upper()
+                for match in _PLATE_RE.finditer(text)
+            ],
             limit=50,
         )
         emails = _unique(_EMAIL_RE.findall(text), limit=50)
