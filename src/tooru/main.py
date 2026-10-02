@@ -10,11 +10,11 @@ from fastapi.responses import JSONResponse
 from tooru.ai.openai_compatible import OpenAICompatibleProvider
 from tooru.ai.router import AIRouter
 from tooru.api.chat import router as chat_router
-from tooru.api.cognition import router as cognition_router
 from tooru.api.chats import router as chats_router
 from tooru.api.cloud import router as cloud_router
 from tooru.api.cloud_intelligence import router as cloud_intelligence_router
 from tooru.api.cloud_smart import router as cloud_smart_router
+from tooru.api.cognition import router as cognition_router
 from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
@@ -26,14 +26,14 @@ from tooru.api.update import router as update_router
 from tooru.chat.documents import ChatDocumentAssistant
 from tooru.chat.pipeline import ChatPipeline
 from tooru.chat.store import ChatStore
-from tooru.cognition.automation import CognitionAutomation
-from tooru.cognition.service import CognitionService
-from tooru.cognition.store import CognitionStore
 from tooru.cloud.document_intelligence import DocumentIntelligence
 from tooru.cloud.memo_organizer import ServiceMemoOrganizer
 from tooru.cloud.smart import SmartDrive
 from tooru.cloud.store import CloudStore
 from tooru.cloud.vault import ToryVault
+from tooru.cognition.automation import CognitionAutomation
+from tooru.cognition.service import CognitionService
+from tooru.cognition.store import CognitionStore
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
