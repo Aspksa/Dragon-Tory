@@ -199,8 +199,18 @@ class ChatPipeline:
         if self.cognition is not None:
             try:
                 self.cognition.apply_reasoning_policy(self.reasoning.config)
-            except Exception:  # noqa: BLE001 - cognition must not break chat
-                pass
+            except Exception as exc:  # noqa: BLE001 - cognition must not break chat
+                if self.router.observability is not None:
+                    self.router.observability.event(
+                        category="cognition",
+                        stage="learning",
+                        operation="reasoning_policy_load",
+                        status="error",
+                        module="cognition",
+                        source_type="chat",
+                        source_id="user-message",
+                        message=type(exc).__name__,
+                    )
 
         reasoning_route = self.reasoning.route(
             message,
@@ -436,8 +446,18 @@ class ChatPipeline:
                             verifier_escalation
                             or verifier_meta.should_escalate
                         )
-                    except Exception:  # noqa: BLE001
-                        pass
+                    except Exception as exc:  # noqa: BLE001
+                        if self.router.observability is not None:
+                            self.router.observability.event(
+                                category="cognition",
+                                stage="metacognition",
+                                operation="verifier_metacognition",
+                                status="error",
+                                module="cognition",
+                                source_type="chat",
+                                source_id="user-message",
+                                message=type(exc).__name__,
+                            )
                 if verifier_escalation:
                     escalated = True
                     ai_calls += 1
@@ -611,8 +631,18 @@ class ChatPipeline:
                             message="Metacognitive outcome recorded.",
                             details=after.model_dump(mode="json"),
                         )
-                except Exception:  # noqa: BLE001 - chat remains primary
-                    pass
+                except Exception as exc:  # noqa: BLE001 - chat remains primary
+                    if self.router.observability is not None:
+                        self.router.observability.event(
+                            category="cognition",
+                            stage="learning",
+                            operation="reasoning_outcome_record",
+                            status="error",
+                            module="cognition",
+                            source_type="chat",
+                            source_id="user-message",
+                            message=type(exc).__name__,
+                        )
 
         return ChatPipelineResult(
             answer=answer,
