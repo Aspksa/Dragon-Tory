@@ -135,6 +135,14 @@ async def lifespan(app: FastAPI):
         intake=memory_intake,
     )
 
+    memo_organizer = ServiceMemoOrganizer(
+        cloud_store=cloud_store,
+        smart=cloud_smart,
+        intelligence=document_intelligence,
+        memory_intake=memory_intake,
+    )
+    memo_organizer.initialize()
+
     cognition_store = CognitionStore(settings.cognition_db_path)
     cognition = CognitionService(
         store=cognition_store,
@@ -143,6 +151,7 @@ async def lifespan(app: FastAPI):
         cloud_store=cloud_store,
         smart_drive=cloud_smart,
         document_intelligence=document_intelligence,
+        memo_organizer=memo_organizer,
         observability=observability,
     )
     cognition.initialize()
@@ -150,13 +159,6 @@ async def lifespan(app: FastAPI):
         cognition,
         interval_seconds=settings.cognition_interval_seconds,
     )
-    memo_organizer = ServiceMemoOrganizer(
-        cloud_store=cloud_store,
-        smart=cloud_smart,
-        intelligence=document_intelligence,
-        memory_intake=memory_intake,
-    )
-    memo_organizer.initialize()
 
     guardian_automation = MemoryGuardianAutomation(
         guardian,
