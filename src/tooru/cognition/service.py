@@ -75,6 +75,44 @@ def _norm(value: Any) -> str:
     return re.sub(r"[^a-zа-яё0-9]+", "", str(value or "").casefold())
 
 
+_PLATE_TRANSLATION = str.maketrans(
+    {
+        "А": "A",
+        "В": "B",
+        "Е": "E",
+        "К": "K",
+        "М": "M",
+        "Н": "H",
+        "О": "O",
+        "Р": "P",
+        "С": "C",
+        "Т": "T",
+        "У": "Y",
+        "Х": "X",
+        "а": "A",
+        "в": "B",
+        "е": "E",
+        "к": "K",
+        "м": "M",
+        "н": "H",
+        "о": "O",
+        "р": "P",
+        "с": "C",
+        "т": "T",
+        "у": "Y",
+        "х": "X",
+    }
+)
+
+
+def _plate_norm(value: Any) -> str:
+    return re.sub(
+        r"[^A-Z0-9]+",
+        "",
+        str(value or "").translate(_PLATE_TRANSLATION).upper(),
+    )
+
+
 def _line_item_key(value: Any) -> str:
     text = _MONEY_LINE_RE.sub(" ", str(value or ""))
     text = re.sub(
@@ -1093,7 +1131,7 @@ class CognitionService:
         vehicle_by_plate: dict[str, dict[str, Any]] = {}
         for vehicle in vehicles:
             vin = _norm(vehicle.get("vin"))
-            plate = _norm(vehicle.get("plate_number"))
+            plate = _plate_norm(vehicle.get("plate_number"))
             if vin:
                 vehicle_by_vin[vin] = vehicle
             if plate:
@@ -1106,7 +1144,11 @@ class CognitionService:
             if not vehicle.get("active", True):
                 continue
             for field in ("vin", "plate_number"):
-                value = _norm(vehicle.get(field))
+                value = (
+                    _plate_norm(vehicle.get(field))
+                    if field == "plate_number"
+                    else _norm(vehicle.get(field))
+                )
                 if value:
                     identity_index[(field, value)].append(vehicle)
         for (field, value), items in identity_index.items():
@@ -1308,15 +1350,15 @@ class CognitionService:
                 if _norm(value)
             ]
             doc_plates = [
-                _norm(value)
+                _plate_norm(value)
                 for value in entities.get("plate_number") or []
-                if _norm(value)
+                if _plate_norm(value)
             ]
             for vin in doc_vins:
                 vehicle = vehicle_by_vin.get(vin)
                 if vehicle is None or not doc_plates:
                     continue
-                expected_plate = _norm(vehicle.get("plate_number"))
+                expected_plate = _plate_norm(vehicle.get("plate_number"))
                 if expected_plate and expected_plate not in doc_plates:
                     other_vehicle = next(
                         (
