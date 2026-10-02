@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import platform
+import platform  # noqa: I001
 import shutil
 import sqlite3
 import sys
