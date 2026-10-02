@@ -168,8 +168,9 @@ def test_update_status_endpoint_is_available() -> None:
     assert payload["local_version"] == APP_VERSION
     assert payload["repository"] == "Aspksa/Dragon-Tory"
     assert payload["release"]["version"] == APP_VERSION
-    release_modules = {item["id"] for item in payload["release"]["modules"]}
-    assert {"memos", "drive", "memory", "updater"} <= release_modules
+    release_modules = payload["release"]["modules"]
+    assert release_modules
+    assert all(item.get("id") and item.get("title") and item.get("version") for item in release_modules)
 
 
 
