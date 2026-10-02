@@ -69,7 +69,7 @@ def cognition_feedback(
 @router.get("/insights")
 def cognition_insights(
     request: Request,
-    status: InsightStatus | None = Query(default=InsightStatus.OPEN),
+    status: InsightStatus | None = InsightStatus.OPEN,
     limit: int = Query(default=100, ge=1, le=1_000),
 ) -> dict:
     items = request.app.state.cognition.store.insights(
