@@ -29,6 +29,8 @@ def test_machine_report_is_complete_downloadable_and_sanitized() -> None:
     assert payload["privacy"]["contains_hidden_reasoning"] is False
     assert payload["privacy"]["contains_api_keys_or_tokens"] is False
     assert "pipeline_contracts" in payload
+    assert "implementation_map" in payload
+    assert "document_engines" in payload
     assert "documents" in payload
     assert "memory" in payload
     assert "guardian" in payload
