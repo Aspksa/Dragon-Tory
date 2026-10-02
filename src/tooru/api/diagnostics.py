@@ -122,6 +122,10 @@ def diagnostics_status(request: Request) -> dict:
     guardian_automation = (
         request.app.state.memory_guardian_automation.status()
     )
+    cognition_automation = request.app.state.cognition_automation.status()
+    cognition_status = request.app.state.cognition.status(
+        automation_running=bool(cognition_automation["running"])
+    )
 
     try:
         insurance_items = request.app.state.cloud_smart.garage_alerts(
@@ -218,4 +222,9 @@ def diagnostics_status(request: Request) -> dict:
         "guardian_automation": guardian_automation.model_dump(
             mode="json"
         ),
+        "cognition": {
+            **cognition_status.model_dump(mode="json"),
+            "database_bytes": _path_size(settings.cognition_db_path),
+            "automation": cognition_automation,
+        },
     }

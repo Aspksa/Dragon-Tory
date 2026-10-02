@@ -38,6 +38,14 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="homeObsState"' in response.text
     assert 'id="homeObsCurrent"' in response.text
     assert 'id="homeTraceList"' in response.text
+    assert 'id="homeCogState"' in response.text
+    assert 'id="homeCogPolicy"' in response.text
+    assert 'id="homeCogExperience"' in response.text
+    assert 'id="homeCogGraph"' in response.text
+    assert 'id="homeCogOpen"' in response.text
+    assert 'id="homeCogHigh"' in response.text
+    assert 'id="homeInsightList"' in response.text
+    assert "Тоору сама заметила" in response.text
     assert "Наблюдаемость · поток Тоору" in response.text
     assert "System Observatory" in response.text
     assert 'id="cloudNewFolder"' in response.text
@@ -145,6 +153,22 @@ def test_diagnostics_status_is_available() -> None:
     assert "messages" in payload["chat_history"]
     assert "garage" in payload
     assert "insurance_alerts" in payload["garage"]
+    assert "cognition" in payload
+    assert "open_insights" in payload["cognition"]
+
+
+
+def test_cognition_status_endpoint_is_available() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/cognition/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "policy" in payload
+    assert "experiences" in payload
+    assert "open_insights" in payload
+    assert "graph_nodes" in payload
+    assert "graph_edges" in payload
 
 
 def test_chat_requires_configured_provider() -> None:
@@ -249,6 +273,7 @@ def test_module_version_registry_endpoint_is_available() -> None:
         "garage",
         "timesheet",
         "memory",
+        "cognition",
         "updater",
     } <= ids
     assert all(item["version"] for item in items)
@@ -307,6 +332,7 @@ def test_dashboard_assets_are_served_separately() -> None:
     assert "withBusyButton" in javascript.text
     assert "refreshHomeObservability" in javascript.text
     assert "renderHomeObservability" in javascript.text
+    assert "refreshHomeCognition" in javascript.text
     assert "uploadChatDocuments" in javascript.text
     assert "showMemoCard" in javascript.text
     assert "renderReleaseNotes" in javascript.text

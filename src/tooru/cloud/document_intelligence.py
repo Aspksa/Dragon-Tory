@@ -29,6 +29,15 @@ _DATE_PATTERNS = (
     re.compile(r"\b(?:19|20)\d{2}[-/.](?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01])\b"),
 )
 _VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b", re.IGNORECASE)
+_PLATE_RE = re.compile(
+    r"(?<![A-ZА-Я0-9])"
+    r"([АВЕКМНОРСТУХABEKMHOPCTYX])\s*"
+    r"(\d{3})\s*"
+    r"([АВЕКМНОРСТУХABEKMHOPCTYX]{2})\s*"
+    r"(\d{2,3})?"
+    r"(?![A-ZА-Я0-9])",
+    re.IGNORECASE,
+)
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 _URL_RE = re.compile(r'https?://[^\s<>"]+', re.IGNORECASE)
 _IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b", re.IGNORECASE)
@@ -577,6 +586,13 @@ class DocumentIntelligence:
     @staticmethod
     def _entities(text: str) -> dict[str, Any]:
         vins = _unique(_VIN_RE.findall(text), limit=30)
+        plates = _unique(
+            [
+                "".join(part or "" for part in match.groups()).upper()
+                for match in _PLATE_RE.finditer(text)
+            ],
+            limit=50,
+        )
         emails = _unique(_EMAIL_RE.findall(text), limit=50)
         urls = _unique(_URL_RE.findall(text), limit=50)
         ibans = _unique(_IBAN_RE.findall(text), limit=30)
@@ -638,6 +654,7 @@ class DocumentIntelligence:
                 break
         return {
             "vin": vins,
+            "plate_number": plates,
             "emails": emails,
             "urls": urls,
             "iban": ibans,

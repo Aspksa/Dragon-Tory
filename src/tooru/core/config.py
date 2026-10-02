@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     observability_retention_days: int = 30
 
+    cognition_automation_enabled: bool = True
+    cognition_interval_seconds: int = 900
+
     update_repository: str = "Aspksa/Dragon-Tory"
     update_branch: str = "main"
     update_github_token: str | None = None
@@ -90,6 +93,10 @@ class Settings(BaseSettings):
     @property
     def observability_db_path(self) -> Path:
         return self.data_dir / "observability" / "tooru_observability.sqlite3"
+
+    @property
+    def cognition_db_path(self) -> Path:
+        return self.data_dir / "cognition" / "tooru_cognition.sqlite3"
 
 
 @lru_cache

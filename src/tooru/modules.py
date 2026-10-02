@@ -6,11 +6,11 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "dashboard",
         "title": "Главная / Системный мозг",
-        "version": "01.11.00",
+        "version": "01.12.00",
         "area": "system",
         "description": "Real-time дашборд состояния, архитектуры, памяти, нагрузки и активных процессов.",
-        "last_update": "Observability показывает автоматический режим Chain/Tree/Hybrid как внутреннее событие без кнопок управления.",
-        "depends_on": ["memory", "grey_matter", "drive", "updater"],
+        "last_update": "Системный мозг показывает Cognitive Core VIII, обучаемую policy и проактивные инсайты «Тоору заметила».",
+        "depends_on": ["memory", "grey_matter", "cognition", "drive", "updater"],
     },
     {
         "id": "drive",
@@ -96,11 +96,20 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "reasoning",
         "title": "Мышление Тоору",
-        "version": "03.00.00",
+        "version": "04.00.00",
         "area": "system",
         "description": "Планирование сложных задач, самопроверка результата и безопасное обучение на опыте.",
-        "last_update": "Adaptive Reasoning Router автоматически выбирает Chain, Tree или Hybrid без ручного переключателя.",
-        "depends_on": ["memory", "grey_matter"],
+        "last_update": "Reasoning Router получает bounded self-learning policy и метакогнитивную эскалацию Chain/Tree/Hybrid.",
+        "depends_on": ["memory", "grey_matter", "cognition"],
+    },
+    {
+        "id": "cognition",
+        "title": "Cognitive Core VIII",
+        "version": "01.00.00",
+        "area": "system",
+        "description": "Самообучающийся метакогнитивный слой: bounded reasoning policy, рабочий граф, проактивные инсайты и обучение на исправлениях.",
+        "last_update": "Adaptive Learning & Proactive Intelligence: опыт reasoning, безопасная настройка порогов, knowledge graph и режим «Тоору сама заметила».",
+        "depends_on": ["memory", "grey_matter", "reasoning", "drive", "garage"],
     },
     {
         "id": "grey_matter",
@@ -114,10 +123,10 @@ MODULE_REGISTRY: tuple[dict[str, Any], ...] = (
     {
         "id": "memory",
         "title": "Память Тоору",
-        "version": "03.01.00",
+        "version": "03.02.00",
         "area": "system",
         "description": "Раздельная личная и проектная долговременная память, Guardian, поиск и обслуживание.",
-        "last_update": "Adaptive recall, truth-feedback calibration, historical as_of, contradiction clusters и audited forgetting.",
+        "last_update": "Явные исправления пользователя сохраняются как LESSON через Guardian; когнитивные метрики не смешиваются с долговременной памятью.",
         "depends_on": [],
     },
     {

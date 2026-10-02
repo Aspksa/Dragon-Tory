@@ -419,3 +419,42 @@ def test_version_diff_includes_structured_fact_evidence(
     assert diff["checks_a"]
     assert diff["checks_b"]
 
+
+
+def test_document_intelligence_extracts_plate_and_line_item_price(
+    tmp_path: Path,
+) -> None:
+    store, smart, intelligence = _stack(tmp_path)
+    text = (
+        "СЧЁТ № 77\n"
+        "VIN JF1SJABC1GH123456\n"
+        "Госномер А001АА25\n"
+        "Резервный госномер C859ЕС\n"
+        "Фильтр масляный ABC-123 1 700 RUB\n"
+        "Итого 1 700 RUB\n"
+    ).encode()
+    document = _upload(store, "Счёт Subaru.txt", text)
+    store.update_passport(
+        document["id"],
+        ai_access="read",
+        confidentiality="personal",
+    )
+    smart.reconcile_contract(document["id"])
+
+    result = intelligence.analyze(document["id"])
+
+    assert "А001АА25" in result["entities"]["plate_number"]
+    assert "C859ЕС" in result["entities"]["plate_number"]
+    line_items = [
+        item
+        for item in result["evidence"]
+        if item.get("type") == "line_item_price"
+    ]
+    assert line_items
+    assert any(
+        item.get("currency") == "RUB"
+        and item.get("value") == 1700.0
+        and "Фильтр масляный" in str(item.get("description") or "")
+        and "ABC-123" in str(item.get("description") or "")
+        for item in line_items
+    )

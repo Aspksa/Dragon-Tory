@@ -14,6 +14,7 @@ from tooru.api.chats import router as chats_router
 from tooru.api.cloud import router as cloud_router
 from tooru.api.cloud_intelligence import router as cloud_intelligence_router
 from tooru.api.cloud_smart import router as cloud_smart_router
+from tooru.api.cognition import router as cognition_router
 from tooru.api.diagnostics import router as diagnostics_router
 from tooru.api.health import router as health_router
 from tooru.api.home import router as home_router
@@ -30,6 +31,9 @@ from tooru.cloud.memo_organizer import ServiceMemoOrganizer
 from tooru.cloud.smart import SmartDrive
 from tooru.cloud.store import CloudStore
 from tooru.cloud.vault import ToryVault
+from tooru.cognition.automation import CognitionAutomation
+from tooru.cognition.service import CognitionService
+from tooru.cognition.store import CognitionStore
 from tooru.core.config import get_settings
 from tooru.memory.embedding import build_embedding_provider
 from tooru.memory.engine import MemoryEngine
@@ -130,6 +134,7 @@ async def lifespan(app: FastAPI):
         memory=memory,
         intake=memory_intake,
     )
+
     memo_organizer = ServiceMemoOrganizer(
         cloud_store=cloud_store,
         smart=cloud_smart,
@@ -137,6 +142,23 @@ async def lifespan(app: FastAPI):
         memory_intake=memory_intake,
     )
     memo_organizer.initialize()
+
+    cognition_store = CognitionStore(settings.cognition_db_path)
+    cognition = CognitionService(
+        store=cognition_store,
+        memory=memory,
+        guardian=guardian,
+        cloud_store=cloud_store,
+        smart_drive=cloud_smart,
+        document_intelligence=document_intelligence,
+        memo_organizer=memo_organizer,
+        observability=observability,
+    )
+    cognition.initialize()
+    cognition_automation = CognitionAutomation(
+        cognition,
+        interval_seconds=settings.cognition_interval_seconds,
+    )
 
     guardian_automation = MemoryGuardianAutomation(
         guardian,
@@ -185,6 +207,8 @@ async def lifespan(app: FastAPI):
     app.state.memory_guardian = guardian
     app.state.memory_intake = memory_intake
     app.state.grey_matter = grey_matter
+    app.state.cognition = cognition
+    app.state.cognition_automation = cognition_automation
     app.state.memory_guardian_automation = guardian_automation
     app.state.memory_automation = automation
     app.state.chat_document_assistant = ChatDocumentAssistant(
@@ -201,18 +225,22 @@ async def lifespan(app: FastAPI):
         guardian=guardian,
         cloud_store=cloud_store,
         grey_matter=grey_matter,
+        cognition=cognition,
     )
 
     if settings.memory_automation_enabled:
         automation.start()
     if settings.memory_guardian_automation_enabled:
         guardian_automation.start()
+    if settings.cognition_automation_enabled:
+        cognition_automation.start()
 
     try:
         yield
     finally:
         for task in list(app.state.chat_tasks.values()):
             task.cancel()
+        await cognition_automation.stop()
         await guardian_automation.stop()
         await automation.stop()
 
@@ -256,6 +284,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(chats_router)
+    app.include_router(cognition_router)
     app.include_router(cloud_router)
     app.include_router(cloud_smart_router)
     app.include_router(cloud_intelligence_router)

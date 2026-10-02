@@ -139,3 +139,19 @@ def test_release_0037_lists_startup_hardening() -> None:
         "LibreOffice" in change
         for change in modules["updater"]["changes"]
     )
+
+
+def test_release_0038_lists_cognitive_core_viii() -> None:
+    release = release_notes_for("0.0.38")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert {"cognition", "reasoning", "memory", "dashboard", "updater"} <= set(modules)
+    assert modules["cognition"]["version"] == "01.00.00"
+    assert modules["reasoning"]["version"] == "04.00.00"
+    assert modules["memory"]["version"] == "03.02.00"
+    assert modules["dashboard"]["version"] == "01.12.00"
+    assert any(
+        "Тоору сама заметила" in change
+        for change in modules["cognition"]["changes"]
+    )

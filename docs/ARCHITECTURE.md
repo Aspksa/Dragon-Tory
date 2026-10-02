@@ -16,9 +16,10 @@ and isolated when providers change.
 5. AI provider registry — internal DeepSeek connection layer.
 6. Tool Registry — controlled tools with permissions.
 7. Web UI — desktop/browser interface.
-8. Mobile clients — planned clients using the same backend contracts.
+8. Cognitive Core VIII — adaptive reasoning control, work graph and proactive insight engine.
+9. Mobile clients — planned clients using the same backend contracts.
 
-## Memory Engine v6 / Cognitive Core VII
+## Memory Engine v6 / Cognitive Core VIII
 
 Capabilities:
 - hybrid semantic and lexical recall;
@@ -73,8 +74,14 @@ Additional cognitive layers:
 - Bounded Reasoning Tree — 3–5 short evidence/risk branches with a hard one-escalation limit.
 - Hybrid Escalation — starts linear and invokes Tree only after low verifier score, contradictions or high uncertainty.
 - Reasoning Observability — internal route is recorded without exposing a manual mode toggle.
+- Adaptive Learning Policy — learns bounded routing thresholds from verified outcome metadata.
+- Metacognitive Control — estimates evidence coverage, uncertainty and contradiction pressure before and after Verifier.
+- Cognition Store — keeps technical learning statistics isolated from personal/project durable memory.
+- Work Graph — links people, vehicles, documents, companies, parts, work, money and events.
+- Proactive Insight Engine — detects evidence-backed anomalies and manages open/acknowledged/resolved/dismissed lifecycle.
+- Cognition Automation — periodically adapts policy, rebuilds the work graph and scans for new anomalies.
 
-See docs/MEMORY_ENGINE.md.
+See docs/MEMORY_ENGINE.md and docs/COGNITIVE_CORE_VIII.md.
 
 ## AI provider
 
