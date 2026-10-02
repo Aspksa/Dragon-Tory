@@ -15,6 +15,8 @@ class CognitionAutomation:
         self.service = service
         self.interval_seconds = max(60, int(interval_seconds))
         self._task: asyncio.Task | None = None
+        self._trigger_task: asyncio.Task | None = None
+        self._lock = asyncio.Lock()
         self.running = False
         self.failure_count = 0
         self.last_error: str | None = None
@@ -66,5 +68,9 @@ class CognitionAutomation:
             "failure_count": self.failure_count,
             "last_error": self.last_error,
             "last_result": self.last_result,
+            "trigger_pending": (
+                self._trigger_task is not None
+                and not self._trigger_task.done()
+            ),
             "interval_seconds": self.interval_seconds,
         }
