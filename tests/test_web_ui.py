@@ -17,6 +17,9 @@ def test_web_ui_contains_main_sections() -> None:
     assert "Настройки" in response.text
     assert 'id="moduleRegistryList"' in response.text
     assert 'id="moduleRegistryCount"' in response.text
+    assert 'id="downloadMachineReport"' in response.text
+    assert 'id="machineReportStatus"' in response.text
+    assert "Машиночитаемый отчёт Тоору" in response.text
     assert "Чат" in response.text
     assert "Мой диск Тори" in response.text
     assert 'id="homeGlobalStatus"' in response.text
@@ -333,6 +336,7 @@ def test_dashboard_assets_are_served_separately() -> None:
     assert "refreshHomeObservability" in javascript.text
     assert "renderHomeObservability" in javascript.text
     assert "refreshHomeCognition" in javascript.text
+    assert "downloadMachineReport" in javascript.text
     assert "uploadChatDocuments" in javascript.text
     assert "showMemoCard" in javascript.text
     assert "renderReleaseNotes" in javascript.text

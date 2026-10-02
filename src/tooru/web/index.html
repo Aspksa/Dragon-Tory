@@ -417,6 +417,23 @@
         <div id="settingsStatus" class="statusbar">Загрузка состояния…</div>
       </div>
       <div class="spacer"></div>
+      <div class="card" style="max-width:900px">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <div>
+            <h3 style="margin:0">Машиночитаемый отчёт Тоору</h3>
+            <div class="muted" style="margin-top:5px">Полный технический снимок для диагностики: загрузка и изучение документов, AI, Memory/Guardian, Серое вещество, Chain/Hybrid/Tree, Cognitive Core, граф, автоматика и последние ошибки.</div>
+          </div>
+          <span class="cloud-badge">JSON · support snapshot</span>
+        </div>
+        <div class="cloud-note" style="margin-top:12px">
+          Отчёт не содержит API-ключи, пароли, полный текст документов, сообщения чатов или скрытые рассуждения. Для диагностики в нём остаются технические IDs, имена файлов, статусы, evidence-метаданные и тексты ошибок.
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button id="downloadMachineReport" class="primary">⬇ Скачать полный отчёт JSON</button>
+          <span id="machineReportStatus" class="statusbar">Готов к сборке.</span>
+        </div>
+      </div>
+      <div class="spacer"></div>
       <div class="card">
         <div class="row" style="justify-content:space-between"><div><h3 style="margin:0">Версии модулей</h3><div class="muted">Отдельная версия, назначение и последнее изменение каждого блока.</div></div><span id="moduleRegistryCount" class="cloud-badge">—</span></div>
         <div id="moduleRegistryList" class="module-list" style="margin-top:14px"><div class="muted">Загрузка…</div></div>

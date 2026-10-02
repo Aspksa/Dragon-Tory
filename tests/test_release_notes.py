@@ -155,3 +155,20 @@ def test_release_0038_lists_cognitive_core_viii() -> None:
         "Тоору сама заметила" in change
         for change in modules["cognition"]["changes"]
     )
+
+
+
+def test_release_0039_lists_cognitive_core_ix_machine_report() -> None:
+    release = release_notes_for("0.0.39")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert {"cognition", "diagnostics", "drive", "dashboard"} <= set(modules)
+    assert modules["cognition"]["version"] == "02.00.00"
+    assert modules["diagnostics"]["version"] == "01.00.00"
+    assert modules["drive"]["version"] == "01.10.00"
+    assert modules["dashboard"]["version"] == "01.13.00"
+    assert any(
+        "JSON" in change
+        for change in modules["diagnostics"]["changes"]
+    )

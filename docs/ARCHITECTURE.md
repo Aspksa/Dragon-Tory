@@ -107,3 +107,22 @@ Chat Pipeline → Memory Guardian → Memory Intelligence → Memory Engine.
 Guardian is responsible for risk classification, reviewer requirements,
 protection of pinned memories, and audit logging. Direct Memory Intelligence
 endpoints remain useful for diagnostics and development.
+
+
+## Cognitive Core IX / Machine Report (00.00.39)
+
+The local Settings surface can export a machine-readable support snapshot via
+`/v1/settings/system-report/download`. The report is assembled from existing
+runtime sources rather than a second shadow state: Memory health/Guardian,
+Grey Matter capability contract, Adaptive Reasoning policy/outcomes, Cognitive
+Core graph/insights, Cloud document metadata/provenance, Document Intelligence,
+AI runtime counters, observability and update state.
+
+Fatal chat-document study errors are persisted as
+`chat_document_study_failed` provenance plus observability error events. The
+original document remains stored. Report generation is best-effort per section,
+so one broken subsystem becomes a diagnostic finding instead of preventing the
+snapshot from downloading.
+
+The support report never exports API credentials, chat bodies, full document
+text or hidden chain-of-thought.
