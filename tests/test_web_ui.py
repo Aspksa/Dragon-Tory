@@ -251,6 +251,7 @@ def test_module_version_registry_endpoint_is_available() -> None:
         "garage",
         "timesheet",
         "memory",
+        "cognition",
         "updater",
     } <= ids
     assert all(item["version"] for item in items)
@@ -309,6 +310,7 @@ def test_dashboard_assets_are_served_separately() -> None:
     assert "withBusyButton" in javascript.text
     assert "refreshHomeObservability" in javascript.text
     assert "renderHomeObservability" in javascript.text
+    assert "refreshHomeCognition" in javascript.text
     assert "uploadChatDocuments" in javascript.text
     assert "showMemoCard" in javascript.text
     assert "renderReleaseNotes" in javascript.text
