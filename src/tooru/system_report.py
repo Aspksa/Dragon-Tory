@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.metadata
 import platform
 import shutil
 import sqlite3
@@ -9,6 +8,7 @@ from collections import Counter, defaultdict
 from contextlib import suppress
 from dataclasses import asdict
 from datetime import UTC, datetime
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -470,8 +470,8 @@ def _document_engines_report() -> dict[str, Any]:
     versions: dict[str, str | None] = {}
     for package in packages:
         try:
-            versions[package] = importlib.metadata.version(package)
-        except importlib.metadata.PackageNotFoundError:
+            versions[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
             versions[package] = None
 
     tesseract = shutil.which("tesseract")
