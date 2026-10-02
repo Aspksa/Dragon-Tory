@@ -525,55 +525,131 @@ class CognitionService:
         self,
         document_id: str,
     ) -> list[dict[str, Any]]:
+        """Return conservative parts/work/item rows with provenance.
+
+        Prefer Document Intelligence v2 evidence because it preserves page/table/
+        cell/chunk provenance. Fall back to local indexed chunks for older data.
+        """
+        items: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, float | None, str]] = set()
+
+        try:
+            analysis = self.document_intelligence.get(document_id)
+        except (KeyError, ValueError):
+            analysis = {}
+
+        for evidence in analysis.get("evidence") or []:
+            if str(evidence.get("type") or "") != "line_item_price":
+                continue
+            label = str(
+                evidence.get("description")
+                or evidence.get("excerpt")
+                or evidence.get("raw")
+                or ""
+            ).strip()
+            if not label:
+                continue
+            if _PART_LINE_RE.search(label):
+                kind = "part"
+            elif _WORK_LINE_RE.search(label):
+                kind = "work"
+            else:
+                kind = "item"
+            value = evidence.get("value")
+            amount = (
+                float(value)
+                if isinstance(value, (int, float)) and float(value) > 0
+                else None
+            )
+            currency = str(evidence.get("currency") or "").upper()
+            key = (
+                kind,
+                str(evidence.get("item_key") or _line_item_key(label)),
+                amount,
+                currency,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(
+                {
+                    "kind": kind,
+                    "label": label[:300],
+                    "item_key": key[1],
+                    "amount": amount,
+                    "currency": currency,
+                    "chunk_no": evidence.get("chunk_no"),
+                    "page_no": evidence.get("page"),
+                    "table": evidence.get("table"),
+                    "cell": evidence.get("cell"),
+                    "evidence_hash": evidence.get("evidence_hash"),
+                    "confidence": float(evidence.get("confidence") or 0.68),
+                }
+            )
+            if len(items) >= 200:
+                return items
+
+        if items:
+            return items
+
         try:
             chunks = self.cloud_store.document_chunks(
                 document_id,
-                limit=30,
+                limit=80,
             )
         except (KeyError, PermissionError, ValueError):
             return []
-        items: list[dict[str, Any]] = []
-        seen: set[tuple[str, str]] = set()
+
         for chunk in chunks:
             text = str(chunk.get("text") or "")
             for raw_line in text.splitlines():
                 line = " ".join(raw_line.strip().split())
                 if len(line) < 8 or len(line) > 260:
                     continue
-                kind = ""
                 if _PART_LINE_RE.search(line):
                     kind = "part"
                 elif _WORK_LINE_RE.search(line):
                     kind = "work"
-                if not kind:
+                else:
                     continue
-                label = line[:220]
-                key = (kind, _norm(label))
-                if key in seen:
+
+                label_key = _line_item_key(line)
+                if not label_key:
                     continue
-                seen.add(key)
                 amount = None
-                currency = None
+                currency = ""
                 money = _MONEY_LINE_RE.search(line)
                 if money:
                     try:
                         amount = float(
-                            money.group("amount").replace(" ", "").replace(",", ".")
+                            money.group("amount")
+                            .replace(" ", "")
+                            .replace(",", ".")
                         )
                     except ValueError:
                         amount = None
                     currency = "RUB"
+
+                key = (kind, label_key, amount, currency)
+                if key in seen:
+                    continue
+                seen.add(key)
                 items.append(
                     {
                         "kind": kind,
-                        "label": label,
+                        "label": line[:220],
+                        "item_key": label_key,
                         "amount": amount,
                         "currency": currency,
                         "chunk_no": chunk.get("chunk_no"),
                         "page_no": chunk.get("page_no"),
+                        "table": chunk.get("table_ref"),
+                        "cell": chunk.get("cell_ref"),
+                        "evidence_hash": None,
+                        "confidence": 0.58,
                     }
                 )
-                if len(items) >= 30:
+                if len(items) >= 80:
                     return items
         return items
 
@@ -990,6 +1066,15 @@ class CognitionService:
         today = datetime.now(UTC).date()
         bundles = self._collect_documents()
         vehicles = self.smart_drive.list_vehicles(limit=1_000)
+        vehicle_by_vin: dict[str, dict[str, Any]] = {}
+        vehicle_by_plate: dict[str, dict[str, Any]] = {}
+        for vehicle in vehicles:
+            vin = _norm(vehicle.get("vin"))
+            plate = _norm(vehicle.get("plate_number"))
+            if vin:
+                vehicle_by_vin[vin] = vehicle
+            if plate:
+                vehicle_by_plate[plate] = vehicle
 
         identity_index: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(
             list
@@ -1079,8 +1164,8 @@ class CognitionService:
             list[tuple[float, str]],
         ] = defaultdict(list)
         line_prices: dict[
-            tuple[str, str],
-            list[tuple[float, str, str]],
+            tuple[str, str, str, str],
+            list[tuple[float, str]],
         ] = defaultdict(list)
 
         for bundle in bundles:
@@ -1192,6 +1277,69 @@ class CognitionService:
                 )
 
             entities = analysis.get("entities") or {}
+
+            doc_vins = [
+                _norm(value)
+                for value in entities.get("vin") or []
+                if _norm(value)
+            ]
+            doc_plates = [
+                _norm(value)
+                for value in entities.get("plate_number") or []
+                if _norm(value)
+            ]
+            for vin in doc_vins:
+                vehicle = vehicle_by_vin.get(vin)
+                if vehicle is None or not doc_plates:
+                    continue
+                expected_plate = _norm(vehicle.get("plate_number"))
+                if expected_plate and expected_plate not in doc_plates:
+                    other_vehicle = next(
+                        (
+                            vehicle_by_plate.get(plate)
+                            for plate in doc_plates
+                            if plate in vehicle_by_plate
+                        ),
+                        None,
+                    )
+                    evidence = {
+                        "vin": vehicle.get("vin"),
+                        "garage_vehicle_id": vehicle.get("id"),
+                        "garage_plate": vehicle.get("plate_number"),
+                        "document_plates": (
+                            analysis.get("entities") or {}
+                        ).get("plate_number", []),
+                        "other_vehicle_id": (
+                            other_vehicle.get("id")
+                            if other_vehicle is not None
+                            else None
+                        ),
+                    }
+                    self._emit_insight(
+                        seen,
+                        rule_id="vehicle_identity_mismatch",
+                        severity=InsightSeverity.HIGH,
+                        confidence=0.94,
+                        title="VIN и госномер в документе не совпадают с Гаражом",
+                        summary=(
+                            f"{document.get('name')}: VIN "
+                            f"{vehicle.get('vin')} соответствует карточке "
+                            f"{vehicle.get('plate_number')}, но в документе "
+                            "указан другой госномер."
+                        ),
+                        refs=[
+                            str(document["id"]),
+                            str(vehicle.get("id") or ""),
+                        ],
+                        evidence=[evidence],
+                        fingerprint_parts=[
+                            document["id"],
+                            vin,
+                            expected_plate,
+                            ",".join(doc_plates),
+                        ],
+                    )
+
             doc_date = (
                 _parse_date(dna.get("document_date"))
                 or _parse_date(document.get("created_at"))
@@ -1222,20 +1370,28 @@ class CognitionService:
                 str(document["id"])
             ):
                 amount = line_item.get("amount")
-                currency = str(line_item.get("currency") or "")
-                label_key = _line_item_key(line_item.get("label"))
+                currency = str(line_item.get("currency") or "").upper()
+                label_key = str(
+                    line_item.get("item_key")
+                    or _line_item_key(line_item.get("label"))
+                )
                 if (
                     label_key
+                    and currency
                     and isinstance(amount, (int, float))
                     and float(amount) > 0
                 ):
                     line_prices[
-                        (str(line_item["kind"]), label_key)
+                        (
+                            cp_key,
+                            str(line_item["kind"]),
+                            label_key,
+                            currency,
+                        )
                     ].append(
                         (
                             float(amount),
                             str(document["id"]),
-                            currency,
                         )
                     )
 
@@ -1390,49 +1546,67 @@ class CognitionService:
                     fingerprint_parts=[document_id, "amount-outlier"],
                 )
 
-        for (item_kind, label_key), values in line_prices.items():
-            if len(values) < 2:
+        for (
+            supplier_key,
+            item_kind,
+            label_key,
+            currency,
+        ), values in line_prices.items():
+            unique_docs = {document_id for _, document_id in values}
+            if len(unique_docs) < 2:
                 continue
-            positive = [value for value, _, _ in values if value > 0]
+            positive = [value for value, _ in values if value > 0]
             if len(positive) < 2:
                 continue
             low = min(positive)
             high = max(positive)
-            if low <= 0 or high / low < 1.50:
+            if low <= 0 or high / low < 1.30:
                 continue
             ratio = high / low
             self._emit_insight(
                 seen,
                 rule_id="line_item_price_jump",
-                severity=InsightSeverity.MEDIUM,
-                confidence=0.64,
-                title="Сумма одинаковой позиции заметно выросла",
-                summary=(
-                    f"Позиция {label_key[:80]}: максимальная сумма строки "
-                    f"примерно в {ratio:.1f} раза выше минимальной. "
-                    "Тоору помечает это как сигнал, а не как доказанную "
-                    "изменённую цену за единицу."
+                severity=(
+                    InsightSeverity.MEDIUM
+                    if ratio >= 1.50
+                    else InsightSeverity.LOW
                 ),
-                refs=[item[1] for item in values],
+                confidence=0.70 if len(unique_docs) >= 3 else 0.62,
+                title="Стоимость одинаковой позиции заметно выросла",
+                summary=(
+                    f"Позиция {label_key[:80]} ({currency}): максимальная "
+                    f"стоимость строки примерно в {ratio:.1f} раза выше "
+                    "минимальной у того же контрагента. Тоору сохраняет "
+                    "это как сигнал; если в строке нет количества, это не "
+                    "считается доказанной ценой за единицу."
+                ),
+                refs=sorted(unique_docs),
                 evidence=[
                     {
                         "kind": item_kind,
+                        "supplier_key": supplier_key,
                         "normalized_label": label_key,
+                        "currency": currency,
                         "values": [
                             {
                                 "amount": item[0],
                                 "document_id": item[1],
-                                "currency": item[2],
                             }
                             for item in values
                         ],
                     }
                 ],
-                fingerprint_parts=[item_kind, label_key],
+                fingerprint_parts=[
+                    supplier_key,
+                    item_kind,
+                    label_key,
+                    currency,
+                ],
             )
 
         auto_rules = {
             "duplicate_vehicle_identity",
+            "vehicle_identity_mismatch",
             "insurance_expiry",
             "counterparty_mismatch",
             "overdue_document_deadline",
