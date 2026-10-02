@@ -197,7 +197,10 @@ class ChatPipeline:
             if item.role in {"user", "assistant"}
         ]
         if self.cognition is not None:
-            self.cognition.apply_reasoning_policy(self.reasoning.config)
+            try:
+                self.cognition.apply_reasoning_policy(self.reasoning.config)
+            except Exception:  # noqa: BLE001 - cognition must not break chat
+                pass
 
         reasoning_route = self.reasoning.route(
             message,
@@ -210,14 +213,21 @@ class ChatPipeline:
         )
         metacognitive = None
         if self.cognition is not None:
-            metacognitive = self.cognition.assess(
-                complexity=reasoning_route.complexity,
-                memory_uncertainty=reasoning_route.memory_uncertainty,
-                contradiction_count=reasoning_route.contradiction_count,
-                context_memories=context.total_memories,
-                document_matches=len(matches) if self.cloud_store is not None else 0,
-            )
-            if metacognitive.should_escalate:
+            try:
+                metacognitive = self.cognition.assess(
+                    complexity=reasoning_route.complexity,
+                    memory_uncertainty=reasoning_route.memory_uncertainty,
+                    contradiction_count=reasoning_route.contradiction_count,
+                    context_memories=context.total_memories,
+                    document_matches=(
+                        len(matches)
+                        if self.cloud_store is not None
+                        else 0
+                    ),
+                )
+            except Exception:  # noqa: BLE001 - cognition must not break chat
+                metacognitive = None
+            if metacognitive is not None and metacognitive.should_escalate:
                 if reasoning_route.mode is ReasoningMode.CHAIN:
                     reasoning_route = reasoning_route.model_copy(
                         update={
@@ -403,26 +413,31 @@ class ChatPipeline:
                     )
                 )
                 if self.cognition is not None:
-                    verifier_meta = self.cognition.assess(
-                        complexity=reasoning_route.complexity,
-                        memory_uncertainty=reasoning_route.memory_uncertainty,
-                        contradiction_count=reasoning_route.contradiction_count,
-                        context_memories=context.total_memories,
-                        document_matches=(
-                            len(matches)
-                            if self.cloud_store is not None
-                            else 0
-                        ),
-                        verification_score=verification.score,
-                        verification_uncertainty=verification.uncertainty,
-                        verification_contradictions=len(
-                            verification.contradictions
-                        ),
-                    )
-                    verifier_escalation = (
-                        verifier_escalation
-                        or verifier_meta.should_escalate
-                    )
+                    try:
+                        verifier_meta = self.cognition.assess(
+                            complexity=reasoning_route.complexity,
+                            memory_uncertainty=reasoning_route.memory_uncertainty,
+                            contradiction_count=(
+                                reasoning_route.contradiction_count
+                            ),
+                            context_memories=context.total_memories,
+                            document_matches=(
+                                len(matches)
+                                if self.cloud_store is not None
+                                else 0
+                            ),
+                            verification_score=verification.score,
+                            verification_uncertainty=verification.uncertainty,
+                            verification_contradictions=len(
+                                verification.contradictions
+                            ),
+                        )
+                        verifier_escalation = (
+                            verifier_escalation
+                            or verifier_meta.should_escalate
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
                 if verifier_escalation:
                     escalated = True
                     ai_calls += 1
@@ -496,11 +511,14 @@ class ChatPipeline:
             )
             correction_status = "correction:not-detected"
             if self.cognition is not None and remember:
-                correction_status = self.cognition.learn_correction(
-                    user_message=message,
-                    previous_assistant=previous_assistant,
-                    session_id=session_id,
-                )
+                try:
+                    correction_status = self.cognition.learn_correction(
+                        user_message=message,
+                        previous_assistant=previous_assistant,
+                        session_id=session_id,
+                    )
+                except Exception:  # noqa: BLE001 - cognition must not break chat
+                    correction_status = "correction:error"
 
             memory_status = await self._remember(
                 user_message=message,
@@ -520,68 +538,81 @@ class ChatPipeline:
                 memory_status += ";" + correction_status
 
             if self.cognition is not None:
-                after = self.cognition.assess(
-                    complexity=reasoning_route.complexity,
-                    memory_uncertainty=reasoning_route.memory_uncertainty,
-                    contradiction_count=reasoning_route.contradiction_count,
-                    context_memories=context.total_memories,
-                    document_matches=(
-                        len(matches) if self.cloud_store is not None else 0
-                    ),
-                    verification_score=(
-                        verification.score
-                        if verification is not None
-                        else None
-                    ),
-                    verification_uncertainty=(
-                        verification.uncertainty
-                        if verification is not None
-                        else None
-                    ),
-                    verification_contradictions=(
-                        len(verification.contradictions)
-                        if verification is not None
-                        else 0
-                    ),
-                )
-                duration_ms = (time.perf_counter() - started_at) * 1000.0
-                self.cognition.record_reasoning_experience(
-                    task=message,
-                    mode=reasoning_route.mode.value,
-                    complexity=reasoning_route.complexity,
-                    memory_uncertainty=reasoning_route.memory_uncertainty,
-                    contradiction_count=reasoning_route.contradiction_count,
-                    verifier_score=(
-                        verification.score
-                        if verification is not None
-                        else None
-                    ),
-                    verifier_uncertainty=(
-                        verification.uncertainty
-                        if verification is not None
-                        else None
-                    ),
-                    passed=(
-                        verification.passed
-                        if verification is not None
-                        else None
-                    ),
-                    escalated=escalated,
-                    ai_calls=max(1, ai_calls),
-                    duration_ms=duration_ms,
-                )
-                if self.router.observability is not None:
-                    self.router.observability.event(
-                        category="cognition",
-                        stage="metacognition",
-                        operation="metacognitive_outcome",
-                        status="success",
-                        module="cognition",
-                        source_type="chat",
-                        source_id="user-message",
-                        message="Metacognitive outcome recorded.",
-                        details=after.model_dump(mode="json"),
+                try:
+                    after = self.cognition.assess(
+                        complexity=reasoning_route.complexity,
+                        memory_uncertainty=reasoning_route.memory_uncertainty,
+                        contradiction_count=(
+                            reasoning_route.contradiction_count
+                        ),
+                        context_memories=context.total_memories,
+                        document_matches=(
+                            len(matches)
+                            if self.cloud_store is not None
+                            else 0
+                        ),
+                        verification_score=(
+                            verification.score
+                            if verification is not None
+                            else None
+                        ),
+                        verification_uncertainty=(
+                            verification.uncertainty
+                            if verification is not None
+                            else None
+                        ),
+                        verification_contradictions=(
+                            len(verification.contradictions)
+                            if verification is not None
+                            else 0
+                        ),
                     )
+                    duration_ms = (
+                        time.perf_counter() - started_at
+                    ) * 1000.0
+                    self.cognition.record_reasoning_experience(
+                        task=message,
+                        mode=reasoning_route.mode.value,
+                        complexity=reasoning_route.complexity,
+                        memory_uncertainty=(
+                            reasoning_route.memory_uncertainty
+                        ),
+                        contradiction_count=(
+                            reasoning_route.contradiction_count
+                        ),
+                        verifier_score=(
+                            verification.score
+                            if verification is not None
+                            else None
+                        ),
+                        verifier_uncertainty=(
+                            verification.uncertainty
+                            if verification is not None
+                            else None
+                        ),
+                        passed=(
+                            verification.passed
+                            if verification is not None
+                            else None
+                        ),
+                        escalated=escalated,
+                        ai_calls=max(1, ai_calls),
+                        duration_ms=duration_ms,
+                    )
+                    if self.router.observability is not None:
+                        self.router.observability.event(
+                            category="cognition",
+                            stage="metacognition",
+                            operation="metacognitive_outcome",
+                            status="success",
+                            module="cognition",
+                            source_type="chat",
+                            source_id="user-message",
+                            message="Metacognitive outcome recorded.",
+                            details=after.model_dump(mode="json"),
+                        )
+                except Exception:  # noqa: BLE001 - chat remains primary
+                    pass
 
         return ChatPipelineResult(
             answer=answer,
