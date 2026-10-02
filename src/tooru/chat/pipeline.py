@@ -396,10 +396,34 @@ class ChatPipeline:
                     context=reasoning_context,
                 )
 
-                if self.reasoning.should_escalate_after_verification(
-                    reasoning_route,
-                    verification,
-                ):
+                verifier_escalation = (
+                    self.reasoning.should_escalate_after_verification(
+                        reasoning_route,
+                        verification,
+                    )
+                )
+                if self.cognition is not None:
+                    verifier_meta = self.cognition.assess(
+                        complexity=reasoning_route.complexity,
+                        memory_uncertainty=reasoning_route.memory_uncertainty,
+                        contradiction_count=reasoning_route.contradiction_count,
+                        context_memories=context.total_memories,
+                        document_matches=(
+                            len(matches)
+                            if self.cloud_store is not None
+                            else 0
+                        ),
+                        verification_score=verification.score,
+                        verification_uncertainty=verification.uncertainty,
+                        verification_contradictions=len(
+                            verification.contradictions
+                        ),
+                    )
+                    verifier_escalation = (
+                        verifier_escalation
+                        or verifier_meta.should_escalate
+                    )
+                if verifier_escalation:
                     escalated = True
                     ai_calls += 1
                     tree = await self.reasoning.build_tree(
