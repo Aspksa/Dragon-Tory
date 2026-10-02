@@ -214,6 +214,8 @@ async def upload_file(
             actor="user",
             details={"name": result["name"], "version": result["version"]},
         )
+        if request.app.state.settings.cognition_automation_enabled:
+            request.app.state.cognition_automation.trigger()
         return result
     finally:
         temp.unlink(missing_ok=True)
