@@ -5,6 +5,7 @@ import shutil
 import sqlite3
 import sys
 from collections import Counter, defaultdict
+from contextlib import suppress
 from dataclasses import asdict
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
@@ -108,7 +109,7 @@ def _git_head(project_root: Path) -> str | None:
     packed = project_root / ".git" / "packed-refs"
     try:
         for line in packed.read_text(encoding="utf-8").splitlines():
-            if line.startswith("#") or line.startswith("^"):
+            if line.startswith(("#", "^")):
                 continue
             sha, _, candidate = line.partition(" ")
             if candidate.strip() == ref:
@@ -151,13 +152,11 @@ def _status_rank(status: str) -> int:
 def _document_report(state, *, limit: int) -> dict[str, Any]:
     documents = list(state.cloud_store.all_active_documents(limit=limit))
     observability_by_document: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    try:
+    with suppress(Exception):
         for event in state.observability.recent(limit=500):
             event_document_id = str(event.get("document_id") or "")
             if event_document_id:
                 observability_by_document[event_document_id].append(event)
-    except Exception:  # noqa: BLE001 - document report must survive telemetry issues
-        pass
 
     documents.sort(
         key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""),
