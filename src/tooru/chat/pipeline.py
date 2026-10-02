@@ -422,7 +422,10 @@ class ChatPipeline:
                         verification,
                     )
                 )
-                if self.cognition is not None:
+                if (
+                    self.cognition is not None
+                    and not verification.used_fallback
+                ):
                     try:
                         verifier_meta = self.cognition.assess(
                             complexity=reasoning_route.complexity,
