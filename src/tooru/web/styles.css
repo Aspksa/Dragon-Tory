@@ -234,7 +234,7 @@
 
 
 /* 00.00.25 · Live observability */
-.home-bento{grid-template-areas:"brain" "observability" "tasks"}
+.home-bento{grid-template-areas:"brain" "observability" "cognition" "tasks"}
 .home-observability{grid-area:observability;padding:16px}
 .home-observability-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}
 .home-obs-kpi{padding:10px 11px;border:1px solid #e3eaf2;border-radius:12px;background:rgba(249,251,253,.92)}
@@ -291,3 +291,15 @@
 .timesheet-manual-list{display:grid;gap:7px;margin-top:12px}
 .timesheet-manual-list>.module-document{padding:8px 10px}
 @media(max-width:760px){.timesheet-table .timesheet-person{min-width:140px}.timesheet-table th,.timesheet-table td{min-width:34px}}
+
+/* 00.00.38 · Cognitive Core VIII */
+.home-cognition{grid-area:cognition;padding:16px}
+.home-cognition-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.home-insight-list{display:grid;gap:8px}
+.home-insight{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:11px 12px;border:1px solid #e3eaf2;border-radius:13px;background:rgba(249,251,253,.94)}
+.home-insight-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;background:#6f9fdc}
+.home-insight.medium .home-insight-dot{background:#d6a34d}.home-insight.high .home-insight-dot,.home-insight.critical .home-insight-dot{background:#d96b68}
+.home-insight-title{font-size:11px;font-weight:800;color:#33465f}
+.home-insight-summary{font-size:10px;line-height:1.45;color:#748398;margin-top:3px}
+.home-insight-meta{font:700 9px Consolas,"Cascadia Code",monospace;color:#8b99aa;text-transform:uppercase}
+@media(max-width:760px){.home-cognition-kpis{grid-template-columns:1fr 1fr}.home-insight{grid-template-columns:auto minmax(0,1fr)}.home-insight-meta{grid-column:2}}
