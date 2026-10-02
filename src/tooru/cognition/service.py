@@ -1446,7 +1446,8 @@ class CognitionService:
                     or _line_item_key(line_item.get("label"))
                 )
                 if (
-                    label_key
+                    cp_key
+                    and label_key
                     and currency
                     and isinstance(amount, (int, float))
                     and float(amount) > 0
