@@ -166,6 +166,11 @@ def _cloud(request: Request):
     return request.app.state.cloud_store
 
 
+def _trigger_cognition(request: Request) -> None:
+    if request.app.state.settings.cognition_automation_enabled:
+        request.app.state.cognition_automation.trigger()
+
+
 def _http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, KeyError):
         return HTTPException(
@@ -291,6 +296,7 @@ def create_vehicle(
             sync_vehicle(request.app.state.memory_intake, item)
         except Exception as sync_exc:  # noqa: BLE001 - best-effort side effect
             logger.warning("Garage memory auto-sync failed: %s", sync_exc)
+        _trigger_cognition(request)
         return item
     except Exception as exc:
         raise _http_error(exc) from exc
@@ -352,7 +358,9 @@ def create_counterparty(
     request: Request,
 ) -> dict[str, Any]:
     try:
-        return _smart(request).create_counterparty(payload.model_dump())
+        item = _smart(request).create_counterparty(payload.model_dump())
+        _trigger_cognition(request)
+        return item
     except Exception as exc:
         raise _http_error(exc) from exc
 
@@ -375,10 +383,12 @@ def update_counterparty(
     request: Request,
 ) -> dict[str, Any]:
     try:
-        return _smart(request).update_counterparty(
+        item = _smart(request).update_counterparty(
             counterparty_id,
             payload.model_dump(),
         )
+        _trigger_cognition(request)
+        return item
     except Exception as exc:
         raise _http_error(exc) from exc
 
@@ -476,6 +486,7 @@ def update_dna(
             sync_weekend_work(request.app.state.memory_intake, dna)
         except Exception as sync_exc:  # noqa: BLE001 - best-effort side effect
             logger.warning("Timesheet memory auto-sync failed: %s", sync_exc)
+        _trigger_cognition(request)
         return dna
     except Exception as exc:
         raise _http_error(exc) from exc
