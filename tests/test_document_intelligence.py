@@ -431,7 +431,7 @@ def test_document_intelligence_extracts_plate_and_line_item_price(
         "Госномер А001АА25\n"
         "Фильтр масляный ABC-123 1 700 RUB\n"
         "Итого 1 700 RUB\n"
-    ).encode("utf-8")
+    ).encode()
     document = _upload(store, "Счёт Subaru.txt", text)
     store.update_passport(
         document["id"],
