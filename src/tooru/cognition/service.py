@@ -487,7 +487,7 @@ class CognitionService:
             tags=[
                 "correction-learning",
                 "cognitive-core-viii",
-                "guardian-reviewed",
+                "guardian-routed",
             ],
             session_id=session_id,
         )
