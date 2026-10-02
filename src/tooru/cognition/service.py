@@ -74,6 +74,17 @@ def _norm(value: Any) -> str:
     return re.sub(r"[^a-zа-яё0-9]+", "", str(value or "").casefold())
 
 
+def _line_item_key(value: Any) -> str:
+    text = _MONEY_LINE_RE.sub(" ", str(value or ""))
+    text = re.sub(
+        r"\b(?:цена|стоимость|сумма)\s*[:=-]?\s*\d[\d\s]*(?:[,.]\d+)?",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return _norm(text)
+
+
 def _stable_id(kind: str, ref: str) -> str:
     digest = hashlib.sha1(
         f"{kind}:{ref}".encode("utf-8"),
@@ -899,7 +910,7 @@ class CognitionService:
                 str(document["id"])
             ):
                 entity_kind = str(line_item["kind"])
-                entity_ref = _norm(line_item["label"])
+                entity_ref = _line_item_key(line_item["label"])
                 entity_node = add_node(
                     entity_kind,
                     entity_ref,
@@ -1210,7 +1221,7 @@ class CognitionService:
             ):
                 amount = line_item.get("amount")
                 currency = str(line_item.get("currency") or "")
-                label_key = _norm(line_item.get("label"))
+                label_key = _line_item_key(line_item.get("label"))
                 if (
                     label_key
                     and isinstance(amount, (int, float))
