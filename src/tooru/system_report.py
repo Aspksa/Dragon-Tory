@@ -31,7 +31,6 @@ _REDACTED_KEYS = {
     "raw",
     "response",
     "secret",
-    "summary",
     "summary_local",
     "system_prompt",
     "text",
