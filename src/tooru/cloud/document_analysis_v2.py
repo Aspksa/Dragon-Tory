@@ -18,7 +18,7 @@ _PLATE_RE = re.compile(
     r"([АВЕКМНОРСТУХABEKMHOPCTYX])\s*"
     r"(\d{3})\s*"
     r"([АВЕКМНОРСТУХABEKMHOPCTYX]{2})\s*"
-    r"(\d{2,3})"
+    r"(\d{2,3})?"
     r"(?![A-ZА-Я0-9])",
     re.IGNORECASE,
 )
@@ -217,7 +217,9 @@ def analyze_chunks(chunks: Iterable[Any]) -> dict[str, Any]:
             )
 
         for match in _PLATE_RE.finditer(text):
-            plate = "".join(match.groups()).upper().replace(" ", "")
+            plate = "".join(
+                part or "" for part in match.groups()
+            ).upper().replace(" ", "")
             evidence.append(
                 _evidence(
                     evidence_type="plate_number",
@@ -301,7 +303,11 @@ def analyze_chunks(chunks: Iterable[Any]) -> dict[str, Any]:
                 and not _NO_VAT_RE.search(line)
                 and len(compact_line) <= 500
             ):
-                description = _AMOUNT_RE.sub(" ", compact_line)
+                description = compact_line
+                for amount_item in amounts_in_line:
+                    raw_amount = str(amount_item.get("raw") or "")
+                    if raw_amount:
+                        description = description.replace(raw_amount, " ")
                 description = re.sub(
                     r"^\s*(?:\d+[.)]?\s+)?(?:\d+(?:[.,]\d+)?\s*)?",
                     "",
