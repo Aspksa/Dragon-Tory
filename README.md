@@ -85,6 +85,19 @@
 Подробнее: `docs/ADAPTIVE_GREY_MATTER.md`.
 
 
+### Cognitive Core IX 02.00.00 · Machine Report
+
+Версия 00.00.39 добавляет самодиагностику и машиночитаемый support snapshot:
+
+- в «Настройки» добавлена кнопка скачивания полного JSON-отчёта;
+- отчёт показывает document pipeline, AI Contract, анализ/индексацию, provenance, ошибки изучения через чат, Memory/Guardian, Grey Matter, reasoning Chain/Hybrid/Tree, cognition policy/insights/graph, observability, фоновые циклы и обновления;
+- каждый документ получает диагностическое состояние `studied / degraded / failed / analyzed / pending`;
+- fatal-ошибка изучения через чат сохраняется как `chat_document_study_failed`, поэтому ошибка не теряется после закрытия чата;
+- в отчёте нет API-ключей, паролей, полного текста документов, сообщений чата или скрытого chain-of-thought;
+- раздел `diagnostic_findings` поднимает наиболее важные проблемы для быстрой диагностики.
+
+Подробнее: `docs/COGNITIVE_CORE_IX.md`.
+
 ### Cognitive Core VIII 01.00.00
 
 Версия 00.00.38 замыкает контур мышления и делает Тоору проактивной:
