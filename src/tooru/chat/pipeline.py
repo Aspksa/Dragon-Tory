@@ -1,4 +1,5 @@
 import re
+import time
 from dataclasses import dataclass
 
 from tooru.ai.base import AIRequest
@@ -110,12 +111,14 @@ class ChatPipeline:
         guardian: MemoryGuardian,
         cloud_store=None,
         grey_matter=None,
+        cognition=None,
     ) -> None:
         self.memory = memory
         self.router = router
         self.guardian = guardian
         self.cloud_store = cloud_store
         self.grey_matter = grey_matter
+        self.cognition = cognition
         self.reasoning = CognitiveReasoning(
             router=router,
             memory=memory,
@@ -132,6 +135,9 @@ class ChatPipeline:
         conversation_summary: str = "",
         session_id: str | None = None,
     ) -> ChatPipelineResult:
+        started_at = time.perf_counter()
+        ai_calls = 0
+        escalated = False
         context = self.memory.context_pack(
             MemoryContextRequest(
                 owner_id="local-user",
@@ -190,6 +196,9 @@ class ChatPipeline:
             for item in history[-6:]
             if item.role in {"user", "assistant"}
         ]
+        if self.cognition is not None:
+            self.cognition.apply_reasoning_policy(self.reasoning.config)
+
         reasoning_route = self.reasoning.route(
             message,
             response_mode=response_mode,
@@ -199,6 +208,53 @@ class ChatPipeline:
                 *context.project_hits,
             ],
         )
+        metacognitive = None
+        if self.cognition is not None:
+            metacognitive = self.cognition.assess(
+                complexity=reasoning_route.complexity,
+                memory_uncertainty=reasoning_route.memory_uncertainty,
+                contradiction_count=reasoning_route.contradiction_count,
+                context_memories=context.total_memories,
+                document_matches=len(matches) if self.cloud_store is not None else 0,
+            )
+            if metacognitive.should_escalate:
+                if reasoning_route.mode is ReasoningMode.CHAIN:
+                    reasoning_route = reasoning_route.model_copy(
+                        update={
+                            "mode": ReasoningMode.HYBRID,
+                            "branch_count": 3,
+                            "max_depth": 2,
+                            "reasons": [
+                                *reasoning_route.reasons,
+                                "metacognitive-escalation",
+                            ],
+                        }
+                    )
+                elif (
+                    reasoning_route.mode is ReasoningMode.HYBRID
+                    and (
+                        metacognitive.contradiction_pressure >= 0.67
+                        or metacognitive.uncertainty >= 0.58
+                    )
+                ):
+                    reasoning_route = reasoning_route.model_copy(
+                        update={
+                            "mode": ReasoningMode.TREE,
+                            "branch_count": max(
+                                reasoning_route.branch_count,
+                                3,
+                            ),
+                            "max_depth": max(
+                                reasoning_route.max_depth,
+                                3,
+                            ),
+                            "reasons": [
+                                *reasoning_route.reasons,
+                                "metacognitive-tree-escalation",
+                            ],
+                        }
+                    )
+
         plan: ReasoningPlan | None = None
         tree: ReasoningTree | None = None
         verification: ResultVerification | None = None
@@ -211,12 +267,14 @@ class ChatPipeline:
             )
         )
         if should_plan:
+            ai_calls += 1
             plan = await self.reasoning.plan(
                 task=message,
                 context=reasoning_context,
                 conversation_summary=conversation_summary,
             )
         if reasoning_route.mode is ReasoningMode.TREE:
+            ai_calls += 1
             tree = await self.reasoning.build_tree(
                 task=message,
                 route=reasoning_route,
@@ -293,6 +351,20 @@ class ChatPipeline:
                     ),
                     details=reasoning_route.model_dump(mode="json"),
                 )
+                if metacognitive is not None:
+                    self.router.observability.event(
+                        category="cognition",
+                        stage="metacognition",
+                        operation="metacognitive_assessment",
+                        status="success",
+                        module="cognition",
+                        source_type="chat",
+                        source_id="user-message",
+                        message=(
+                            "Metacognitive readiness assessed before response."
+                        ),
+                        details=metacognitive.model_dump(mode="json"),
+                    )
                 self.router.observability.event(
                     category="source",
                     stage="source",
@@ -303,6 +375,7 @@ class ChatPipeline:
                     source_id="user-message",
                     message="Сообщение пользователя передано Тоору.",
                 )
+            ai_calls += 1
             response = await self.router.generate(
                 AI_PROVIDER,
                 AIRequest(
@@ -315,6 +388,7 @@ class ChatPipeline:
             )
             answer = response.text
             if plan is not None:
+                ai_calls += 1
                 verification = await self.reasoning.verify(
                     task=message,
                     plan=plan,
@@ -326,6 +400,8 @@ class ChatPipeline:
                     reasoning_route,
                     verification,
                 ):
+                    escalated = True
+                    ai_calls += 1
                     tree = await self.reasoning.build_tree(
                         task=message,
                         route=ReasoningRoute(
@@ -360,6 +436,7 @@ class ChatPipeline:
                         current_answer=answer,
                         verification=verification,
                     )
+                    ai_calls += 1
                     answer = await self.reasoning.synthesize_tree_answer(
                         task=message,
                         answer=answer,
@@ -368,6 +445,7 @@ class ChatPipeline:
                         plan=plan,
                         verification=verification,
                     )
+                    ai_calls += 1
                     verification = await self.reasoning.verify(
                         task=message,
                         plan=plan,
@@ -392,6 +470,14 @@ class ChatPipeline:
                 ),
                 "",
             )
+            correction_status = "correction:not-detected"
+            if self.cognition is not None and remember:
+                correction_status = self.cognition.learn_correction(
+                    user_message=message,
+                    previous_assistant=previous_assistant,
+                    session_id=session_id,
+                )
+
             memory_status = await self._remember(
                 user_message=message,
                 assistant_answer=answer,
@@ -403,6 +489,75 @@ class ChatPipeline:
                 tree=tree,
                 previous_assistant=previous_assistant,
             )
+            if correction_status not in {
+                "correction:not-detected",
+                "correction:blocked",
+            }:
+                memory_status += ";" + correction_status
+
+            if self.cognition is not None:
+                after = self.cognition.assess(
+                    complexity=reasoning_route.complexity,
+                    memory_uncertainty=reasoning_route.memory_uncertainty,
+                    contradiction_count=reasoning_route.contradiction_count,
+                    context_memories=context.total_memories,
+                    document_matches=(
+                        len(matches) if self.cloud_store is not None else 0
+                    ),
+                    verification_score=(
+                        verification.score
+                        if verification is not None
+                        else None
+                    ),
+                    verification_uncertainty=(
+                        verification.uncertainty
+                        if verification is not None
+                        else None
+                    ),
+                    verification_contradictions=(
+                        len(verification.contradictions)
+                        if verification is not None
+                        else 0
+                    ),
+                )
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                self.cognition.record_reasoning_experience(
+                    task=message,
+                    mode=reasoning_route.mode.value,
+                    complexity=reasoning_route.complexity,
+                    memory_uncertainty=reasoning_route.memory_uncertainty,
+                    contradiction_count=reasoning_route.contradiction_count,
+                    verifier_score=(
+                        verification.score
+                        if verification is not None
+                        else None
+                    ),
+                    verifier_uncertainty=(
+                        verification.uncertainty
+                        if verification is not None
+                        else None
+                    ),
+                    passed=(
+                        verification.passed
+                        if verification is not None
+                        else None
+                    ),
+                    escalated=escalated,
+                    ai_calls=max(1, ai_calls),
+                    duration_ms=duration_ms,
+                )
+                if self.router.observability is not None:
+                    self.router.observability.event(
+                        category="cognition",
+                        stage="metacognition",
+                        operation="metacognitive_outcome",
+                        status="success",
+                        module="cognition",
+                        source_type="chat",
+                        source_id="user-message",
+                        message="Metacognitive outcome recorded.",
+                        details=after.model_dump(mode="json"),
+                    )
 
         return ChatPipelineResult(
             answer=answer,
