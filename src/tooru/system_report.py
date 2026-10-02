@@ -4,7 +4,7 @@ import platform
 import shutil
 import sqlite3
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import asdict
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
@@ -150,6 +150,15 @@ def _status_rank(status: str) -> int:
 
 def _document_report(state, *, limit: int) -> dict[str, Any]:
     documents = list(state.cloud_store.all_active_documents(limit=limit))
+    observability_by_document: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    try:
+        for event in state.observability.recent(limit=500):
+            event_document_id = str(event.get("document_id") or "")
+            if event_document_id:
+                observability_by_document[event_document_id].append(event)
+    except Exception:  # noqa: BLE001 - document report must survive telemetry issues
+        pass
+
     documents.sort(
         key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""),
         reverse=True,
@@ -221,6 +230,12 @@ def _document_report(state, *, limit: int) -> dict[str, Any]:
                 "tables": len(structure.get("tables") or []),
             }
 
+        document_events = observability_by_document.get(
+            document_id,
+            [],
+        )
+        latest_runtime = document_events[0] if document_events else None
+
         items.append(
             {
                 "id": document_id,
@@ -245,6 +260,17 @@ def _document_report(state, *, limit: int) -> dict[str, Any]:
                 "ai_contract": contract,
                 "recent_provenance": provenance[:12],
                 "recent_activity": activity[:8],
+                "runtime_last_operation": (
+                    latest_runtime.get("operation")
+                    if latest_runtime is not None
+                    else None
+                ),
+                "runtime_last_status": (
+                    latest_runtime.get("status")
+                    if latest_runtime is not None
+                    else None
+                ),
+                "recent_observability": document_events[:20],
             }
         )
 
