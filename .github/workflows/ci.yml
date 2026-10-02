@@ -154,6 +154,14 @@ jobs:
           if ($content -notmatch 'pyproject\.toml') {
             throw "Bootstrap does not derive dependencies from pyproject.toml."
           }
+          $startMarker = $content.IndexOf('Write-LauncherLog "INFO" "Starting Dragon Tory on $Url"')
+          $engineMarker = $content.LastIndexOf("Ensure-DocumentEngines")
+          if ($startMarker -lt 0 -or $engineMarker -lt 0 -or $engineMarker -lt $startMarker) {
+            throw "Optional document engines must be checked only after backend startup begins."
+          }
+          if ($content -match '[^\x00-\x7F]') {
+            throw "bootstrap.ps1 must remain ASCII-safe for Windows PowerShell 5.1."
+          }
 
       - name: Validate update script syntax and protected data
         shell: pwsh

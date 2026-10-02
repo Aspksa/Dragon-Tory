@@ -126,3 +126,16 @@ def test_release_0036_lists_adaptive_reasoning_router() -> None:
         for change in modules["dashboard"]["changes"]
     )
 
+
+
+def test_release_0037_lists_startup_hardening() -> None:
+    release = release_notes_for("0.0.37")
+
+    assert release is not None
+    modules = {item["id"]: item for item in release["modules"]}
+    assert "updater" in modules
+    assert modules["updater"]["version"] == "01.06.00"
+    assert any(
+        "LibreOffice" in change
+        for change in modules["updater"]["changes"]
+    )

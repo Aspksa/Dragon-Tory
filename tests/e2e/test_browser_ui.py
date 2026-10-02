@@ -68,8 +68,9 @@ def test_dashboard_navigation_and_update_button_recovers() -> None:
         )
 
         page.get_by_role("button", name=re.compile("Обновление")).click()
-        expect(page.locator("#updateReleaseNotes")).to_contain_text(
-            "Служебные записки",
+        release_notes = page.locator("#updateReleaseNotes")
+        expect(release_notes).not_to_be_empty(timeout=10_000)
+        expect(release_notes.locator(".module-document").first).to_be_visible(
             timeout=10_000,
         )
         expect(page.locator("#updateReleaseVersion")).to_have_text(APP_VERSION)

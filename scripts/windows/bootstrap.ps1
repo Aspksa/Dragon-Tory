@@ -10,6 +10,9 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+# Keep this script ASCII-safe. Windows PowerShell 5.1 can misread UTF-8 source
+# without BOM even when the console itself is configured for UTF-8.
+
 try {
     [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 } catch {
@@ -555,11 +558,11 @@ function Install-DocumentEngine {
 
     $winget = Get-Command "winget.exe" -ErrorAction SilentlyContinue
     if ($null -eq $winget) {
-        Write-LauncherLog "WARN" "$Label не найден, а winget недоступен. Тоору продолжит работу без этого движка."
+        Write-LauncherLog "WARN" "$Label was not found and winget is unavailable. Dragon Tory will continue without this optional engine."
         return
     }
 
-    Write-LauncherLog "INFO" "Устанавливается $Label для распознавания документов."
+    Write-LauncherLog "INFO" "Installing optional document engine: $Label."
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
@@ -569,12 +572,12 @@ function Install-DocumentEngine {
             Add-Content -LiteralPath $LauncherLog -Value ([string]$line) -Encoding UTF8
         }
         if ($exitCode -ne 0) {
-            Write-LauncherLog "WARN" "$Label не удалось установить автоматически (winget exit $exitCode)."
+            Write-LauncherLog "WARN" "$Label could not be installed automatically (winget exit $exitCode)."
         } else {
-            Write-LauncherLog "OK" "$Label установлен."
+            Write-LauncherLog "OK" "$Label is installed."
         }
     } catch {
-        Write-LauncherLog "WARN" "$Label не удалось установить автоматически: $($_.Exception.Message)"
+        Write-LauncherLog "WARN" "$Label could not be installed automatically: $($_.Exception.Message)"
     } finally {
         $ErrorActionPreference = $previousPreference
     }
@@ -582,20 +585,20 @@ function Install-DocumentEngine {
 
 function Ensure-DocumentEngines {
     if ($env:TOORU_SKIP_DOCUMENT_ENGINES -eq "1") {
-        Write-LauncherLog "INFO" "Проверка системных движков документов пропущена переменной окружения."
+        Write-LauncherLog "INFO" "Optional document-engine setup was skipped by environment variable."
         return
     }
 
     if (-not (Find-TesseractEngine)) {
         Install-DocumentEngine -PackageId "UB-Mannheim.TesseractOCR" -Label "Tesseract OCR"
     } else {
-        Write-LauncherLog "OK" "Tesseract OCR доступен."
+        Write-LauncherLog "OK" "Tesseract OCR is available."
     }
 
     if (-not (Find-LibreOfficeEngine)) {
         Install-DocumentEngine -PackageId "TheDocumentFoundation.LibreOffice" -Label "LibreOffice"
     } else {
-        Write-LauncherLog "OK" "LibreOffice доступен для старых DOC/PPT."
+        Write-LauncherLog "OK" "LibreOffice is available for legacy DOC/PPT conversion."
     }
 }
 
@@ -680,8 +683,6 @@ try {
         Write-LauncherLog "OK" "Required Python libraries are already installed and consistent."
     }
 
-    Ensure-DocumentEngines
-
     New-Item -ItemType Directory -Path (Join-Path $ProjectRoot "data") -Force | Out-Null
 
     Write-LauncherLog "INFO" "Starting Dragon Tory on $Url"
@@ -716,7 +717,10 @@ try {
         Start-Process $Url
     }
 
-    Write-LauncherLog "OK" "Startup complete."
+    Write-LauncherLog "OK" "Startup complete. Optional document engines are checked only after the backend is ready."
+
+    Ensure-DocumentEngines
+
     exit 0
 } catch {
     Write-LauncherLog "ERROR" $_.Exception.Message
