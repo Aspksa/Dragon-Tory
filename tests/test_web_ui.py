@@ -145,6 +145,8 @@ def test_diagnostics_status_is_available() -> None:
     assert "messages" in payload["chat_history"]
     assert "garage" in payload
     assert "insurance_alerts" in payload["garage"]
+    assert "cognition" in payload
+    assert "open_insights" in payload["cognition"]
 
 
 def test_chat_requires_configured_provider() -> None:
