@@ -1063,7 +1063,11 @@ class CognitionService:
                     (
                         "DESCRIBES_PART"
                         if entity_kind == "part"
-                        else "DESCRIBES_WORK"
+                        else (
+                            "DESCRIBES_WORK"
+                            if entity_kind == "work"
+                            else "DESCRIBES_ITEM"
+                        )
                     ),
                     confidence=0.72,
                     evidence=[
