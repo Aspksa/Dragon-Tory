@@ -149,6 +149,20 @@ def test_diagnostics_status_is_available() -> None:
     assert "open_insights" in payload["cognition"]
 
 
+
+def test_cognition_status_endpoint_is_available() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/cognition/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "policy" in payload
+    assert "experiences" in payload
+    assert "open_insights" in payload
+    assert "graph_nodes" in payload
+    assert "graph_edges" in payload
+
+
 def test_chat_requires_configured_provider() -> None:
     with TestClient(app) as client:
         if client.get("/v1/settings/ai/deepseek").json()["configured"]:
