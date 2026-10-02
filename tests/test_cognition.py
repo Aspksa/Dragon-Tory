@@ -617,3 +617,147 @@ def test_line_item_price_signal_ignores_price_in_identity(
     }
 
     assert "line_item_price_jump" in rules
+
+
+def test_vehicle_plate_canonicalization_avoids_false_mismatch(
+    tmp_path: Path,
+) -> None:
+    cloud = StubCloud(
+        [
+            {
+                "id": "DOC-PLATE-OK",
+                "name": "Счёт на автомобиль",
+                "version": 1,
+                "project_id": "dragon-tory",
+                "created_at": "2026-09-20T00:00:00+00:00",
+            }
+        ]
+    )
+    smart = StubSmart(
+        vehicles=[
+            {
+                "id": "CAR-OK",
+                "garage_number": "10",
+                "plate_number": "A001AA25",
+                "vin": "JF1SJABC1GH123456",
+                "make_model": "Subaru",
+                "driver_employee_id": None,
+                "active": True,
+                "insurance_days_left": 100,
+            }
+        ],
+        dna={"DOC-PLATE-OK": {"kind": "счёт"}},
+    )
+    intelligence = StubIntelligence(
+        {
+            "DOC-PLATE-OK": {
+                "kind": "счёт",
+                "summary_local": "",
+                "entities": {
+                    "vin": ["JF1SJABC1GH123456"],
+                    "plate_number": ["А001АА25"],
+                    "counterparties": [],
+                    "employees": [],
+                    "amounts": [],
+                },
+                "checks": {"warnings": []},
+                "deadlines": [],
+            }
+        }
+    )
+    service = make_service(
+        tmp_path,
+        cloud=cloud,
+        smart=smart,
+        intelligence=intelligence,
+    )
+
+    service.scan_proactive()
+    rules = {
+        item.rule_id
+        for item in service.store.insights(
+            status=InsightStatus.OPEN,
+            limit=100,
+        )
+    }
+
+    assert "vehicle_identity_mismatch" not in rules
+
+
+def test_vehicle_vin_plate_conflict_is_proactive_high_signal(
+    tmp_path: Path,
+) -> None:
+    cloud = StubCloud(
+        [
+            {
+                "id": "DOC-PLATE-BAD",
+                "name": "Счёт на автомобиль",
+                "version": 1,
+                "project_id": "dragon-tory",
+                "created_at": "2026-09-20T00:00:00+00:00",
+            }
+        ]
+    )
+    smart = StubSmart(
+        vehicles=[
+            {
+                "id": "CAR-1",
+                "garage_number": "10",
+                "plate_number": "A001AA25",
+                "vin": "JF1SJABC1GH123456",
+                "make_model": "Subaru",
+                "driver_employee_id": None,
+                "active": True,
+                "insurance_days_left": 100,
+            },
+            {
+                "id": "CAR-2",
+                "garage_number": "11",
+                "plate_number": "B777BB25",
+                "vin": "JT123456789012345",
+                "make_model": "Toyota",
+                "driver_employee_id": None,
+                "active": True,
+                "insurance_days_left": 100,
+            },
+        ],
+        dna={"DOC-PLATE-BAD": {"kind": "счёт"}},
+    )
+    intelligence = StubIntelligence(
+        {
+            "DOC-PLATE-BAD": {
+                "kind": "счёт",
+                "summary_local": "",
+                "entities": {
+                    "vin": ["JF1SJABC1GH123456"],
+                    "plate_number": ["В777ВВ25"],
+                    "counterparties": [],
+                    "employees": [],
+                    "amounts": [],
+                },
+                "checks": {"warnings": []},
+                "deadlines": [],
+            }
+        }
+    )
+    service = make_service(
+        tmp_path,
+        cloud=cloud,
+        smart=smart,
+        intelligence=intelligence,
+    )
+
+    service.scan_proactive()
+    insights = service.store.insights(
+        status=InsightStatus.OPEN,
+        limit=100,
+    )
+    mismatch = next(
+        item for item in insights
+        if item.rule_id == "vehicle_identity_mismatch"
+    )
+
+    assert mismatch.severity is InsightSeverity.HIGH
+    assert mismatch.confidence >= 0.90
+    assert mismatch.evidence[0]["garage_vehicle_id"] == "CAR-1"
+    assert mismatch.evidence[0]["other_vehicle_id"] == "CAR-2"
