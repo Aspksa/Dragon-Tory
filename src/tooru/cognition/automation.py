@@ -55,7 +55,7 @@ class CognitionAutomation:
         while True:
             try:
                 await self.run_once()
-            except Exception:
+            except Exception:  # noqa: BLE001 - next cycle may recover
                 self.last_error = self.last_error or "Cognition cycle failed."
             await asyncio.sleep(self.interval_seconds)
 
