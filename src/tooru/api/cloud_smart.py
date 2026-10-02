@@ -542,12 +542,14 @@ def add_relation(
     request: Request,
 ) -> dict:
     try:
-        return _smart(request).add_relation(
+        item = _smart(request).add_relation(
             document_id,
             payload.target_id,
             payload.relation_type,
             payload.note,
         )
+        _trigger_cognition(request)
+        return item
     except Exception as exc:
         raise _http_error(exc) from exc
 
@@ -559,6 +561,7 @@ def delete_relation(relation_id: str, request: Request) -> dict:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Связь не найдена.",
         )
+    _trigger_cognition(request)
     return {"ok": True, "relation_id": relation_id}
 
 
