@@ -1487,6 +1487,38 @@ async function refreshHomeObservability(){
   catch(e){$("homeObsState").textContent="Наблюдаемость временно недоступна: "+e.message}
   finally{homeObsLoading=false}
 }
+function renderHomeCognitionPanel(){
+  const state=$("homeCogState"),policy=$("homeCogPolicy"),list=$("homeInsightList");
+  if(!state||!policy||!list)return;
+  if(!homeCognition){
+    state.textContent="Когнитивный контур временно недоступен";
+    policy.textContent="policy · —";
+    list.innerHTML='<div class="home-trace-empty">Нет данных Cognitive Core VIII.</div>';
+    return;
+  }
+  const p=homeCognition.policy||{};
+  state.textContent=(homeCognition.automation_running?"Когнитивный цикл выполняется":"Автоматика наблюдает за проектом")+(homeCognition.last_cycle_at?" · "+new Date(homeCognition.last_cycle_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"");
+  policy.textContent="policy · v"+(p.version||1);
+  $("homeCogExperience").textContent=homeCognition.experiences||0;
+  $("homeCogGraph").textContent=(homeCognition.graph_nodes||0)+" / "+(homeCognition.graph_edges||0);
+  $("homeCogOpen").textContent=homeCognition.open_insights||0;
+  $("homeCogHigh").textContent=homeCognition.high_insights||0;
+  list.innerHTML="";
+  if(!homeCognitionInsights.length){
+    list.innerHTML='<div class="home-trace-empty">Тоору пока не обнаружила новых аномалий.</div>';
+    return;
+  }
+  homeCognitionInsights.slice(0,6).forEach(item=>{
+    const row=document.createElement("div");row.className="home-insight "+(item.severity||"info");
+    const dot=document.createElement("span");dot.className="home-insight-dot";
+    const body=document.createElement("div");
+    const title=document.createElement("div");title.className="home-insight-title";title.textContent=item.title||item.rule_id||"Сигнал";
+    const summary=document.createElement("div");summary.className="home-insight-summary";summary.textContent=item.summary||"Требуется проверка.";
+    body.append(title,summary);
+    const meta=document.createElement("span");meta.className="home-insight-meta";meta.textContent=(item.severity||"info")+" · "+Math.round(Number(item.confidence||0)*100)+"%";
+    row.append(dot,body,meta);list.append(row);
+  });
+}
 async function refreshHomeCognition(){
   try{
     const [status,insights]=await Promise.all([
@@ -1494,8 +1526,8 @@ async function refreshHomeCognition(){
       api("/v1/cognition/insights?limit=4")
     ]);
     homeCognition=status;homeCognitionInsights=insights.items||[];
-    renderHomeTasks();if(homeModules.length)renderHomeBrain();
-  }catch(e){homeCognition=null;homeCognitionInsights=[]}
+    renderHomeCognitionPanel();renderHomeTasks();if(homeModules.length)renderHomeBrain();
+  }catch(e){homeCognition=null;homeCognitionInsights=[];renderHomeCognitionPanel()}
 }
 async function loadHomeDashboard(){
   initHomeBrain();
@@ -1508,7 +1540,7 @@ async function loadHomeDashboard(){
       api("/v1/cognition/status"),
       api("/v1/cognition/insights?limit=4")
     ]);
-    homeModules=modules.items||[];homeLastUpdate=update;homeRecentChats=chats.items||[];homeUpdateHistory=history.items||[];homeCognition=cognition;homeCognitionInsights=insights.items||[];renderHomeBrain();renderHomeTasks();refreshHomeObservability();
+    homeModules=modules.items||[];homeLastUpdate=update;homeRecentChats=chats.items||[];homeUpdateHistory=history.items||[];homeCognition=cognition;homeCognitionInsights=insights.items||[];renderHomeBrain();renderHomeCognitionPanel();renderHomeTasks();refreshHomeObservability();
   }catch(e){const box=$("homeTaskList");if(box){box.innerHTML="";box.append(homeTask("Дашборд","Часть данных недоступна: "+e.message,"!",true))}}
 }
 function updateHomeDashboard(d){
