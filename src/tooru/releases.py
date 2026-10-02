@@ -629,6 +629,49 @@ RELEASE_NOTES: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "00.00.39": {
+        "title": "Cognitive Core IX: Self-Diagnostics & Machine Report",
+        "modules": [
+            {
+                "id": "cognition",
+                "title": "Cognitive Core IX",
+                "version": "02.00.00",
+                "changes": [
+                    "Добавлен слой Self-Diagnostics & Explainability поверх Cognitive Core VIII без экспорта hidden chain-of-thought.",
+                    "Машинный отчёт связывает reasoning policy, cognition graph/insights, Grey Matter capabilities, Memory health, Guardian, автоматики, AI runtime и observability в один снимок.",
+                    "Диагностические findings автоматически поднимают критичные состояния: fatal document study, degraded AI study, Guardian dead-letter, Memory health и ошибки фоновых циклов.",
+                ],
+            },
+            {
+                "id": "diagnostics",
+                "title": "Самодиагностика / Машинный отчёт",
+                "version": "01.00.00",
+                "changes": [
+                    "В Настройках появилась кнопка скачивания JSON support snapshot.",
+                    "Отчёт содержит версии, конфигурацию без секретов, БД/health, pipeline contracts, document status/provenance/activity, AI Contract, reasoning outcomes, cognition, observability и update state.",
+                    "Тексты документов, сообщения чатов, API-ключи, токены, пароли и скрытые рассуждения в отчёт не попадают.",
+                    "Для каждого документа вычисляется состояние studied / degraded / failed / analyzed / pending и сохраняются последние технические события.",
+                ],
+            },
+            {
+                "id": "drive",
+                "title": "Мой диск",
+                "version": "01.10.00",
+                "changes": [
+                    "Полный сбой изучения документа через чат теперь сохраняет chat_document_study_failed в provenance и observability.",
+                    "После fatal study failure исходный файл остаётся доступен, а cognition получает фоновый debounce-trigger для локальной повторной диагностики.",
+                ],
+            },
+            {
+                "id": "dashboard",
+                "title": "Главная / Системный мозг",
+                "version": "01.13.00",
+                "changes": [
+                    "Registry показывает Cognitive Core IX и новый модуль самодиагностики.",
+                ],
+            },
+        ],
+    },
 }
 
 
