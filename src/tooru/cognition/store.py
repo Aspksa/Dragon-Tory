@@ -450,10 +450,7 @@ class CognitionStore:
             else:
                 insight_id = str(existing["id"])
                 status = str(existing["status"])
-                if status in {
-                    InsightStatus.RESOLVED.value,
-                    InsightStatus.DISMISSED.value,
-                }:
+                if status == InsightStatus.RESOLVED.value:
                     status = InsightStatus.OPEN.value
                 db.execute(
                     """
