@@ -251,7 +251,9 @@ def create_employee(
     request: Request,
 ) -> dict[str, Any]:
     try:
-        return _smart(request).create_employee(payload.model_dump())
+        item = _smart(request).create_employee(payload.model_dump())
+        _trigger_cognition(request)
+        return item
     except Exception as exc:
         raise _http_error(exc) from exc
 
@@ -263,10 +265,12 @@ def update_employee(
     request: Request,
 ) -> dict[str, Any]:
     try:
-        return _smart(request).update_employee(
+        item = _smart(request).update_employee(
             employee_id,
             payload.model_dump(),
         )
+        _trigger_cognition(request)
+        return item
     except Exception as exc:
         raise _http_error(exc) from exc
 
@@ -317,6 +321,7 @@ def update_vehicle(
             sync_vehicle(request.app.state.memory_intake, item)
         except Exception as sync_exc:  # noqa: BLE001 - best-effort side effect
             logger.warning("Garage memory auto-sync failed: %s", sync_exc)
+        _trigger_cognition(request)
         return item
     except Exception as exc:
         raise _http_error(exc) from exc
