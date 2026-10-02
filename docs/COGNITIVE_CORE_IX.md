@@ -20,6 +20,8 @@ The report includes:
 
 - project/version/release and module registry;
 - runtime/Python/OS/SQLite and database sizes;
+- Tesseract/LibreOffice availability and document-parser package versions;
+- implementation map with the repository files responsible for each pipeline;
 - sanitized configuration and DeepSeek runtime counters;
 - chat counts and active request count;
 - document storage totals and per-document technical state;
@@ -64,7 +66,8 @@ changes. Current findings include:
 - Memory/Guardian/Cognition automation failures;
 - fatal/degraded/pending document-study counts;
 - recent observability errors, blocks or interrupted work;
-- report sections that could not be collected.
+- report sections that could not be collected;
+- missing OCR/legacy Office engines when those document paths may need them.
 
 Every detailed subsystem section remains available even if another section
 fails. Report generation is deliberately best-effort: a broken module should
