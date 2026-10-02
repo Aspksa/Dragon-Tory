@@ -38,6 +38,14 @@ def test_web_ui_contains_main_sections() -> None:
     assert 'id="homeObsState"' in response.text
     assert 'id="homeObsCurrent"' in response.text
     assert 'id="homeTraceList"' in response.text
+    assert 'id="homeCogState"' in response.text
+    assert 'id="homeCogPolicy"' in response.text
+    assert 'id="homeCogExperience"' in response.text
+    assert 'id="homeCogGraph"' in response.text
+    assert 'id="homeCogOpen"' in response.text
+    assert 'id="homeCogHigh"' in response.text
+    assert 'id="homeInsightList"' in response.text
+    assert "Тоору сама заметила" in response.text
     assert "Наблюдаемость · поток Тоору" in response.text
     assert "System Observatory" in response.text
     assert 'id="cloudNewFolder"' in response.text
