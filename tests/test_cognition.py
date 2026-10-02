@@ -570,8 +570,14 @@ def test_line_item_price_signal_ignores_price_in_identity(
 
     smart = StubSmart(
         dna={
-            "DOC-1": {"kind": "счёт"},
-            "DOC-2": {"kind": "счёт"},
+            "DOC-1": {
+                "kind": "счёт",
+                "counterparty": "Поставщик",
+            },
+            "DOC-2": {
+                "kind": "счёт",
+                "counterparty": "Поставщик",
+            },
         }
     )
     intelligence = StubIntelligence(
